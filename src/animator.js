@@ -12,11 +12,13 @@ import * as THREE from 'three';
 const READY_ARM = { x: -0.35, z: 0, wrist: -0.55 };
 
 // De slag: [moment (0 → 1), arm.x, arm.z, pols, bovenlijf draaien, bovenlijf voorover]
-// Eerst het wapen omhoog achter de schouder (uithalen), dan schuin naar beneden over je lijf heen.
+// Een horizontale slag van rechts naar links: eerst de arm (met het wapen) opzij naar rechts
+// uithalen, dan in een grote boog vóór je langs naar links zwaaien.
+// (arm.x = -1.4 betekent: arm bijna horizontaal; arm.z bepaalt dan de richting: - is rechts, + is links)
 const ATTACK_KEYS = [
   [0.0, READY_ARM.x, READY_ARM.z, READY_ARM.wrist, 0, 0],
-  [0.3, -2.7, -0.55, -0.4, -0.45, -0.1], // uithalen
-  [0.65, -0.5, 0.55, 0.6, 0.4, 0.25], // raak! wapen naar voren-beneden
+  [0.3, -1.35, -1.55, 1.15, -0.55, 0], // uithalen naar rechts
+  [0.68, -1.35, 1.15, 1.3, 0.55, 0.1], // zwaai naar links: raak!
   [1.0, READY_ARM.x, READY_ARM.z, READY_ARM.wrist, 0, 0], // terug
 ];
 

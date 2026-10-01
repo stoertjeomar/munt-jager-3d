@@ -7,12 +7,14 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 //   swingTime = hoe lang een slag duurt (kleiner = sneller slaan)
 //   file      = 3D-model (.glb) in models/wapens/, met het handvat in het midden
 //   scale     = hoe groot het model wordt
+//   blade     = [begin, punt] van het lemmet (afstand vanaf de hand), voor het zwaard-windje
+//   trail     = kleur van het zwaard-windje
 export const WEAPONS = {
-  diamant: { name: 'Diamanten zwaard', damage: 1, range: 2.4, swingTime: 0.34 },
-  sword: { name: 'Ridderzwaard', file: 'models/wapens/Sword.glb', scale: 0.3, damage: 1, range: 2.7, swingTime: 0.38 },
-  katana: { name: 'Katana', file: 'models/wapens/Katana.glb', scale: 0.33, damage: 1, range: 2.8, swingTime: 0.26 },
-  shortsword: { name: 'Kort zwaard', file: 'models/wapens/ShortSword.glb', scale: 0.3, damage: 1, range: 2.1, swingTime: 0.22 },
-  club: { name: 'Knots', file: 'models/wapens/Club.glb', scale: 0.42, damage: 2, range: 2.3, swingTime: 0.5 },
+  diamant: { name: 'Diamanten zwaard', damage: 1, range: 2.4, swingTime: 0.34, blade: [0.3, 1.0], trail: 0x5ff7de },
+  sword: { name: 'Ridderzwaard', file: 'models/wapens/Sword.glb', scale: 0.3, damage: 1, range: 2.7, swingTime: 0.38, blade: [0.35, 1.16], trail: 0xb8dcff },
+  katana: { name: 'Katana', file: 'models/wapens/Katana.glb', scale: 0.33, damage: 1, range: 2.8, swingTime: 0.26, blade: [0.3, 1.1], trail: 0xff4f7a },
+  shortsword: { name: 'Kort zwaard', file: 'models/wapens/ShortSword.glb', scale: 0.3, damage: 1, range: 2.1, swingTime: 0.22, blade: [0.25, 0.87], trail: 0xffd36b },
+  club: { name: 'Knots', file: 'models/wapens/Club.glb', scale: 0.42, damage: 2, range: 2.3, swingTime: 0.5, blade: [0.35, 0.87], trail: 0xff8a2b },
 };
 
 export const START_WEAPON = 'diamant';

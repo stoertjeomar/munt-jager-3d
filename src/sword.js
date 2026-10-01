@@ -37,6 +37,8 @@ export class Sword {
     this.damage = weapon.damage;
     this.range = weapon.range;
     this.swingTime = weapon.swingTime;
+    this.blade = weapon.blade;
+    this.trailColor = weapon.trail;
 
     if (this.weaponMesh) this.grip.remove(this.weaponMesh);
     this.weaponMesh = createWeaponMesh(key);
@@ -71,5 +73,11 @@ export class Sword {
 
   update(dt) {
     if (this.timer > 0) this.timer -= dt;
+  }
+
+  /** Waar het lemmet nu is in de wereld: onderkant en punt (voor het zwaard-windje). */
+  getBladeWorld(base, tip) {
+    this.grip.localToWorld(base.set(0, this.blade[0], 0));
+    this.grip.localToWorld(tip.set(0, this.blade[1], 0));
   }
 }

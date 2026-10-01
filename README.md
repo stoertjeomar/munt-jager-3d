@@ -39,6 +39,7 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 | Muis bewegen    | Rondkijken (klik eerst in het spel) |
 | Esc             | Muis weer vrij   |
 | Scrollen        | Zoomen           |
+| M               | Geluid aan/uit   |
 | R               | Opnieuw beginnen |
 
 ## Wat zit erin
@@ -51,10 +52,18 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 - Bewegend poppetje: armen en benen zwaaien tijdens het lopen, uithalen en slaan met het wapen in de hand,
   armen uit elkaar bij springen, bukken om een wapen op te pakken (`src/animator.js`)
 - Diamanten zwaard van blokjes (pixel art, zelf te tekenen in `src/sword.js`) met zwaai-animatie: twee klappen en een vijand is verslagen
-- Vijanden (slijmballen) die heen en weer lopen en je achterna gaan als je dichtbij komt
+- 4 soorten vijanden, van makkelijk tot moeilijk:
+  - **Slijmpje** (groen, 1 leven): klein en traag
+  - **Slijmbal** (rood, 2 levens): boos en sneller
+  - **Spook** (paars, 3 levens): vliegt door muren en volgt je tot op de platforms
+  - **Rotsgolem** (8 levens): langzaam en zwaar, laadt op en slaat een schokgolf in de grond
+- Levensbalk en schade-getallen boven vijanden, en hartjes die ze laten vallen
+- Gloeiend zwaard-windje achter elke slag (kleur per wapen), vonken, spetters, camera-schok en "hitstop"
+- Geluidseffecten, gemaakt met de Web Audio API (geen geluidsbestanden)
+- Lucht met kleurverloop, bomen, stenen en bloemetjes
 - 5 wapens: begin met het diamanten zwaard, vind in de wereld het ridderzwaard, kort zwaard, de knots en (bovenop het hoogste platform) de katana.
   Elk wapen heeft eigen schade, bereik en snelheid; de knots verslaat een vijand in één klap
-- 3 levens: een vijand raken kost een hartje (met terugstoot), op een vijand springen verslaat hem meteen
+- 5 levens: een vijand raken kost een hartje (met terugstoot), op een vijand springen verslaat hem meteen
 - Realtime schaduwen en mist
 
 ## Projectstructuur
@@ -73,7 +82,11 @@ munt-jager-3d/
     ├── sword.js    → het wapen in de hand: welk wapen en de timing van een slag
     ├── weapons.js  → alle wapens: schade, bereik, snelheid en 3D-model
     ├── pickups.js  → wapens die in de wereld liggen om op te pakken
-    ├── enemies.js  → vijanden: looproutes, achtervolgen, geraakt worden
+    ├── enemies.js  → vijanden: soorten, looproutes, achtervolgen, golem-aanval
+    ├── effects.js  → deeltjes, schade-getallen, schokgolven, camera-schok
+    ├── trail.js    → het gloeiende zwaard-windje
+    ├── audio.js    → geluidseffecten (Web Audio)
+    ├── drops.js    → hartjes die vijanden laten vallen
     ├── world.js    → level: vloer, licht, blokken en munten
     ├── camera.js   → third-person camera
     └── input.js    → toetsenbord uitlezen
@@ -89,7 +102,7 @@ munt-jager-3d/
   Kijkt het de verkeerde kant op? Pas `MODEL_TURN` aan bovenaan `src/player.js`; zit het zwaard niet in de hand, pas dan `MODEL_HAND` aan.
   Wil je het poppetje uit `character.js` terug? Verwijder (of hernoem) `models/speler.glb`.
 - **Wapens aanpassen** → `WEAPONS` in `src/weapons.js` (schade, bereik, snelheid) en `PICKUP_SPOTS` in `src/pickups.js` (waar ze liggen)
-- **Vijanden aanpassen** → `PATROLS` (looproutes), snelheden en `MAX_HP` bovenaan `src/enemies.js`
+- **Vijanden aanpassen** → `ENEMY_TYPES` (levens, snelheid, schade) en `SPAWNS` (waar ze lopen) bovenaan `src/enemies.js`
 - **Debuggen** → open de console (F12) en typ bijvoorbeeld `game.player.position`
 
 ## Roadmap
@@ -97,7 +110,7 @@ munt-jager-3d/
 - [x] Vijanden die heen en weer lopen
 - [x] Zwaard
 - [ ] Bewegende platforms
-- [ ] Geluidseffecten
+- [x] Geluidseffecten
 - [x] 3D-model als speler (`GLTFLoader`)
 - [ ] Meerdere levels en een opgeslagen beste tijd
 

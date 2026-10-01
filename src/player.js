@@ -11,7 +11,7 @@ const GRAVITY = 25; // zwaartekracht
 const RADIUS = 0.45; // dikte van de speler
 const HEIGHT = 1.6; // lengte van de speler
 const FALL_LIMIT = -25; // onder deze hoogte: respawn
-export const MAX_HEALTH = 3; // aantal levens (hartjes)
+export const MAX_HEALTH = 5; // aantal levens (hartjes)
 const INVULNERABLE_TIME = 1.2; // na een klap ben je even onkwetsbaar
 
 // Eigen 3D-poppetje: zet een .glb-bestand op deze plek (bijv. gemaakt met Tripo).
@@ -207,9 +207,9 @@ export class Player {
   }
 
   /** Geraakt door een vijand op positie `from`. Geeft true terug als het pijn deed. */
-  hurt(from) {
+  hurt(from, damage = 1) {
     if (this.invulnerable > 0 || !this.alive) return false;
-    this.health--;
+    this.health = Math.max(0, this.health - damage);
     this.invulnerable = INVULNERABLE_TIME;
 
     // Wegstoten van de vijand, met een klein sprongetje
@@ -218,6 +218,13 @@ export class Player {
     this.knockback.copy(away.normalize().multiplyScalar(12));
     this.velocity.y = 6;
     this.onGround = false;
+    return true;
+  }
+
+  /** Een leven erbij (bijv. van een hartje). Geeft false terug als je al vol zit. */
+  heal(amount = 1) {
+    if (this.health >= MAX_HEALTH) return false;
+    this.health = Math.min(MAX_HEALTH, this.health + amount);
     return true;
   }
 
@@ -261,9 +268,11 @@ export class Player {
     }
 
     // 2. Springen
+    this.jumped = false;
     if (this.onGround && input.isDown('Space')) {
       this.velocity.y = JUMP_SPEED;
       this.onGround = false;
+      this.jumped = true;
     }
 
     // 3. Zwaartekracht
