@@ -6,12 +6,15 @@ import { createWorld, GRACES, ARENAS, CHESTS, REGION_NAMES, WALKABLE_HALF } from
 import { createEnemies, spawnEnemy } from './enemies.js';
 import { createBosses, BOSS_INFO } from './bosses.js';
 import { Sites } from './sites.js';
+import { Decor } from './decor.js';
 import { Stats, POWERS } from './stats.js';
 import { itemInfo } from './gear.js';
 import { Effects } from './effects.js';
 import { SwordTrail } from './trail.js';
 import { UI } from './ui.js';
-import { play, unlockAudio, toggleMute } from './audio.js';
+import { play, unlockAudio, toggleMute, setFootsteps } from './audio.js';
+import { Pickups, DIAMONDS } from './pickups.js';
+import { Projectiles } from './projectiles.js';
 
 // ---------- Basis: renderer, scene, camera ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -38,6 +41,9 @@ const ui = new UI(stats);
 const input = new Input();
 const world = createWorld(scene);
 const sites = new Sites(scene, { graces: GRACES, chests: CHESTS }, stats);
+const decor = new Decor(scene);
+const pickups = new Pickups(scene, stats);
+const projectiles = new Projectiles(scene);
 const player = new Player(scene, stats);
 const enemies = createEnemies(scene);
 const bosses = createBosses(scene, ARENAS, stats.data.bosses);
@@ -113,6 +119,8 @@ function removeSummons() {
 /** Vijanden terug tot leven (na rusten of doodgaan), net als in Elden Ring. */
 function respawnWorld() {
   removeSummons();
+  pickups.clearHearts();
+  projectiles.clear();
   for (const e of enemies) e.reset();
   for (const b of bosses) if (!b.dead) b.resetFight();
   state.activeBoss = null;
@@ -141,7 +149,11 @@ function onDefeated(target) {
   play('defeat');
   effects.burst(target.center, target.type.color, { count: 26, speed: 7, size: 0.16, life: 0.8, up: 3 });
   effects.burst(target.center, 0xffd700, { count: 8, speed: 3, size: 0.08, life: 0.6, up: 4 });
-  if (!target.summoned) giveRunes(target.type.runes);
+  if (!target.summoned) {
+    giveRunes(target.type.runes);
+    pickups.coinBurst(target.center, target.type.runes);
+    if (Math.random() < 0.2) pickups.dropHeart(target.position);
+  }
   if (state.lockTarget === target) state.lockTarget = null;
 }
 
@@ -157,6 +169,7 @@ function onBossDefeated(boss) {
   effects.shake(0.5);
   ui.banner('VIJAND GEVELD', boss.name, 'gold', 5);
   giveRunes(BOSS_INFO[boss.id].runes);
+  pickups.coinBurst(boss.center, 100);
   stats.data.bosses.push(boss.id);
   for (const item of BOSS_REWARDS[boss.id]) stats.addItem(item);
   state.activeBoss = null;
@@ -232,7 +245,7 @@ function slamLanded() {
 
 function enemyContact() {
   for (const enemy of [...enemies, ...bosses]) {
-    if (!enemy.alive || enemy.awake === false) continue;
+    if (!enemy.alive || enemy.awake === false || enemy.type.noContact) continue;
     const type = enemy.type;
     const dx = player.position.x - enemy.position.x;
     const dz = player.position.z - enemy.position.z;
@@ -248,7 +261,7 @@ function enemyContact() {
       effects.shake(0.15);
       onDefeated(enemy);
     } else {
-      hurtPlayer(enemy.position, type.damage);
+      hurtPlayer(enemy.position, type.contactDamage ?? type.damage);
     }
   }
 }
@@ -469,6 +482,8 @@ function handlePlayerEvents() {
       const at = player.position.clone().setY(player.position.y + 1);
       effects.burst(at, 0x7dff9a, { count: 18, speed: 3, size: 0.09, life: 0.7, up: 3, gravity: -0.3 });
       effects.floatText(at.setY(at.y + 0.9), `+${Math.round(player.maxHealth * 0.45)}`, '#7dff9a', 0.55);
+    } else if (ev === 'land') {
+      play('land');
     } else if (ev === 'fire') {
       ui.toast('🔥 <b>Vuurzwaard!</b> 50% meer schade', 2);
     }
@@ -530,7 +545,7 @@ function updateBossFights() {
 
 // ---------- Game loop ----------
 const clock = new THREE.Clock();
-const bossCtx = { player, effects, hurtPlayer, spawnEnemy: addSummon, camera };
+const bossCtx = { player, effects, hurtPlayer, spawnEnemy: addSummon, camera, projectiles };
 
 function gameLoop() {
   // realDt = tijd sinds vorige frame. Begrensd zodat een lag-piek je niet door de vloer laat vallen.
@@ -585,13 +600,41 @@ function gameLoop() {
   }
   if (!player.alive && state.deathTimer <= 0) die();
 
-  const enemyCtx = { time: elapsed, player, colliders: world.colliders, groundHalfSize: WALKABLE_HALF, camera, onSlam: onGolemSlam };
+  const enemyCtx = {
+    time: elapsed, player, colliders: world.colliders, groundHalfSize: WALKABLE_HALF, camera, onSlam: onGolemSlam,
+    hurtPlayer, projectiles, effects,
+  };
   for (const enemy of enemies) enemy.update(dt, enemyCtx);
   for (const boss of bosses) boss.update(dt, bossCtx);
+  projectiles.update(dt, {
+    targets, player, hurtPlayer, colliders: world.colliders, effects,
+    onPlayerHit: (target, result, proj) => onHit(target, result, proj.kind === 'arrow' ? 0xffd27a : 0xffe27a),
+  });
   // Is de boss dood door iets anders dan een klap? (bijv. schade terwijl je doodging)
   if (state.activeBoss && (!state.activeBoss.awake || state.activeBoss.dead)) state.activeBoss = null;
 
   sites.update(dt, elapsed);
+  pickups.update(dt, elapsed, player, {
+    onCoin: () => play('coin'),
+    onHeart: (fraction) => {
+      if (player.health >= player.maxHealth) return false;
+      const heal = Math.round(player.maxHealth * fraction);
+      player.health = Math.min(player.maxHealth, player.health + heal);
+      play('heal');
+      effects.floatText(player.position.clone().setY(player.position.y + 2), `+${heal}`, '#ff6b9d', 0.55);
+      return true;
+    },
+    onDiamond: (d, value) => {
+      giveRunes(value);
+      stats.save();
+      play('pickup');
+      effects.burst(d.position.clone().setY(d.position.y + 1), 0x5aa8ff, { count: 24, speed: 5, size: 0.12, life: 0.8, up: 3 });
+      ui.toast(`💎 <b>Diamant gevonden!</b> +${value} munten<br><small>${stats.data.diamonds.length} / ${DIAMONDS.length} diamanten</small>`, 4);
+    },
+  });
+  const walking = player.moving && player.onGround && player.rollTimer <= 0 && !ui.menuOpen && player.alive;
+  setFootsteps(walking, input.heldFor('ShiftLeft') > 0.22 || input.heldFor('ShiftRight') > 0.22);
+  decor.update(dt, elapsed, player.position);
   updateTrail(dt);
   effects.update(dt);
   world.updateSun(player.position);
@@ -637,4 +680,4 @@ if (stats.level === 1 && stats.runes === 0 && stats.data.bosses.length === 0) {
 }
 
 // Handig voor debuggen in de browser-console (F12): typ bijvoorbeeld `game.player.position`
-window.game = { scene, player, enemies, bosses, sites, stats, ui, world, state, camera, renderer, effects, trail, loop: gameLoop };
+window.game = { scene, player, enemies, bosses, sites, stats, ui, world, state, camera, cameraRig, renderer, effects, trail, loop: gameLoop };

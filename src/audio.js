@@ -7,6 +7,52 @@ let master = null;
 let noiseBuffer = null;
 let muted = false;
 
+// Echte geluiden uit het Kenney Starter Kit (sounds/). Als ze geladen zijn, worden ze gebruikt
+// in plaats van het zelfgemaakte geluid met dezelfde naam.
+const SAMPLE_FILES = { jump: 'jump', coin: 'coin', land: 'land', defeat: 'break', lose: 'fall', steps: 'walking' };
+const samples = {};
+let footsteps = null;
+
+async function loadSamples() {
+  for (const [name, file] of Object.entries(SAMPLE_FILES)) {
+    try {
+      const data = await (await fetch(`sounds/${file}.ogg`)).arrayBuffer();
+      samples[name] = await ctx.decodeAudioData(data);
+    } catch {
+      // geen probleem: dan gebruiken we het zelfgemaakte geluid
+    }
+  }
+}
+
+function playSample(name, volume = 0.6, rate = 1) {
+  const src = ctx.createBufferSource();
+  src.buffer = samples[name];
+  src.playbackRate.value = rate * (0.95 + Math.random() * 0.1);
+  const gain = ctx.createGain();
+  gain.gain.value = volume;
+  src.connect(gain).connect(master);
+  src.start();
+  return { src, gain };
+}
+
+/** Voetstappen aan (tijdens lopen) of uit. `fast` = sprinten. */
+export function setFootsteps(on, fast = false) {
+  if (!ready() || !samples.steps) {
+    if (footsteps && !on) footsteps.src.stop();
+    if (!on) footsteps = null;
+    return;
+  }
+  if (on && !footsteps) {
+    footsteps = playSample('steps', 0.35, fast ? 1.4 : 1);
+    footsteps.src.loop = true;
+  } else if (!on && footsteps) {
+    footsteps.src.stop();
+    footsteps = null;
+  } else if (footsteps) {
+    footsteps.src.playbackRate.value = fast ? 1.4 : 1;
+  }
+}
+
 /** De browser staat geluid pas toe na een klik of toets. Roep dit dan aan. */
 export function unlockAudio() {
   if (!ctx) {
@@ -19,6 +65,7 @@ export function unlockAudio() {
     noiseBuffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const data = noiseBuffer.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    loadSamples();
   }
   if (ctx.state === 'suspended') ctx.resume();
 }
@@ -102,6 +149,17 @@ const SOUNDS = {
   },
   // Golem laadt op: brommend geluid omhoog
   charge: () => tone({ type: 'sawtooth', from: 60, to: 140, duration: 0.6, volume: 0.12 }),
+  // Schot met een geweer: harde knal + ruis
+  shot: () => {
+    noise({ from: 3000, to: 300, duration: 0.18, volume: 0.6, q: 0.6 });
+    tone({ type: 'square', from: 160, to: 40, duration: 0.12, volume: 0.3 });
+  },
+  bigShot: () => {
+    noise({ from: 2000, to: 120, duration: 0.4, volume: 0.7, q: 0.5 });
+    tone({ type: 'sawtooth', from: 120, to: 30, duration: 0.3, volume: 0.35 });
+  },
+  bow: () => noise({ from: 900, to: 3500, duration: 0.15, volume: 0.35, q: 3 }),
+  laser: () => tone({ type: 'sawtooth', from: 1400, to: 200, duration: 0.25, volume: 0.15 }),
   // Gewonnen!
   win: () => [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone({ type: 'square', from: f, duration: 0.18, volume: 0.12, delay: i * 0.11 })),
   lose: () => [392, 330, 262, 196].forEach((f, i) => tone({ type: 'triangle', from: f, duration: 0.3, volume: 0.2, delay: i * 0.18 })),
@@ -110,5 +168,6 @@ const SOUNDS = {
 /** Speel een geluid, bijvoorbeeld play('hit'). */
 export function play(name) {
   if (!ready()) return;
-  SOUNDS[name]?.();
+  if (samples[name]) playSample(name, name === 'lose' ? 0.8 : 0.6);
+  else SOUNDS[name]?.();
 }

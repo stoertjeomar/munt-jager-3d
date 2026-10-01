@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { play } from './audio.js';
+import { loadGLB } from './assets.js';
+import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 
 // Soorten vijanden — speel met deze getallen om ze makkelijker of moeilijker te maken!
 //   hp            = levenspunten
@@ -10,7 +12,21 @@ import { play } from './audio.js';
 //   damage        = schade als ze je raken (de golem: met zijn schokgolf)
 //   stompable     = kun je erop springen om ze te verslaan?
 //   runes         = hoeveel munten je krijgt als je ze verslaat
+//   model         = 3D-model (.glb) in plaats van een zelfgebouwd poppetje
+//   contactDamage = schade als je ze alleen aanraakt (noContact = aanraken doet geen pijn)
 export const ENEMY_TYPES = {
+  zombie: {
+    name: 'Zombie', hp: 90, radius: 0.5, height: 1.7, color: 0x86a86b, model: 'models/zombie.glb', skinned: true,
+    patrolSpeed: 1, chaseSpeed: 3.2, sight: 11, knockback: 0.8, damage: 22, noContact: true, stompable: false, runes: 32,
+  },
+  spierbonk: {
+    name: 'Spierbonk', hp: 200, radius: 0.8, height: 2.6, color: 0xe8c890, model: 'models/bosses/buffman.glb',
+    patrolSpeed: 1.3, chaseSpeed: 2.6, sight: 13, knockback: 0.3, damage: 34, contactDamage: 14, stompable: false, runes: 90,
+  },
+  mecha: {
+    name: 'Mecha-Wachter', hp: 320, radius: 0.9, height: 3.2, color: 0xe8eef5, model: 'models/bosses/gundam.glb',
+    patrolSpeed: 1, chaseSpeed: 1.6, sight: 22, knockback: 0.1, damage: 26, contactDamage: 12, stompable: false, runes: 140,
+  },
   slijmpje: {
     name: 'Slijmpje', hp: 30, radius: 0.4, height: 0.65, color: 0x6fd36a,
     patrolSpeed: 1.5, chaseSpeed: 2.8, sight: 7, knockback: 1.3, damage: 10, stompable: true, runes: 6,
@@ -25,7 +41,7 @@ export const ENEMY_TYPES = {
   },
   golem: {
     name: 'Rotsgolem', hp: 260, radius: 0.9, height: 2.0, color: 0x8a8f99,
-    patrolSpeed: 1.1, chaseSpeed: 2.3, sight: 9, knockback: 0.15, damage: 30, stompable: false, runes: 80,
+    patrolSpeed: 1.1, chaseSpeed: 2.3, sight: 9, knockback: 0.15, damage: 30, contactDamage: 15, stompable: false, runes: 80,
   },
 };
 
@@ -36,7 +52,7 @@ const ACTIVE_RANGE = 70; // vijanden verder weg dan dit staan stil (scheelt reke
 export const SPAWNS = [
   // Groene Weide: vooral slijmpjes, een paar slijmballen
   ['slijmpje', -7, 3, -4, 5], ['slijmpje', 8, 5, 10, 8], ['slijmpje', -11, 10, -7, 13], ['slijmpje', 14, 30, 18, 34],
-  ['slijmpje', -24, 20, -20, 26], ['slijmpje', 26, 12, 30, 16], ['slijmpje', 18, 40, 24, 44], ['slijmpje', -18, 40, -12, 44],
+  ['slijmpje', -24, 20, -20, 26], ['slijmpje', 26, 12, 30, 16], ['slijmpje', 18, 40, 24, 44], ['slijmpje', -8, 34, -4, 38],
   ['slijmbal', -7, -1, -2, -1], ['slijmbal', 3, -10, 8, -10], ['slijmbal', 25, -20, 30, -26], ['slijmbal', -28, -16, -24, -22],
   // Pad naar Koning Slijm
   ['slijmbal', -4, -30, 4, -30], ['slijmbal', 5, -40, 9, -36], ['slijmpje', -6, -38, -3, -42], ['slijmpje', 6, -55, 9, -58],
@@ -51,6 +67,13 @@ export const SPAWNS = [
   ['golem', 66, -10, 70, -4], ['golem', 82, 20, 88, 14], ['golem', 76, -40, 86, -40], ['golem', 100, -10, 104, 0],
   ['golem', 62, 56, 66, 62], ['spook', 50, -25, 58, -30], ['spook', 95, 40, 100, 30], ['spook', 70, 80, 78, 86],
   ['slijmbal', 48, 20, 52, 26], ['slijmbal', 58, -50, 62, -56], ['golem', 52, -66, 46, -60], ['spook', 104, -60, 96, -66],
+  // Zombies in het Spookwoud en bij de noordelijke ruïnes
+  ['zombie', -58, 18, -66, 22], ['zombie', -80, 10, -76, 2], ['zombie', -95, 45, -88, 50], ['zombie', -70, -60, -64, -66],
+  ['zombie', -108, -30, -100, -36], ['zombie', -52, -40, -58, -46], ['zombie', -40, -60, -44, -52], ['zombie', -24, -76, -16, -72],
+  // Spierbonken in het hoogland
+  ['spierbonk', 68, 22, 74, 18], ['spierbonk', 92, -20, 98, -26], ['spierbonk', 60, 70, 66, 76],
+  // Mecha-Wachters: bewaken de weg naar Steenreus Gorath en de noordoosthoek
+  ['mecha', 80, 46, 86, 42], ['mecha', 96, -86, 90, -92], ['mecha', 30, -90, 36, -96],
 ];
 
 // Golem-aanval: opladen en dan op de grond slaan
@@ -189,12 +212,16 @@ class Enemy {
     this.home = this.pointA.clone().lerp(this.pointB, 0.5);
 
     this.mesh = new THREE.Group();
-    const model =
-      typeKey === 'spook' ? buildGhost(type) : typeKey === 'golem' ? buildGolem(type) : buildSlime(type, typeKey === 'slijmbal');
+    let model;
+    if (type.model) model = { body: new THREE.Group(), materials: [] };
+    else if (typeKey === 'spook') model = buildGhost(type);
+    else if (typeKey === 'golem') model = buildGolem(type);
+    else model = buildSlime(type, typeKey === 'slijmbal');
     this.model = model;
     this.body = model.body;
     this.baseGlow = model.materials.map((m) => ({ color: m.emissive.clone(), intensity: m.emissiveIntensity }));
     this.mesh.add(this.body);
+    if (type.model) this.loadModel(scene);
 
     const { bar, fg } = buildHealthBar(Math.max(0.7, type.radius * 1.4));
     this.healthBar = bar;
@@ -206,6 +233,60 @@ class Enemy {
     this.velocity = new THREE.Vector3();
     this.knockback = new THREE.Vector3();
     this.reset();
+  }
+
+  /** Een 3D-model laden (zombie, Spierbonk, Mecha) en even groot maken als in ENEMY_TYPES staat. */
+  loadModel(scene) {
+    const type = this.type;
+    loadGLB(type.model).then((gltf) => {
+      const obj = type.skinned ? cloneSkinned(gltf.scene) : gltf.scene.clone(true);
+      obj.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(obj);
+      const s = type.height / (box.max.y - box.min.y);
+      const center = box.getCenter(new THREE.Vector3());
+      obj.scale.multiplyScalar(s);
+      obj.position.set(-center.x * s, -box.min.y * s, -center.z * s);
+      const materials = [];
+      obj.traverse((c) => {
+        if (!c.isMesh) return;
+        c.castShadow = true;
+        if (c.isSkinnedMesh) c.frustumCulled = false;
+        c.material = Array.isArray(c.material) ? c.material.map((m) => m.clone()) : c.material.clone();
+        materials.push(...(Array.isArray(c.material) ? c.material : [c.material]));
+      });
+      this.body.add(obj);
+      this.model.materials = materials.filter((m) => m.emissive);
+      this.baseGlow = this.model.materials.map((m) => ({ color: m.emissive.clone(), intensity: m.emissiveIntensity }));
+      if (gltf.animations.length) {
+        this.mixer = new THREE.AnimationMixer(obj);
+        this.actions = {};
+        for (const clip of gltf.animations) this.actions[clip.name] = this.mixer.clipAction(clip);
+        this.playAnim('Idle');
+      }
+      if (this.typeKey === 'mecha') {
+        // Rode richtstraal voordat hij schiet
+        this.laser = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+          new THREE.LineBasicMaterial({ color: 0xff2a2a, transparent: true, opacity: 0.8, toneMapped: false })
+        );
+        this.laser.visible = false;
+        this.laser.frustumCulled = false;
+        scene.add(this.laser);
+      }
+    });
+  }
+
+  /** Animatie afspelen (alleen modellen met animaties, zoals de zombie). */
+  playAnim(name, once = false) {
+    if (!this.actions?.[name] || (this.currentAnim === name && !once)) return;
+    const next = this.actions[name];
+    next.reset();
+    next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
+    next.clampWhenFinished = once;
+    next.fadeIn(0.15).play();
+    if (this.currentAction && this.currentAction !== next) this.currentAction.fadeOut(0.15);
+    this.currentAction = next;
+    this.currentAnim = name;
   }
 
   get position() {
@@ -228,7 +309,14 @@ class Enemy {
     this.lastSwingId = -1;
     this.goingToB = true;
     this.chasing = false;
-    this.state = 'walk'; // golem: walk / windup / recover
+    this.state = 'walk'; // golem: walk / windup / recover, andere soorten hebben hun eigen aanvallen
+    this.attackCooldown = 1;
+    this.anim = 0; // > 0: een eenmalige animatie (zoals "geraakt") speelt nog
+    if (this.laser) this.laser.visible = false;
+    if (this.mixer) {
+      this.currentAnim = null;
+      this.playAnim('Idle');
+    }
     this.stateTimer = 0;
     this.slamCooldown = 0;
     this.position.copy(this.pointA);
@@ -268,6 +356,10 @@ class Enemy {
 
     const killed = this.hp <= 0;
     if (killed) this.die();
+    else if (this.mixer && this.state === 'walk') {
+      this.playAnim('HitReact', true);
+      this.anim = 0.5;
+    }
     return { damage, killed };
   }
 
@@ -280,7 +372,9 @@ class Enemy {
   }
 
   die() {
-    this.dying = DEATH_TIME;
+    this.dying = this.mixer ? 1.3 : DEATH_TIME;
+    if (this.mixer) this.playAnim('Death', true);
+    if (this.laser) this.laser.visible = false;
     this.flash = 0.12;
     this.healthBar.visible = false;
     this.state = 'walk';
@@ -298,6 +392,16 @@ class Enemy {
     this.healthFg.material.color.setHSL((this.hp / type.hp) * 0.33, 0.9, 0.45); // groen → rood
 
     // Doodgaan: plat worden, ronddraaien en verdwijnen
+    if (this.dying > 0 && this.mixer) {
+      // Zombie: doodgaan-animatie, en daarna wegzakken in de grond
+      this.dying -= dt;
+      this.mixer.update(dt);
+      this.position.addScaledVector(this.knockback, dt);
+      this.knockback.multiplyScalar(Math.exp(-8 * dt));
+      if (this.dying < 0.4) this.position.y -= dt * 2;
+      if (this.dying <= 0) this.mesh.visible = false;
+      return;
+    }
     if (this.dying > 0) {
       this.dying -= dt;
       const t = Math.max(0, this.dying / DEATH_TIME);
@@ -318,6 +422,15 @@ class Enemy {
     const distFromHome = this.position.clone().setY(0).distanceTo(this.home);
     const reachable = type.flies || playerPos.y < this.position.y + 2.5; // niet achter je aan als je hoog op een blok staat
     this.chasing = ctx.player.alive && !ctx.player.resting && distToPlayer < type.sight && distFromHome < LEASH && reachable;
+
+    // ---------- Eigen aanvallen van de nieuwe vijanden ----------
+    if (this.typeKey === 'zombie' || this.typeKey === 'spierbonk' || this.typeKey === 'mecha') {
+      this.attackCooldown -= dt;
+      if (this.specialAttack(dt, ctx, distToPlayer, flatToPlayer)) {
+        this.mixer?.update(dt);
+        return;
+      }
+    }
 
     // ---------- Golem: opladen en slaan ----------
     if (this.typeKey === 'golem') {
@@ -350,6 +463,11 @@ class Enemy {
     if (this.chasing) {
       dir = type.flies ? toPlayer.clone().add(new THREE.Vector3(0, 0.6, 0)) : flatToPlayer.clone();
       speed = type.chaseSpeed;
+      if (this.typeKey === 'mecha') {
+        // De Mecha schiet liever van een afstandje
+        if (distToPlayer < 8) dir.negate();
+        else if (distToPlayer < 13) speed = 0;
+      }
       if (!type.flies && distToPlayer < type.radius + 0.35) speed = 0; // niet in de speler kruipen
     } else {
       const goal = this.goingToB ? this.pointB : this.pointA;
@@ -387,9 +505,192 @@ class Enemy {
     }
 
     // ---------- Animatie ----------
-    if (this.typeKey === 'golem') this.animateGolem(dt, ctx.time);
+    if (this.mixer) {
+      this.anim -= dt;
+      if (this.anim <= 0) this.playAnim(speed === 0 ? 'Idle' : this.chasing ? 'Run' : 'Walk');
+      this.mixer.update(dt);
+    } else if (type.model) this.animateModel(ctx.time, speed);
+    else if (this.typeKey === 'golem') this.animateGolem(dt, ctx.time);
     else if (type.flies) this.animateGhost(ctx.time);
     else this.animateSlime(ctx.time);
+  }
+
+  /** Modellen zonder eigen animaties: wiegen en wippen tijdens het lopen. */
+  animateModel(time, speed) {
+    const moving = speed > 0 ? 1 : 0;
+    const step = Math.sin(time * (this.chasing ? 7 : 5) + this.phase);
+    this.body.position.y = Math.abs(step) * 0.12 * moving;
+    this.body.rotation.z = step * 0.06 * moving;
+    this.body.rotation.x = THREE.MathUtils.lerp(this.body.rotation.x, 0.08 * moving, 0.1);
+    this.body.scale.set(1, 1, 1);
+  }
+
+  /** Aanvallen van zombie, Spierbonk en Mecha. Geeft true terug als de aanval de beweging overneemt. */
+  specialAttack(dt, ctx, dist, flatToPlayer) {
+    const facePlayer = (speed = 8) => {
+      let diff = Math.atan2(flatToPlayer.x, flatToPlayer.z) - this.mesh.rotation.y;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      this.mesh.rotation.y += diff * Math.min(1, speed * dt);
+    };
+    const inFront = (range) => {
+      const facing = new THREE.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y));
+      return dist < range && (dist < 1 || flatToPlayer.clone().normalize().dot(facing) > 0.2);
+    };
+    this.stateTimer -= dt;
+
+    // ----- Zombie: dichtbij komen en een vuistslag -----
+    if (this.typeKey === 'zombie') {
+      if (this.state === 'walk' && this.chasing && dist < 1.8 && this.attackCooldown <= 0) {
+        this.state = 'punch';
+        this.stateTimer = 0.77;
+        this.hitDone = false;
+        this.playAnim('Punch', true);
+      }
+      if (this.state === 'punch') {
+        facePlayer(10);
+        if (!this.hitDone && this.stateTimer < 0.42) {
+          this.hitDone = true;
+          if (inFront(2.3)) ctx.hurtPlayer(this.position, this.type.damage);
+        }
+        if (this.stateTimer <= 0) {
+          this.state = 'walk';
+          this.attackCooldown = 1.1;
+        }
+        return true;
+      }
+      return false;
+    }
+
+    // ----- Spierbonk: aanloop nemen en op je af stormen -----
+    if (this.typeKey === 'spierbonk') {
+      const flash = (on) => this.model.materials.forEach((m) => {
+        m.emissive.set(on ? 0xff2200 : 0x000000);
+        m.emissiveIntensity = on ? 0.5 : 0;
+      });
+      if (this.state === 'walk' && this.chasing && this.attackCooldown <= 0) {
+        if (dist > 4 && dist < 14) {
+          this.state = 'chargeWindup';
+          this.stateTimer = 0.9;
+          play('charge');
+        } else if (dist < 2.6) {
+          this.state = 'punchWindup';
+          this.stateTimer = 0.55;
+        }
+      }
+      if (this.state === 'chargeWindup') {
+        facePlayer(10);
+        this.body.scale.set(1.08, 0.86, 1.08); // ineen gedoken
+        this.body.position.x = (Math.random() - 0.5) * 0.06;
+        flash(Math.floor(this.stateTimer * 10) % 2 === 0);
+        if (this.stateTimer <= 0) {
+          this.state = 'charge';
+          this.stateTimer = 0.8;
+          this.hitDone = false;
+          this.chargeDir = flatToPlayer.clone().normalize();
+          flash(false);
+          this.body.scale.set(1, 1, 1);
+          this.body.position.x = 0;
+        }
+        return true;
+      }
+      if (this.state === 'charge') {
+        this.body.rotation.x = 0.35; // voorover rennen
+        const before = this.position.clone();
+        this.position.addScaledVector(this.chargeDir, 15 * dt);
+        this.pushOutOfBlocks(ctx.colliders);
+        const blocked = before.distanceTo(this.position) < 15 * dt * 0.5;
+        if (Math.random() < 0.5) ctx.effects.burst(this.position.clone().setY(0.2), 0xb8a58c, { count: 2, speed: 2, size: 0.15, life: 0.4, up: 1 });
+        const touch = ctx.player.position.clone().setY(0).distanceTo(this.position.clone().setY(0)) < this.type.radius + 0.7;
+        if (!this.hitDone && touch && ctx.player.position.y < this.type.height) {
+          this.hitDone = true;
+          if (ctx.hurtPlayer(this.position, this.type.damage)) ctx.player.knockback.addScaledVector(this.chargeDir, 14);
+        }
+        if (this.stateTimer <= 0 || blocked) {
+          this.state = 'dizzy';
+          this.stateTimer = blocked ? 2 : 1.2; // tegen een muur gerend: extra lang duizelig
+          if (blocked) {
+            play('slam');
+            ctx.effects.shake(0.2);
+          }
+        }
+        return true;
+      }
+      if (this.state === 'dizzy') {
+        // Duizelig: wiebelen met sterretjes. Nu is je kans!
+        this.body.rotation.x = 0;
+        this.body.rotation.z = Math.sin(ctx.time * 12) * 0.15;
+        if (Math.random() < 0.3) ctx.effects.burst(this.position.clone().setY(this.type.height + 0.3), 0xffe066, { count: 1, speed: 1, size: 0.12, life: 0.5, up: 0.5, gravity: 0 });
+        if (this.stateTimer <= 0) {
+          this.state = 'walk';
+          this.attackCooldown = 2.5;
+        }
+        return true;
+      }
+      if (this.state === 'punchWindup') {
+        facePlayer(8);
+        this.body.rotation.x = THREE.MathUtils.lerp(this.body.rotation.x, -0.25, 0.2);
+        if (this.stateTimer <= 0) {
+          this.body.rotation.x = 0.35;
+          play('heavySwing');
+          if (inFront(3)) ctx.hurtPlayer(this.position, 24);
+          this.state = 'walk';
+          this.attackCooldown = 1.6;
+        }
+        return true;
+      }
+      return false;
+    }
+
+    // ----- Mecha-Wachter: richten met een laser, dan een energiebal schieten; stampen als je dichtbij komt -----
+    if (this.typeKey === 'mecha') {
+      if (this.state === 'walk' && this.chasing && this.attackCooldown <= 0) {
+        if (dist < 3.6) {
+          this.state = 'stomp';
+          this.stateTimer = 0.7;
+          ctx.effects.warnCircle(this.position, 3.8, 0.7);
+        } else if (dist < 22) {
+          this.state = 'aim';
+          this.stateTimer = 0.9;
+          this.shotsLeft = this.hp < this.type.hp / 2 ? 3 : 1;
+          play('laser');
+        }
+      }
+      const gun = this.position.clone().add(new THREE.Vector3(0, this.type.height * 0.6, 0));
+      if (this.state === 'aim') {
+        facePlayer(6);
+        const target = ctx.player.position.clone().setY(ctx.player.position.y + 0.9);
+        if (this.laser) {
+          this.laser.visible = true;
+          this.laser.geometry.setFromPoints([gun, target]);
+          this.laser.material.opacity = 0.4 + 0.5 * Math.abs(Math.sin(ctx.time * 20));
+        }
+        if (this.stateTimer <= 0) {
+          const lead = ctx.player.velocity.clone().setY(0).multiplyScalar(dist / 22);
+          ctx.projectiles.spawn({ from: gun, dir: target.add(lead).sub(gun), speed: 22, damage: this.type.damage, owner: 'enemy', kind: 'energy', radius: 0.5 });
+          play('laser');
+          this.shotsLeft--;
+          if (this.shotsLeft > 0) this.stateTimer = 0.3;
+          else {
+            if (this.laser) this.laser.visible = false;
+            this.state = 'walk';
+            this.attackCooldown = 2.4;
+          }
+        }
+        return true;
+      }
+      if (this.state === 'stomp') {
+        this.body.rotation.z = THREE.MathUtils.lerp(this.body.rotation.z, 0.2, 0.2);
+        if (this.stateTimer <= 0) {
+          this.body.rotation.z = 0;
+          ctx.onSlam(this, 3.8, 30);
+          this.state = 'walk';
+          this.attackCooldown = 1.8;
+        }
+        return true;
+      }
+      return false;
+    }
+    return false;
   }
 
   animateSlime(time) {

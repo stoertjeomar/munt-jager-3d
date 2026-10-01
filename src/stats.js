@@ -54,6 +54,7 @@ function freshSave() {
     lastGrace: 'weide', // hier kom je terug als je doodgaat
     bosses: [], // verslagen bosses
     chests: [], // geopende kisten
+    diamonds: [], // gevonden diamanten
     lostRunes: null, // { x, y, z, amount } munten die je liet vallen toen je doodging
     victory: false,
   };

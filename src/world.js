@@ -34,8 +34,19 @@ export const CHESTS = [
   ['c-hoog', 50, 0, -64, { kind: 'helmet', key: 'kap' }],
 ].map(([id, x, y, z, item]) => ({ id, position: new THREE.Vector3(x, y, z), item }));
 
+// Muntdorp: huizen rond een dorpsplein. [x, z, breedte, diepte, hoogte, muur, dak]
+export const VILLAGE_CENTER = new THREE.Vector3(-28, 0, 47);
+const HOUSES = [
+  [-38, 40, 6, 5, 3.2, 'wall_timber_structure', 'roof_clay_red_center'],
+  [-39, 53, 5, 5, 3, 'wall_brick_small_sand', 'roof_thatch_center'],
+  [-17, 40, 5, 6, 3.4, 'wall_brick_small_sand', 'roof_clay_red_center'],
+  [-17, 54, 6, 5, 3, 'wall_timber_structure_cross', 'roof_thatch_center'],
+  [-28, 61, 7, 5, 3.6, 'wall_brick_stone_center', 'roof_clay_red_center'],
+];
+
 // Paden tussen plekken (lijnstukken), zodat je de weg kunt vinden
 const PATHS = [
+  [[0, 16], [-28, 47]],
   [[0, 16], [0, -48]], [[0, -48], [0, -62]],
   [[0, 16], [-55, 6]], [[-55, 6], [-78, -22]], [[-78, -22], [-90, -36]],
   [[0, 16], [55, 6]], [[55, 6], [74, 38]], [[74, 38], [84, 54]],
@@ -66,11 +77,50 @@ const BLOCKS = [
 ];
 
 // Voorspelbare "random" getallen, zodat bomen elke keer op dezelfde plek staan
-function seededRandom(seed) {
+export function seededRandom(seed) {
   return () => {
     seed = (seed * 16807) % 2147483647;
     return (seed - 1) / 2147483646;
   };
+}
+
+// ---------- Texturen (Kenney Retro Textures Fantasy) ----------
+const textureLoader = new THREE.TextureLoader();
+const textureCache = {};
+
+/** Laadt een textuur uit textures/ (pixel-art: scherp, en herhalend). */
+export function tex(name) {
+  if (!textureCache[name]) {
+    const t = textureLoader.load(`textures/${name}.png`);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.magFilter = THREE.NearestFilter;
+    t.anisotropy = 8;
+    textureCache[name] = t;
+  }
+  return textureCache[name];
+}
+
+/** Een blok waarvan de textuur netjes herhaalt (elke `tile` meter één keer), in plaats van uitgerekt. */
+export function texturedBox(w, h, d, material, tile = 2) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  const uv = geo.attributes.uv;
+  const faceSize = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]]; // +x, -x, +y, -y, +z, -z
+  for (let i = 0; i < uv.count; i++) {
+    const [fu, fv] = faceSize[Math.floor(i / 4)];
+    uv.setXY(i, (uv.getX(i) * fu) / tile, (uv.getY(i) * fv) / tile);
+  }
+  const mesh = new THREE.Mesh(geo, material);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+const materialCache = {};
+function texMat(name, extra = {}) {
+  const key = name + JSON.stringify(extra);
+  materialCache[key] ??= new THREE.MeshStandardMaterial({ map: tex(name), roughness: 0.9, ...extra });
+  return materialCache[key];
 }
 
 /** In welk gebied ligt dit punt? */
@@ -97,10 +147,11 @@ function distToPath(x, z) {
 }
 
 /** Is hier ruimte voor een boom of steen? (niet op paden, arena's, genade-plekken, kisten of de ruïne) */
-function isFree(x, z, margin = 0) {
+export function isFree(x, z, margin = 0) {
   if (Math.abs(x) > WALKABLE_HALF - 2 || Math.abs(z) > WALKABLE_HALF - 2) return false;
   if (distToPath(x, z) < 4 + margin) return false;
   if (Math.abs(x) < 23 && Math.abs(z) < 21) return false; // parkour-ruïne
+  if (Math.hypot(x - VILLAGE_CENTER.x, z - VILLAGE_CENTER.z) < 22) return false; // Muntdorp
   for (const a of ARENAS) if (Math.hypot(x - a.center.x, z - a.center.z) < a.radius + 5) return false;
   for (const g of GRACES) if (Math.hypot(x - g.position.x, z - g.position.z) < 8) return false;
   for (const c of CHESTS) if (Math.hypot(x - c.position.x, z - c.position.z) < 4) return false;
@@ -128,40 +179,151 @@ function createSky(scene) {
   return sky;
 }
 
-/** De grond: één groot vlak met kleuren per gebied en bruine paden. */
+/** De grond: één groot vlak dat 4 texturen mengt (gras, aarde, rots, stenen vloer). */
 function createGround(scene) {
   const size = WORLD_HALF * 2;
   const geo = new THREE.PlaneGeometry(size, size, 160, 160);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
   const colors = [];
+  const blends = [];
   const rand = seededRandom(7);
-  const regionColor = {
-    weide: new THREE.Color(0x6abf69),
-    woud: new THREE.Color(0x3c6a3c),
-    hoogland: new THREE.Color(0x9b9584),
-  };
-  const dirt = new THREE.Color(0xa88a5e);
-  const stone = new THREE.Color(0x8c8c8c);
+  const tint = { weide: new THREE.Color(1.6, 1.6, 1.35), woud: new THREE.Color(0.85, 1.0, 0.8), hoogland: new THREE.Color(1.05, 1.0, 0.92) };
   const c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const z = pos.getZ(i);
-    c.copy(regionColor[regionAt(x, z)]);
-    // zachte overgang en een beetje variatie
-    c.offsetHSL(0, 0, (rand() - 0.5) * 0.05);
-    const p = distToPath(x, z);
-    if (p < 2.6) c.lerp(dirt, 1 - p / 2.6);
+    const region = regionAt(x, z);
+    c.copy(tint[region]).offsetHSL(0, 0, (rand() - 0.5) * 0.06);
+    // gewicht per textuur: [gras, aarde, rots, stenen vloer]
+    let w = region === 'hoogland' ? [0.35, 0, 0.65, 0] : [1, 0, 0, 0];
+    const p = Math.min(distToPath(x, z), Math.hypot(x - VILLAGE_CENTER.x, z - VILLAGE_CENTER.z) - 7);
+    if (p < 2.6) {
+      const k = 1 - Math.max(0, p) / 2.6;
+      w = w.map((v, j) => v * (1 - k) + (j === 1 ? k : 0));
+      c.lerp(new THREE.Color(1, 1, 1), k);
+    }
     for (const a of ARENAS) {
       const d = Math.hypot(x - a.center.x, z - a.center.z);
-      if (d < a.radius + 1) c.lerp(stone, Math.min(1, (a.radius + 1 - d) / 2));
+      if (d < a.radius + 1) {
+        const k = Math.min(1, (a.radius + 1 - d) / 2);
+        w = w.map((v, j) => v * (1 - k) + (j === 3 ? k : 0));
+        c.lerp(new THREE.Color(0.85, 0.85, 0.85), k);
+      }
     }
     colors.push(c.r, c.g, c.b);
+    blends.push(...w);
   }
   geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  const ground = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }));
+  geo.setAttribute('blend', new THREE.Float32BufferAttribute(blends, 4));
+
+  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.tGrass = { value: tex('floor_ground_grass') };
+    shader.uniforms.tDirt = { value: tex('floor_ground_dirt') };
+    shader.uniforms.tRock = { value: tex('wall_rock') };
+    shader.uniforms.tStone = { value: tex('floor_stone_pattern') };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec4 blend;\nvarying vec4 vBlend;\nvarying vec2 vGroundUv;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBlend = blend;\nvGroundUv = position.xz / 2.5;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D tGrass, tDirt, tRock, tStone;\nvarying vec4 vBlend;\nvarying vec2 vGroundUv;')
+      .replace(
+        '#include <map_fragment>',
+        `vec3 groundTex = texture2D(tGrass, vGroundUv).rgb * vBlend.x + texture2D(tDirt, vGroundUv).rgb * vBlend.y
+          + texture2D(tRock, vGroundUv * 0.6).rgb * vBlend.z + texture2D(tStone, vGroundUv).rgb * vBlend.w;
+        diffuseColor.rgb *= groundTex;`
+      );
+  };
+  const ground = new THREE.Mesh(geo, material);
   ground.receiveShadow = true;
   scene.add(ground);
+}
+
+/** Een huis met muren, een puntdak, een deur, ramen met licht en een schoorsteen. */
+function createHouse(scene, colliders, [x, z, w, d, h, wallName, roofName]) {
+  const house = new THREE.Group();
+  // Deur aan de kant van het dorpsplein (in stappen van 90 graden, zodat de botsing klopt)
+  const angle = Math.atan2(VILLAGE_CENTER.x - x, VILLAGE_CENTER.z - z);
+  const rot = Math.round(angle / (Math.PI / 2)) * (Math.PI / 2);
+  house.position.set(x, 0, z);
+  house.rotation.y = rot;
+  const wallMat = texMat(wallName);
+  const walls = texturedBox(w, h, d, wallMat, 2);
+  walls.position.y = h / 2;
+  house.add(walls);
+
+  // Puntdak: twee schuine vlakken en twee driehoekige gevels
+  const rh = d * 0.45;
+  const slope = Math.atan2(rh, d / 2);
+  const slopeLen = Math.hypot(d / 2, rh);
+  const roofMat = texMat(roofName);
+  for (const side of [-1, 1]) {
+    const roof = texturedBox(w + 0.7, 0.14, slopeLen + 0.45, roofMat, 1.5);
+    roof.position.set(0, h + rh / 2 + 0.08, (side * d) / 4 + side * 0.08);
+    roof.rotation.x = side * slope;
+    house.add(roof);
+    const shape = new THREE.Shape([new THREE.Vector2(-d / 2, 0), new THREE.Vector2(d / 2, 0), new THREE.Vector2(0, rh)]);
+    const gableGeo = new THREE.ShapeGeometry(shape);
+    const guv = gableGeo.attributes.uv;
+    for (let i = 0; i < guv.count; i++) guv.setXY(i, gableGeo.attributes.position.getX(i) / 2, gableGeo.attributes.position.getY(i) / 2);
+    const gable = new THREE.Mesh(gableGeo, wallMat);
+    gable.position.set((side * w) / 2, h, 0);
+    gable.rotation.y = side * (Math.PI / 2);
+    gable.castShadow = true;
+    house.add(gable);
+  }
+  // Schoorsteen
+  const chimney = texturedBox(0.6, 1.6, 0.6, texMat('wall_brick_stone_center'), 1);
+  chimney.position.set(w * 0.25, h + rh * 0.7, -d * 0.15);
+  house.add(chimney);
+
+  // Deur en ramen (vlakjes net vóór de muur); de ramen gloeien warm
+  const plane = (texName, pw, ph, px, py, pz, ry, glow) => {
+    const m = new THREE.Mesh(
+      new THREE.PlaneGeometry(pw, ph),
+      new THREE.MeshStandardMaterial({ map: tex(texName), roughness: 0.8, emissive: glow ? 0xffc46b : 0x000000, emissiveMap: glow ? tex(texName) : null, emissiveIntensity: glow ? 0.6 : 0 })
+    );
+    m.position.set(px, py, pz);
+    m.rotation.y = ry;
+    house.add(m);
+  };
+  plane('door_wood_handle', 1.1, 2.1, 0, 1.05, d / 2 + 0.02, 0, false);
+  plane('window_square_divided_lit', 0.9, 0.9, -w * 0.3, h * 0.6, d / 2 + 0.02, 0, true);
+  plane('window_square_divided_lit', 0.9, 0.9, w * 0.3, h * 0.6, d / 2 + 0.02, 0, true);
+  plane('window_round_divided_lit', 0.8, 0.8, w / 2 + 0.02, h * 0.6, 0, Math.PI / 2, true);
+  plane('window_round_divided_lit', 0.8, 0.8, -w / 2 - 0.02, h * 0.6, 0, -Math.PI / 2, true);
+  plane('window_square_divided_lit', 0.9, 0.9, 0, h * 0.6, -d / 2 - 0.02, Math.PI, true);
+  scene.add(house);
+
+  // Botsingsvak (gedraaid huis: breedte en diepte wisselen)
+  const turned = Math.abs(Math.sin(rot)) > 0.5;
+  const hw = (turned ? d : w) / 2;
+  const hd = (turned ? w : d) / 2;
+  colliders.push(new THREE.Box3(new THREE.Vector3(x - hw, 0, z - hd), new THREE.Vector3(x + hw, h + rh, z + hd)));
+}
+
+/** De dorpsput in het midden van Muntdorp. */
+function createWell(scene, colliders) {
+  const c = VILLAGE_CENTER;
+  const stone = texMat('wall_brick_stone_center');
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.3, 1, 16, 1, true), stone);
+  ring.position.set(c.x, 0.5, c.z);
+  ring.material.side = THREE.DoubleSide;
+  const water = new THREE.Mesh(new THREE.CircleGeometry(1.15, 16), new THREE.MeshStandardMaterial({ color: 0x2f6f9f, roughness: 0.2, metalness: 0.2 }));
+  water.rotation.x = -Math.PI / 2;
+  water.position.set(c.x, 0.6, c.z);
+  const wood = texMat('timber_square_planks');
+  const posts = [-1, 1].map((s) => {
+    const p = texturedBox(0.18, 2.4, 0.18, wood, 1);
+    p.position.set(c.x + s * 1.1, 1.2, c.z);
+    return p;
+  });
+  const roof = texturedBox(2.8, 0.15, 1.8, texMat('roof_thatch_center'), 1);
+  roof.position.set(c.x, 2.45, c.z);
+  ring.castShadow = true;
+  scene.add(ring, water, ...posts, roof);
+  colliders.push(new THREE.Box3(new THREE.Vector3(c.x - 1.3, 0, c.z - 1.3), new THREE.Vector3(c.x + 1.3, 1, c.z + 1.3)));
 }
 
 /** Bomen (heel veel, dus met InstancedMesh), stenen, bloemen, paddenstoelen. */
@@ -280,17 +442,15 @@ function createNature(scene, colliders) {
 
 /** Boss-arena: stenen vloer en een kring van (gebroken) pilaren. */
 function createArena(scene, colliders, arena) {
-  const mat = new THREE.MeshStandardMaterial({ color: 0x9a968e, roughness: 0.9, flatShading: true });
+  const mat = texMat('wall_brick_stone_center');
   const count = 12;
   for (let i = 0; i < count; i++) {
     const a = (i / count) * Math.PI * 2;
     const x = arena.center.x + Math.sin(a) * (arena.radius + 1.5);
     const z = arena.center.z + Math.cos(a) * (arena.radius + 1.5);
     const h = i % 3 === 0 ? 2 : 5 + (i % 2) * 1.5; // sommige zijn afgebroken
-    const pillar = new THREE.Mesh(new THREE.BoxGeometry(1.4, h, 1.4), mat);
+    const pillar = texturedBox(1.4, h, 1.4, mat, 1.4);
     pillar.position.set(x, h / 2, z);
-    pillar.castShadow = true;
-    pillar.receiveShadow = true;
     scene.add(pillar);
     colliders.push(new THREE.Box3().setFromObject(pillar));
   }
@@ -311,15 +471,17 @@ export function createWorld(scene) {
 
   const colliders = [];
   for (const [x, y, z, w, h, d, color] of BLOCKS) {
-    const block = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color, roughness: 0.85 }));
+    // Dunne zwevende platforms van hout, de rest van steen
+    const material = h <= 0.5 ? texMat('floor_wood_planks') : texMat(color === 0x8d8a85 || color === 0x6f6a63 ? 'wall_stone' : 'wall_brick_stone_center');
+    const block = texturedBox(w, h, d, material, 2);
     block.position.set(x, y, z);
-    block.castShadow = true;
-    block.receiveShadow = true;
     scene.add(block);
     colliders.push(new THREE.Box3().setFromObject(block));
   }
 
   createNature(scene, colliders);
+  for (const house of HOUSES) createHouse(scene, colliders, house);
+  createWell(scene, colliders);
   for (const arena of ARENAS) createArena(scene, colliders, arena);
 
   return {

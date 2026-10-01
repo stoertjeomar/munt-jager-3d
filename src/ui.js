@@ -235,7 +235,8 @@ export class UI {
         <span style="color:${itemColor(item)}">${item.kind === 'weapon' ? '⚔' : '⛑'} ${info.name}</span>
         <small>${stat} · ${info.info}</small>${equipped ? '<em>uitgerust</em>' : ''}</button>`;
     };
-    return `<h3>Wapens</h3>${d.inventory.filter((i) => i.kind === 'weapon').map(row).join('')}
+    const diamonds = `<p class="menu-info">💎 Diamanten gevonden: <b>${(d.diamonds ?? []).length} / 12</b> · Kisten geopend: <b>${d.chests.length}</b></p>`;
+    return diamonds + `<h3>Wapens</h3>${d.inventory.filter((i) => i.kind === 'weapon').map(row).join('')}
       <h3>Helmen</h3>${d.inventory.filter((i) => i.kind === 'helmet').map(row).join('')}`;
   }
 
