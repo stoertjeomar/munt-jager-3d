@@ -3,7 +3,7 @@ import * as THREE from 'three';
 // Instellingen van het zwaard
 const SWING_TIME = 0.28; // hoe lang een slag duurt (seconden)
 const COOLDOWN = 0.15; // pauze na een slag voordat je weer kunt slaan
-export const SWORD_RANGE = 2.3; // hoe ver het zwaard reikt
+export const SWORD_RANGE = 2.4; // hoe ver het zwaard reikt
 
 // Rusthouding en slag-hoeken (radialen)
 const REST_YAW = -0.35;
@@ -11,6 +11,74 @@ const REST_PITCH = 0.3;
 const SWING_FROM = -1.4; // rechts van de speler
 const SWING_TO = 1.5; // links van de speler
 const SWING_PITCH = 1.45; // bijna horizontaal naar voren
+
+// Het zwaard is "pixel art" van blokjes, net als een diamanten zwaard in Minecraft.
+// Elke letter is één blokje; de bovenste regel is de punt. Teken je eigen zwaard!
+//   d = donkergroene rand   m = turquoise   l = lichtblauw
+//   g = goud                b = donker goud   . = leeg
+const SWORD_PIXELS = [
+  '.....d.....',
+  '....dld....',
+  '...dllmd...',
+  '...dlmld...',
+  '...dmlld...',
+  '...dllmd...',
+  '...dlmld...',
+  '...dmlld...',
+  '...dllmd...',
+  '...dlmld...',
+  '...dmlld...',
+  '...dllmd...',
+  '...dlmld...',
+  '...dmlld...',
+  'dd.dlmld.dd',
+  'dldllmlldld',
+  'dlllmmmllld',
+  'ddddddddddd',
+  '....gbg....',
+  '....bgb....',
+  '....gbg....',
+  '...ddldd...',
+  '...dlmld...',
+  '....ddd....',
+];
+const PIXEL = 0.065; // grootte van één blokje
+const HANDLE_ROW = 19; // deze regel zit in de hand
+
+const PIXEL_COLORS = {
+  d: { color: 0x0d4a3c, roughness: 0.6 },
+  m: { color: 0x2fa58f, roughness: 0.35, emissive: 0x0b3b33 },
+  l: { color: 0x8ff0dc, roughness: 0.25, emissive: 0x1d5c50 },
+  g: { color: 0xd9a52b, roughness: 0.4, metalness: 0.4 },
+  b: { color: 0x8a5a14, roughness: 0.6 },
+};
+
+/** Bouwt het zwaard uit blokjes. Per kleur één InstancedMesh, dat is snel. */
+function buildBlockSword() {
+  const group = new THREE.Group();
+  const cube = new THREE.BoxGeometry(PIXEL, PIXEL, PIXEL * 1.4);
+  const width = SWORD_PIXELS[0].length;
+
+  for (const [letter, settings] of Object.entries(PIXEL_COLORS)) {
+    const spots = [];
+    SWORD_PIXELS.forEach((row, r) => {
+      [...row].forEach((ch, c) => {
+        if (ch === letter) spots.push([c, r]);
+      });
+    });
+    if (spots.length === 0) continue;
+
+    const mesh = new THREE.InstancedMesh(cube, new THREE.MeshStandardMaterial({ flatShading: true, ...settings }), spots.length);
+    const m = new THREE.Matrix4();
+    spots.forEach(([c, r], i) => {
+      m.makeTranslation((c - (width - 1) / 2) * PIXEL, (HANDLE_ROW - r) * PIXEL, 0);
+      mesh.setMatrixAt(i, m);
+    });
+    mesh.castShadow = true;
+    group.add(mesh);
+  }
+  return group;
+}
 
 export class Sword {
   /** @param {THREE.Object3D} holder  het object waar het zwaard aan vastzit (de speler) */
@@ -22,27 +90,8 @@ export class Sword {
     this.yawPivot.add(this.pitchPivot);
     holder.add(this.yawPivot);
 
-    const metal = new THREE.MeshStandardMaterial({ color: 0xdfe6ee, metalness: 0.8, roughness: 0.25 });
-    const gold = new THREE.MeshStandardMaterial({ color: 0xd4a017, metalness: 0.6, roughness: 0.35 });
-    const leather = new THREE.MeshStandardMaterial({ color: 0x6b3e1f, roughness: 0.8 });
-
-    // Het zwaard wijst langs +Y vanaf het handvat
-    const parts = [
-      [new THREE.CylinderGeometry(0.045, 0.045, 0.28, 8), leather, 0.0], // handvat
-      [new THREE.SphereGeometry(0.07, 10, 10), gold, -0.16], // knop onderaan
-      [new THREE.BoxGeometry(0.42, 0.07, 0.1), gold, 0.16], // pareerstang
-      [new THREE.BoxGeometry(0.11, 1.0, 0.035), metal, 0.69], // kling
-      [new THREE.ConeGeometry(0.078, 0.18, 4), metal, 1.28], // punt
-    ];
-    for (const [geo, mat, y] of parts) {
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.y = y;
-      mesh.castShadow = true;
-      this.pitchPivot.add(mesh);
-    }
-    // De punt (kegel met 4 kanten) plat draaien zodat hij op de kling aansluit
-    this.pitchPivot.children[4].rotation.y = Math.PI / 4;
-    this.pitchPivot.children[4].scale.z = 0.4;
+    // Het zwaard wijst langs +Y; het handvat zit in het draaipunt (de hand)
+    this.pitchPivot.add(buildBlockSword());
 
     // Een doorzichtige "zwiep"-boog die even zichtbaar is tijdens een slag
     const trailGeo = new THREE.RingGeometry(0.6, SWORD_RANGE - 0.3, 24, 1, 0, SWING_TO - SWING_FROM);

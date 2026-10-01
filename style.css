@@ -16,11 +16,7 @@ body {
 
 canvas {
   display: block;
-  cursor: grab;
-}
-
-canvas:active {
-  cursor: grabbing;
+  cursor: pointer;
 }
 
 #hud {
@@ -62,6 +58,20 @@ canvas:active {
   color: #fff;
   font-size: 14px;
   white-space: nowrap;
+  pointer-events: none;
+}
+
+#lock-hint {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 14px 24px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
   pointer-events: none;
 }
 

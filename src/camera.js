@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 
 // Een "third person" camera die om de speler heen draait.
-// Muis slepen = draaien, scrollen = zoomen.
+// Klik in het spel: de muis wordt "vastgezet" en gewoon bewegen = rondkijken.
+// Esc maakt de muis weer vrij. Scrollen = zoomen.
+const MOUSE_SENSITIVITY = 0.0025;
+
 export class CameraRig {
   constructor(camera, domElement) {
     this.camera = camera;
@@ -9,18 +12,15 @@ export class CameraRig {
     this.pitch = 0.45; // verticale hoek (radialen)
     this.distance = 9;
     this.target = new THREE.Vector3();
+    this.domElement = domElement;
 
-    let dragging = false;
-
-    domElement.addEventListener('pointerdown', (e) => {
-      dragging = true;
-      domElement.setPointerCapture(e.pointerId);
+    domElement.addEventListener('pointerdown', () => {
+      if (!this.locked) domElement.requestPointerLock();
     });
-    domElement.addEventListener('pointerup', () => (dragging = false));
-    domElement.addEventListener('pointermove', (e) => {
-      if (!dragging) return;
-      this.yaw -= e.movementX * 0.005;
-      this.pitch += e.movementY * 0.005;
+    document.addEventListener('mousemove', (e) => {
+      if (!this.locked) return;
+      this.yaw -= e.movementX * MOUSE_SENSITIVITY;
+      this.pitch += e.movementY * MOUSE_SENSITIVITY;
       this.pitch = THREE.MathUtils.clamp(this.pitch, 0.05, 1.3);
     });
     domElement.addEventListener(
@@ -31,6 +31,11 @@ export class CameraRig {
       },
       { passive: false }
     );
+  }
+
+  /** Zit de muis vast in het spel? */
+  get locked() {
+    return document.pointerLockElement === this.domElement;
   }
 
   /** Richting "vooruit" vanaf de camera, op de grond (x, z). */

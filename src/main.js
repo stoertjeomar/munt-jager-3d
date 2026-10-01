@@ -81,17 +81,17 @@ function collectCoins() {
   }
 }
 
-// ---------- Zwaard: slaan met F, of één keer klikken (zonder slepen) ----------
-let pointerStart = null;
+// ---------- Zwaard: slaan met F, of klikken (als de muis vastzit in het spel) ----------
 let attackRequested = false;
 renderer.domElement.addEventListener('pointerdown', (e) => {
-  if (e.button === 0) pointerStart = { x: e.clientX, y: e.clientY };
+  // De eerste klik zet alleen de muis vast; daarna is klikken = slaan
+  if (e.button === 0 && cameraRig.locked) attackRequested = true;
 });
-renderer.domElement.addEventListener('pointerup', (e) => {
-  if (!pointerStart) return;
-  const moved = Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y);
-  pointerStart = null;
-  if (moved < 6) attackRequested = true; // slepen = camera draaien, niet slaan
+
+// Uitleg "klik om te spelen" tonen zolang de muis niet vastzit
+const lockHintEl = document.getElementById('lock-hint');
+document.addEventListener('pointerlockchange', () => {
+  lockHintEl.classList.toggle('hidden', cameraRig.locked);
 });
 
 function swordAttack() {

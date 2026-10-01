@@ -35,18 +35,19 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 | WASD / pijltjes | Lopen            |
 | Spatie          | Springen         |
 | F / klik        | Zwaard zwaaien   |
-| Muis slepen     | Camera draaien   |
+| Muis bewegen    | Rondkijken (klik eerst in het spel) |
+| Esc             | Muis weer vrij   |
 | Scrollen        | Zoomen           |
 | R               | Opnieuw beginnen |
 
 ## Wat zit erin
 
-- Third-person camera die om de speler draait (muis) en soepel meebeweegt
+- Third-person camera: muis vastgezet in het spel (pointer lock), gewoon bewegen om rond te kijken
 - Beweging relatief aan de camera, met zwaartekracht en springen
 - Eigen botsingsdetectie (AABB): landen op blokken, hoofd stoten, langs muren schuiven
 - Van de wereld vallen → terug naar start
 - Munten verzamelen, timer en win-scherm
-- Zwaard met zwaai-animatie: twee klappen en een vijand is verslagen
+- Diamanten zwaard van blokjes (pixel art, zelf te tekenen in `src/sword.js`) met zwaai-animatie: twee klappen en een vijand is verslagen
 - Vijanden (slijmballen) die heen en weer lopen en je achterna gaan als je dichtbij komt
 - 3 levens: een vijand raken kost een hartje (met terugstoot), op een vijand springen verslaat hem meteen
 - Realtime schaduwen en mist
