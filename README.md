@@ -1,8 +1,8 @@
 # Munt Jager 3D
 
-Een 3D-platformgame in de browser, gemaakt met **JavaScript** en **[Three.js](https://threejs.org/)**.
-Loop rond, spring over blokken en zwevende platforms en verzamel alle 15 munten zo snel mogelijk.
-Pas op voor de boze slijmballen — sla ze met je zwaard of spring erop!
+Een **open-wereld actie-RPG** in de browser, in de stijl van Elden Ring, gemaakt met **JavaScript** en **[Three.js](https://threejs.org/)**.
+Kies je held, versla vijanden voor munten, word sterker bij de Plekken van Genade, vind wapens en krachten,
+en versla de vier bosses.
 
 ![Screenshot van Munt Jager 3D](docs/screenshot.png)
 
@@ -30,94 +30,94 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 
 ## Besturing
 
-| Toets           | Actie            |
-| --------------- | ---------------- |
-| WASD / pijltjes | Lopen            |
-| Spatie          | Springen         |
-| F / klik        | Slaan met je wapen |
-| E               | Wapen oppakken (je oude wapen blijft liggen) |
-| Muis bewegen    | Rondkijken (klik eerst in het spel) |
-| Esc             | Muis weer vrij   |
-| Scrollen        | Zoomen           |
-| M               | Geluid aan/uit   |
-| R               | Opnieuw beginnen |
+| Toets | Actie |
+| ----- | ----- |
+| WASD / pijltjes | Lopen |
+| Muis | Rondkijken (de camera draait ook vanzelf achter je aan) |
+| Shift | Kort tikken = rollen (onkwetsbaar), ingedrukt houden = sprinten |
+| Spatie | Springen (in de lucht nog eens = dubbele sprong) |
+| Klik / F | Slaan of schieten (F in de lucht = grondslag) |
+| Q | Vastzetten op een vijand (lock-on) |
+| R | Flesje drinken (leven terug) |
+| E | Rusten bij een Plek van Genade / kist openen |
+| C | Dash |
+| V | Wervelslag |
+| X | Vuurzwaard |
+| I of Tab | Uitrusting (wapens, helmen, krachten) |
+| M | Geluid aan/uit |
+| Esc | Pauze / muis vrij |
 
 ## Wat zit erin
 
-- Third-person camera: muis vastgezet in het spel (pointer lock), gewoon bewegen om rond te kijken
-- Beweging relatief aan de camera, met zwaartekracht en springen
-- Eigen botsingsdetectie (AABB): landen op blokken, hoofd stoten, langs muren schuiven
-- Van de wereld vallen → terug naar start
-- Munten verzamelen, timer en win-scherm
-- Bewegend poppetje: armen en benen zwaaien tijdens het lopen, uithalen en slaan met het wapen in de hand,
-  armen uit elkaar bij springen, bukken om een wapen op te pakken (`src/animator.js`)
-- Diamanten zwaard van blokjes (pixel art, zelf te tekenen in `src/sword.js`) met zwaai-animatie: twee klappen en een vijand is verslagen
-- 4 soorten vijanden, van makkelijk tot moeilijk:
-  - **Slijmpje** (groen, 1 leven): klein en traag
-  - **Slijmbal** (rood, 2 levens): boos en sneller
-  - **Spook** (paars, 3 levens): vliegt door muren en volgt je tot op de platforms
-  - **Rotsgolem** (8 levens): langzaam en zwaar, laadt op en slaat een schokgolf in de grond
-- Levensbalk en schade-getallen boven vijanden, en hartjes die ze laten vallen
-- Gloeiend zwaard-windje achter elke slag (kleur per wapen), vonken, spetters, camera-schok en "hitstop"
-- Geluidseffecten, gemaakt met de Web Audio API (geen geluidsbestanden)
-- Lucht met kleurverloop, bomen, stenen en bloemetjes
-- 5 wapens: begin met het diamanten zwaard, vind in de wereld het ridderzwaard, kort zwaard, de knots en (bovenop het hoogste platform) de katana.
-  Elk wapen heeft eigen schade, bereik en snelheid; de knots verslaat een vijand in één klap
-- 5 levens: een vijand raken kost een hartje (met terugstoot), op een vijand springen verslaat hem meteen
-- Realtime schaduwen en mist
+- **Kies je held**: Ridder, Eve, Soldaat, Mila, Robot of Strohoed — allemaal met dezelfde animaties
+  (lopen, slaan, rollen, drinken, richten), ook de Mixamo-personages met een echt skelet
+- **Open wereld** van 240 × 240 meter: Groene Weide, het dorp Muntdorp, het Spookwoud en het Rotshoogland,
+  met paden, ruïnes, bomen, dieren, wolken, een minimap en een **dag-en-nachtritme** met sterren
+- **Elden Ring-stijl**: munten verdienen, levelen bij Plekken van Genade (Vitaliteit, Kracht, Uithouding),
+  rusten brengt vijanden terug, doodgaan = je munten blijven liggen waar je viel
+- **Gevechten**: leven en stamina, rollen met onkwetsbaarheid, lock-on, flesjes, zwaard-windje,
+  vonken, schade-getallen, camera-schok en hitstop
+- **5 krachten**: Dash, Dubbele sprong, Wervelslag, Grondslag en Vuurzwaard (vrijspelen door te levelen en bosses te verslaan)
+- **Wapens**: kort zwaard, ridderzwaard, katana, knots, diamanten zwaard, revolver, shotgun, machinegeweer,
+  sluipschuttersgeweer en boog — plus 3 helmen. Te vinden in kisten en bij bosses
+- **Vijanden**: slijmpjes, slijmballen, spoken, rotsgolems, zombies, Spierbonken en Mecha-Wachters
+- **4 bosses** met een mistmuur, boss-balk en een tweede fase: Koning Slijm, De Gevallen Ridder,
+  Steenreus Gorath en Budget Mario
+- 12 verstopte **diamanten**, hartjes, munten die naar je toe vliegen
+- Geluidseffecten en **opslaan** in de browser (verder spelen waar je was)
 
 ## Projectstructuur
 
 ```
 munt-jager-3d/
-├── index.html      → pagina + HUD, laadt Three.js via een import map
-├── style.css       → opmaak van de HUD
-├── lib/            → Three.js (r170) + GLTFLoader + licentie
-├── models/         → zet hier speler.glb neer voor je eigen poppetje
+├── index.html        → pagina, HUD en startscherm
+├── style.css         → opmaak (Elden Ring-stijl)
+├── lib/              → Three.js (r170) + loaders + licentie
+├── models/           → 3D-modellen (personages, wapens, helmen, bosses, KayKit, Kenney)
+├── textures/         → Kenney Retro Textures (grond, muren, daken, ramen)
+├── sounds/           → geluiden uit het Kenney Starter Kit
+├── images/           → portretten voor het startscherm
 └── src/
-    ├── main.js     → start alles op, game loop, score, gevechten en winnen
-    ├── character.js → het poppetje: strohoed, rood hemd, blauwe broek, lopende armen en benen
-    ├── player.js   → speler: lopen, springen, zwaartekracht, botsingen, levens
-    ├── animator.js → laat het poppetje bewegen: lopen, slaan, springen, oppakken
-    ├── sword.js    → het wapen in de hand: welk wapen en de timing van een slag
-    ├── weapons.js  → alle wapens: schade, bereik, snelheid en 3D-model
-    ├── pickups.js  → wapens die in de wereld liggen om op te pakken
-    ├── enemies.js  → vijanden: soorten, looproutes, achtervolgen, golem-aanval
-    ├── effects.js  → deeltjes, schade-getallen, schokgolven, camera-schok
-    ├── trail.js    → het gloeiende zwaard-windje
-    ├── audio.js    → geluidseffecten (Web Audio)
-    ├── drops.js    → hartjes die vijanden laten vallen
-    ├── world.js    → level: vloer, licht, blokken en munten
-    ├── camera.js   → third-person camera
-    └── input.js    → toetsenbord uitlezen
+    ├── main.js       → start alles op, game loop, gevechten, rusten, doodgaan
+    ├── world.js      → de open wereld: grond, paden, dorp, ruïnes, arena's, dag en nacht
+    ├── decor.js      → planten, stenen, wolken, vlaggen en dieren
+    ├── player.js     → speler: bewegen, rollen, krachten, flesjes, personages
+    ├── animator.js   → laat het poppetje bewegen (lopen, slaan, richten, drinken...)
+    ├── mixamo.js     → vertaalt die bewegingen naar een Mixamo-skelet
+    ├── character.js  → het Strohoed-poppetje uit simpele vormen
+    ├── weapons.js    → alle wapens · gear.js → helmen
+    ├── sword.js      → het wapen in de hand · trail.js → het zwaard-windje
+    ├── projectiles.js→ kogels, pijlen, energie- en vuurballen
+    ├── enemies.js    → vijanden en hun aanvallen · bosses.js → de vier bosses
+    ├── sites.js      → Plekken van Genade, kisten, verloren munten
+    ├── pickups.js    → munten, hartjes, diamanten
+    ├── stats.js      → level, eigenschappen, krachten, opslaan
+    ├── ui.js         → balken, menu's, banners, minimap
+    ├── effects.js    → deeltjes, schokgolven, waarschuwingscirkels
+    ├── audio.js      → geluiden · camera.js · input.js · assets.js
 ```
 
 ## Zelf aanpassen
 
-- **Sneller lopen / hoger springen** → constanten bovenaan `src/player.js` (`SPEED`, `JUMP_SPEED`, `GRAVITY`)
-- **Eigen level bouwen** → de lijsten `BLOCKS` en `COINS` bovenaan `src/world.js`
-- **Poppetje aanpassen** → kleuren en vormen in `src/character.js`
-- **Eigen 3D-poppetje** → exporteer je model als **.glb** (bijv. uit Tripo) en zet het in `models/speler.glb`.
-  Het wordt vanzelf op de goede grootte gezet; heeft het animaties (idle / walk / run / jump), dan worden die afgespeeld.
-  Kijkt het de verkeerde kant op? Pas `MODEL_TURN` aan bovenaan `src/player.js`; zit het zwaard niet in de hand, pas dan `MODEL_HAND` aan.
-  Wil je het poppetje uit `character.js` terug? Verwijder (of hernoem) `models/speler.glb`.
-- **Wapens aanpassen** → `WEAPONS` in `src/weapons.js` (schade, bereik, snelheid) en `PICKUP_SPOTS` in `src/pickups.js` (waar ze liggen)
-- **Vijanden aanpassen** → `ENEMY_TYPES` (levens, snelheid, schade) en `SPAWNS` (waar ze lopen) bovenaan `src/enemies.js`
-- **Debuggen** → open de console (F12) en typ bijvoorbeeld `game.player.position`
-
-## Roadmap
-
-- [x] Vijanden die heen en weer lopen
-- [x] Zwaard
-- [ ] Bewegende platforms
-- [x] Geluidseffecten
-- [x] 3D-model als speler (`GLTFLoader`)
-- [ ] Meerdere levels en een opgeslagen beste tijd
+- **Vijanden** → `ENEMY_TYPES` en `SPAWNS` bovenaan `src/enemies.js`
+- **Wapens** → `WEAPONS` in `src/weapons.js` · **Helmen** → `HELMETS` in `src/gear.js`
+- **Krachten en levelen** → `POWERS` en `levelCost` in `src/stats.js`
+- **Wereld** → `GRACES`, `ARENAS`, `CHESTS` en `HOUSES` bovenaan `src/world.js`
+- **Personages** → `CHARACTERS` bovenaan `src/player.js`
+- **Opnieuw beginnen** → uitrusting (I) → *Nieuw spel beginnen*
 
 ## Credits
 
-- Ridder (`models/speler.glb`) en wapens (`models/wapens/`): **Knight Pack** door [Quaternius](https://quaternius.com) — CC0 1.0 (public domain)
+- Ridder, helmen, zwaarden, knots en zombie: [Quaternius](https://quaternius.com) — CC0
+- Mini-Game Variety Pack (planten, stenen, dieren, boog, hart, diamant): [KayKit / Kay Lousberg](https://kaylousberg.com) — CC0
+- Starter Kit 3D Platformer (munt, wolken, gras, vlaggen, robot, geluiden): [Kenney](https://kenney.nl) — MIT
+- Retro Textures Fantasy: [Kenney](https://kenney.nl) — CC0
+- Ultimate Guns Pack (geweren)
+- Personages Eve, Soldaat en Mila: via Mixamo
+- Budget Mario door Teh_LaughingMan, Buff man door joney_lol, MS Gundam RX-78-2 door Tipatat Chennavasin
+  (fan-modellen; Mario en Gundam zijn van Nintendo en Bandai — alleen voor eigen plezier)
 
 ## Licentie
 
 MIT — zie [LICENSE](LICENSE). Three.js valt onder zijn eigen MIT-licentie ([lib/THREE-LICENSE](lib/THREE-LICENSE)).
+De gebruikte modellen en texturen vallen onder de licenties hierboven.

@@ -27,7 +27,7 @@ renderer.toneMappingExposure = 1.15;
 document.body.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 400);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 230); // verder dan 230 m tekenen we niet (mist)
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -299,6 +299,7 @@ function die() {
 function respawnAfterDeath() {
   respawnWorld();
   player.respawnAt(graceSpawn(stats.data.lastGrace));
+  player.invulnerable = 2; // even veilig na het terugkomen
   cameraRig.snapTo(player.position);
 }
 
@@ -727,7 +728,7 @@ function gameLoop() {
   decor.update(dt, elapsed, player.position);
   updateTrail(dt);
   effects.update(dt);
-  world.updateSun(player.position);
+  world.updateSun(player.position, dt);
 
   cameraRig.update(realDt, player.position, {
     facing: player.mesh.rotation.y,

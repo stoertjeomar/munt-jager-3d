@@ -1,5 +1,8 @@
-speler.glb = de ridder uit de Knight Pack van Quaternius (CC0 1.0, https://quaternius.com),
-met Helmet1 en ShoulderPads erop. Hij is in losse delen geknipt (Hips, ArmL, ArmR, LegL, LegR, HandR)
-zodat animator.js zijn armen en benen kan bewegen.
-Vervang dit bestand door je eigen .glb voor een ander poppetje.
-Zonder dit bestand speel je met het poppetje uit src/character.js.
+Hier staan de 3D-modellen van de game:
+- speler.glb  = de ridder (Quaternius Knight Pack, CC0), in losse delen geknipt zodat hij kan bewegen
+- robot.glb   = robot uit het Kenney Starter Kit
+- personages/ = Eve, Soldaat en Mila (Mixamo)
+- wapens/, helmen/ = Quaternius (CC0) en Ultimate Guns Pack
+- kaykit/, kenney/ = KayKit Mini-Game Variety Pack (CC0) en Kenney Starter Kit
+- bosses/     = Budget Mario, Buff man (Spierbonk) en Gundam (Mecha-Wachter)
+- zombie.glb  = Zombie van Quaternius

@@ -688,6 +688,7 @@ class StoneGiant extends Boss {
       r.mesh.rotation.x += dt * 8;
       if (k >= 1) {
         this.scene.remove(r.mesh);
+        r.mesh.geometry.dispose();
         this.rocks.splice(i, 1);
         this.groundImpact(ctx, r.to, 2.6, 30);
       }

@@ -166,10 +166,54 @@ export function isFree(x, z, margin = 0) {
   return true;
 }
 
+// ---------- Dag en nacht ----------
+const DAY_LENGTH = 360; // een hele dag duurt 6 minuten
+const glowingWindows = [];
+
+// Kleuren op bepaalde momenten van de dag; daartussen vloeien ze in elkaar over
+const DAY_KEYS = [
+  { t: 0.0, top: 0x0a1030, horizon: 0x1b2850, sun: 0x8fa8ff, sunPower: 0.45, ambient: 0.35, skyLight: 0x6a7fc0, stars: 1 }, // nacht
+  { t: 0.22, top: 0x1d2f6a, horizon: 0xf2a37a, sun: 0xffb27a, sunPower: 0.9, ambient: 0.55, skyLight: 0xffc9a0, stars: 0.3 }, // zonsopgang
+  { t: 0.3, top: 0x3d7fd9, horizon: 0xcdeaff, sun: 0xffffff, sunPower: 1.6, ambient: 0.9, skyLight: 0xffffff, stars: 0 }, // ochtend
+  { t: 0.7, top: 0x3d7fd9, horizon: 0xcdeaff, sun: 0xffffff, sunPower: 1.6, ambient: 0.9, skyLight: 0xffffff, stars: 0 }, // middag
+  { t: 0.78, top: 0x4a3a7a, horizon: 0xff9a5c, sun: 0xff8a4a, sunPower: 1.0, ambient: 0.6, skyLight: 0xffb08a, stars: 0.2 }, // zonsondergang
+  { t: 0.86, top: 0x0a1030, horizon: 0x1b2850, sun: 0x8fa8ff, sunPower: 0.45, ambient: 0.35, skyLight: 0x6a7fc0, stars: 1 }, // nacht
+  { t: 1.0, top: 0x0a1030, horizon: 0x1b2850, sun: 0x8fa8ff, sunPower: 0.45, ambient: 0.35, skyLight: 0x6a7fc0, stars: 1 },
+];
+
+function dayLook(t) {
+  let i = 1;
+  while (i < DAY_KEYS.length - 1 && DAY_KEYS[i].t < t) i++;
+  const a = DAY_KEYS[i - 1];
+  const b = DAY_KEYS[i];
+  const k = THREE.MathUtils.smoothstep(t, a.t, b.t);
+  const col = (key) => new THREE.Color(a[key]).lerp(new THREE.Color(b[key]), k);
+  const num = (key) => a[key] + (b[key] - a[key]) * k;
+  return { top: col('top'), horizon: col('horizon'), sun: col('sun'), skyLight: col('skyLight'), sunPower: num('sunPower'), ambient: num('ambient'), stars: num('stars') };
+}
+
+/** Sterren aan de hemel (alleen 's nachts zichtbaar). */
+function createStars(scene) {
+  const rand = seededRandom(5);
+  const positions = [];
+  for (let i = 0; i < 700; i++) {
+    const a = rand() * Math.PI * 2;
+    const h = 0.12 + rand() * 0.88; // alleen boven de horizon
+    const r = Math.sqrt(1 - h * h);
+    positions.push(Math.cos(a) * r * 180, h * 180, Math.sin(a) * r * 180);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  const stars = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 1.3, sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false, fog: false, toneMapped: false }));
+  stars.frustumCulled = false;
+  scene.add(stars);
+  return stars;
+}
+
 /** Een lucht die van diepblauw (boven) naar lichtblauw (horizon) loopt. */
 function createSky(scene) {
   const sky = new THREE.Mesh(
-    new THREE.SphereGeometry(300, 32, 16),
+    new THREE.SphereGeometry(200, 32, 16),
     new THREE.ShaderMaterial({
       side: THREE.BackSide,
       depthWrite: false,
@@ -291,6 +335,7 @@ function createHouse(scene, colliders, [x, z, w, d, h, wallName, roofName]) {
       new THREE.PlaneGeometry(pw, ph),
       new THREE.MeshStandardMaterial({ map: tex(texName), roughness: 0.8, emissive: glow ? 0xffc46b : 0x000000, emissiveMap: glow ? tex(texName) : null, emissiveIntensity: glow ? 0.6 : 0 })
     );
+    if (glow) glowingWindows.push(m.material);
     m.position.set(px, py, pz);
     m.rotation.y = ry;
     house.add(m);
@@ -464,11 +509,13 @@ function createArena(scene, colliders, arena) {
 }
 
 export function createWorld(scene) {
-  createSky(scene);
+  const sky = createSky(scene);
   scene.fog = new THREE.Fog(0xcdeaff, 50, 140);
 
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x556b2f, 0.9));
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x556b2f, 0.9);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+  const stars = createStars(scene);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 120 });
@@ -495,9 +542,28 @@ export function createWorld(scene) {
     colliders,
     groundHalfSize: WALKABLE_HALF,
     /** Laat de zon (en zijn schaduw) met de speler meelopen. */
-    updateSun(playerPos) {
+    /** Hoe laat is het? 0 = middernacht, 0.25 = ochtend, 0.5 = middag, 0.75 = avond. */
+    timeOfDay: 0.3,
+    /** Laat de zon (en zijn schaduw) met de speler meelopen, en laat de dag verstrijken. */
+    updateSun(playerPos, dt = 0) {
+      this.timeOfDay = (this.timeOfDay + dt / DAY_LENGTH) % 1;
+      const look = dayLook(this.timeOfDay);
+      // Zon (overdag) of maan (nacht) draait over de hemel
+      const angle = (this.timeOfDay - 0.25) * Math.PI * 2;
+      const dir = new THREE.Vector3(Math.cos(angle) * 0.8, Math.sin(angle), 0.45);
+      if (dir.y < 0.15) dir.set(-dir.x, Math.max(0.35, -dir.y), dir.z); // 's nachts schijnt de maan van de andere kant
       sun.target.position.copy(playerPos);
-      sun.position.copy(playerPos).add(new THREE.Vector3(25, 45, 18));
+      sun.position.copy(playerPos).addScaledVector(dir.normalize(), 55);
+      sun.color.copy(look.sun);
+      sun.intensity = look.sunPower;
+      hemi.intensity = look.ambient;
+      hemi.color.copy(look.skyLight);
+      sky.material.uniforms.top.value.copy(look.top);
+      sky.material.uniforms.horizon.value.copy(look.horizon);
+      scene.fog.color.copy(look.horizon);
+      stars.material.opacity = look.stars;
+      stars.position.copy(playerPos);
+      for (const m of glowingWindows) m.emissiveIntensity = 0.4 + look.stars * 1.6; // ramen gloeien 's nachts
     },
   };
 }

@@ -11,14 +11,27 @@ import { isFree, regionAt, seededRandom, GRACES, WORLD_HALF, VILLAGE_CENTER } fr
  */
 function scatter(scene, gltf, transforms, { shadows = false } = {}) {
   gltf.scene.updateMatrixWorld(true);
+  // In vakken van 40 x 40 meter verdelen: dan tekent de computer alleen de vakken die in beeld zijn
+  const CELL = 40;
+  const cells = new Map();
+  const p = new THREE.Vector3();
+  for (const t of transforms) {
+    p.setFromMatrixPosition(t);
+    const key = `${Math.floor(p.x / CELL)},${Math.floor(p.z / CELL)}`;
+    if (!cells.has(key)) cells.set(key, []);
+    cells.get(key).push(t);
+  }
   gltf.scene.traverse((child) => {
-    if (!child.isMesh || transforms.length === 0) return;
-    const inst = new THREE.InstancedMesh(child.geometry, child.material, transforms.length);
-    const m = new THREE.Matrix4();
-    transforms.forEach((t, i) => inst.setMatrixAt(i, m.multiplyMatrices(t, child.matrixWorld)));
-    inst.castShadow = shadows;
-    inst.receiveShadow = true;
-    scene.add(inst);
+    if (!child.isMesh) return;
+    for (const list of cells.values()) {
+      const inst = new THREE.InstancedMesh(child.geometry, child.material, list.length);
+      const m = new THREE.Matrix4();
+      list.forEach((t, i) => inst.setMatrixAt(i, m.multiplyMatrices(t, child.matrixWorld)));
+      inst.computeBoundingSphere();
+      inst.castShadow = shadows;
+      inst.receiveShadow = true;
+      scene.add(inst);
+    }
   });
 }
 
@@ -106,13 +119,13 @@ export class Decor {
     const green = ['weide', 'woud'];
     if (grass) scatter(scene, grass, spots(rand, 900, { regions: green, scaleMin: 1.4, scaleMax: 2.4 }));
     if (grassSmall) scatter(scene, grassSmall, spots(rand, 900, { regions: green, scaleMin: 1.4, scaleMax: 2.2 }));
-    if (plantA) scatter(scene, plantA, spots(rand, 220, { regions: green, scaleMin: 0.8, scaleMax: 1.4 }));
-    if (plantB) scatter(scene, plantB, spots(rand, 220, { regions: green, scaleMin: 0.8, scaleMax: 1.4 }));
-    if (detail) scatter(scene, detail, spots(rand, 260, { regions: green, scaleMin: 1, scaleMax: 1.6 }));
-    if (rocksA) scatter(scene, rocksA, spots(rand, 120, { regions: green, scaleMin: 0.8, scaleMax: 1.5 }), { shadows: true });
-    if (rocksB) scatter(scene, rocksB, spots(rand, 120, { regions: green, scaleMin: 0.8, scaleMax: 1.5 }), { shadows: true });
-    if (rocksDesA) scatter(scene, rocksDesA, spots(rand, 160, { regions: ['hoogland'], scaleMin: 1, scaleMax: 2 }), { shadows: true });
-    if (rocksDesB) scatter(scene, rocksDesB, spots(rand, 160, { regions: ['hoogland'], scaleMin: 1, scaleMax: 2 }), { shadows: true });
+    if (plantA) scatter(scene, plantA, spots(rand, 90, { regions: green, scaleMin: 0.9, scaleMax: 1.5 }));
+    if (plantB) scatter(scene, plantB, spots(rand, 90, { regions: green, scaleMin: 0.8, scaleMax: 1.4 }));
+    if (detail) scatter(scene, detail, spots(rand, 110, { regions: green, scaleMin: 1, scaleMax: 1.6 }));
+    if (rocksA) scatter(scene, rocksA, spots(rand, 50, { regions: green, scaleMin: 0.8, scaleMax: 1.5 }), { shadows: true });
+    if (rocksB) scatter(scene, rocksB, spots(rand, 50, { regions: green, scaleMin: 0.8, scaleMax: 1.5 }), { shadows: true });
+    if (rocksDesA) scatter(scene, rocksDesA, spots(rand, 70, { regions: ['hoogland'], scaleMin: 1, scaleMax: 2 }), { shadows: true });
+    if (rocksDesB) scatter(scene, rocksDesB, spots(rand, 70, { regions: ['hoogland'], scaleMin: 1, scaleMax: 2 }), { shadows: true });
 
     // Vlaggen bij elke Plek van Genade
     if (flag) {

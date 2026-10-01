@@ -5,6 +5,13 @@ import { loadGLB } from './assets.js';
 // Een projectiel van de speler raakt vijanden; een projectiel van een vijand raakt de speler.
 
 const MAX_LIFE = 3;
+
+// Vormen en materialen worden gedeeld door alle projectielen (anders lekt er geheugen weg)
+const shared = {};
+function sharedGeo(key, make) {
+  shared[key] ??= make();
+  return shared[key];
+}
 let arrowModel = null;
 loadGLB('models/kaykit/arrow_teamRed.glb').then((g) => (arrowModel = g.scene)).catch(() => {});
 
@@ -53,7 +60,11 @@ export class Projectiles {
       return holder;
     }
     if (kind === 'bullet') {
-      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 6), new THREE.MeshBasicMaterial({ color: color ?? 0xffe27a, toneMapped: false }));
+      const c = color ?? 0xffe27a;
+      const m = new THREE.Mesh(
+        sharedGeo('bullet', () => new THREE.CylinderGeometry(0.03, 0.03, 0.9, 6)),
+        sharedGeo(`bulletMat${c}`, () => new THREE.MeshBasicMaterial({ color: c, toneMapped: false }))
+      );
       m.rotation.x = Math.PI / 2;
       const holder = new THREE.Group();
       holder.add(m);
@@ -62,8 +73,16 @@ export class Projectiles {
     // Energie- en vuurballen: een gloeiende bol met een zachte gloed eromheen
     const c = color ?? (kind === 'fire' ? 0xff7a1a : 0x5ff0ff);
     const holder = new THREE.Group();
-    holder.add(new THREE.Mesh(new THREE.SphereGeometry(kind === 'fire' ? 0.35 : 0.45, 14, 10), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false })));
-    holder.add(new THREE.Mesh(new THREE.SphereGeometry(kind === 'fire' ? 0.6 : 0.8, 14, 10), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false })));
+    const small = kind === 'fire' ? 0.35 : 0.45;
+    const big = kind === 'fire' ? 0.6 : 0.8;
+    holder.add(new THREE.Mesh(
+      sharedGeo(`core${small}`, () => new THREE.SphereGeometry(small, 14, 10)),
+      sharedGeo('coreMat', () => new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }))
+    ));
+    holder.add(new THREE.Mesh(
+      sharedGeo(`glow${big}`, () => new THREE.SphereGeometry(big, 14, 10)),
+      sharedGeo(`glowMat${c}`, () => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false }))
+    ));
     return holder;
   }
 

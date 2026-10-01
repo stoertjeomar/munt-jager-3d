@@ -191,6 +191,10 @@ export class Effects {
       const k = w.age / w.life;
       if (k >= 1) {
         this.scene.remove(w.group);
+        for (const m of [w.fill, w.edge]) {
+          m.geometry.dispose();
+          m.material.dispose();
+        }
         this.warnings.splice(i, 1);
         continue;
       }
