@@ -1,0 +1,2 @@
+Zet hier je eigen 3D-poppetje neer als: speler.glb
+(bijvoorbeeld gedownload uit Tripo als GLB). Zonder dit bestand speel je met het blauwe poppetje.

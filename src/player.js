@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Sword } from './sword.js';
 
 // Instellingen van de speler — speel hiermee om het gevoel te veranderen!
@@ -11,9 +12,18 @@ const FALL_LIMIT = -25; // onder deze hoogte: respawn
 export const MAX_HEALTH = 3; // aantal levens (hartjes)
 const INVULNERABLE_TIME = 1.2; // na een klap ben je even onkwetsbaar
 
+// Eigen 3D-poppetje: zet een .glb-bestand op deze plek (bijv. gemaakt met Tripo).
+// Staat het bestand er niet, dan speel je met het blauwe poppetje.
+const MODEL_URL = 'models/speler.glb';
+const MODEL_TURN = 0; // kijkt het model de verkeerde kant op? Probeer Math.PI of Math.PI / 2
+
 export class Player {
   constructor(scene) {
     this.mesh = new THREE.Group();
+
+    // Het blauwe poppetje (wordt vervangen als er een 3D-model is)
+    this.placeholder = new THREE.Group();
+    this.mesh.add(this.placeholder);
 
     // Lichaam: een capsule
     const body = new THREE.Mesh(
@@ -22,7 +32,7 @@ export class Player {
     );
     body.position.y = HEIGHT / 2;
     body.castShadow = true;
-    this.mesh.add(body);
+    this.placeholder.add(body);
 
     // Ogen, zodat je ziet welke kant de speler op kijkt (+Z = voorkant)
     const eyeGeo = new THREE.SphereGeometry(0.09, 12, 12);
@@ -35,7 +45,7 @@ export class Player {
       const pupil = new THREE.Mesh(pupilGeo, pupilMat);
       pupil.position.z = 0.07;
       eye.add(pupil);
-      this.mesh.add(eye);
+      this.placeholder.add(eye);
     }
 
     this.sword = new Sword(this.mesh);
@@ -47,6 +57,76 @@ export class Player {
     this.onGround = false;
     this.spawnPoint = new THREE.Vector3(0, 0, 8);
     this.reset();
+
+    this.mixer = null; // speelt de animaties van het model af (als het die heeft)
+    this.actions = {};
+    this.currentAction = null;
+    this.loadModel();
+  }
+
+  /** Probeer het eigen 3D-model te laden. */
+  loadModel() {
+    new GLTFLoader().load(
+      MODEL_URL,
+      (gltf) => {
+        const model = gltf.scene;
+        model.rotation.y = MODEL_TURN;
+
+        // Even groot maken als de speler, met de voeten op de grond en het midden in het midden
+        model.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(model);
+        const size = box.getSize(new THREE.Vector3());
+        const scale = HEIGHT / size.y;
+        model.scale.setScalar(scale);
+        model.updateMatrixWorld(true);
+        box.setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        model.position.set(-center.x, -box.min.y, -center.z);
+
+        model.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+
+        this.mesh.remove(this.placeholder);
+        this.mesh.add(model);
+
+        // Animaties (als het model "gerigd" is, bijvoorbeeld idle / walk / run / jump)
+        if (gltf.animations.length > 0) {
+          this.mixer = new THREE.AnimationMixer(model);
+          const find = (pattern) => gltf.animations.find((clip) => pattern.test(clip.name));
+          const clips = {
+            idle: find(/idle|stand/i),
+            walk: find(/run|walk/i) ?? gltf.animations[0],
+            jump: find(/jump/i),
+          };
+          for (const [name, clip] of Object.entries(clips)) {
+            if (clip) this.actions[name] = this.mixer.clipAction(clip);
+          }
+          console.log('Animaties in het model:', gltf.animations.map((clip) => clip.name));
+        }
+      },
+      undefined,
+      (error) => console.info(`Kon ${MODEL_URL} niet laden, je speelt met het blauwe poppetje.`, error)
+    );
+  }
+
+  /** Kies de juiste animatie: stilstaan, lopen of springen. */
+  updateAnimation(dt, moving) {
+    if (!this.mixer) return;
+    let name = 'idle';
+    if (!this.onGround && this.actions.jump) name = 'jump';
+    else if (moving) name = 'walk';
+
+    const next = this.actions[name] ?? null;
+    if (next !== this.currentAction) {
+      this.currentAction?.fadeOut(0.2);
+      next?.reset().fadeIn(0.2).play();
+      this.currentAction = next;
+    }
+    this.mixer.update(dt);
   }
 
   get position() {
@@ -157,6 +237,9 @@ export class Player {
 
     // 5. Van de wereld gevallen?
     if (pos.y < FALL_LIMIT) this.respawn();
+
+    // 6. Animatie van het 3D-model
+    this.updateAnimation(dt, move.lengthSq() > 0);
   }
 
   /** Bounding box van de speler op zijn huidige positie. */

@@ -58,7 +58,8 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 munt-jager-3d/
 ├── index.html      → pagina + HUD, laadt Three.js via een import map
 ├── style.css       → opmaak van de HUD
-├── lib/            → Three.js (r170) + licentie
+├── lib/            → Three.js (r170) + GLTFLoader + licentie
+├── models/         → zet hier speler.glb neer voor je eigen poppetje
 └── src/
     ├── main.js     → start alles op, game loop, score, gevechten en winnen
     ├── player.js   → speler: lopen, springen, zwaartekracht, botsingen, levens
@@ -73,6 +74,9 @@ munt-jager-3d/
 
 - **Sneller lopen / hoger springen** → constanten bovenaan `src/player.js` (`SPEED`, `JUMP_SPEED`, `GRAVITY`)
 - **Eigen level bouwen** → de lijsten `BLOCKS` en `COINS` bovenaan `src/world.js`
+- **Eigen 3D-poppetje** → exporteer je model als **.glb** (bijv. uit Tripo) en zet het in `models/speler.glb`.
+  Het wordt vanzelf op de goede grootte gezet; heeft het animaties (idle / walk / run / jump), dan worden die afgespeeld.
+  Kijkt het de verkeerde kant op? Pas `MODEL_TURN` aan bovenaan `src/player.js`.
 - **Vijanden aanpassen** → `PATROLS` (looproutes), snelheden en `MAX_HP` bovenaan `src/enemies.js`
 - **Debuggen** → open de console (F12) en typ bijvoorbeeld `game.player.position`
 
@@ -82,7 +86,7 @@ munt-jager-3d/
 - [x] Zwaard
 - [ ] Bewegende platforms
 - [ ] Geluidseffecten
-- [ ] 3D-model als speler (`GLTFLoader`)
+- [x] 3D-model als speler (`GLTFLoader`)
 - [ ] Meerdere levels en een opgeslagen beste tijd
 
 ## Licentie
