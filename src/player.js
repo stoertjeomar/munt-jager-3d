@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Sword } from './sword.js';
+import { buildCharacter, animateLimbs } from './character.js';
 
 // Instellingen van de speler — speel hiermee om het gevoel te veranderen!
 const SPEED = 7; // loopsnelheid (eenheden per seconde)
@@ -13,7 +14,7 @@ export const MAX_HEALTH = 3; // aantal levens (hartjes)
 const INVULNERABLE_TIME = 1.2; // na een klap ben je even onkwetsbaar
 
 // Eigen 3D-poppetje: zet een .glb-bestand op deze plek (bijv. gemaakt met Tripo).
-// Staat het bestand er niet, dan speel je met het blauwe poppetje.
+// Staat het bestand er niet, dan speel je met het poppetje uit character.js.
 const MODEL_URL = 'models/speler.glb';
 const MODEL_TURN = 0; // kijkt het model de verkeerde kant op? Probeer Math.PI of Math.PI / 2
 
@@ -21,32 +22,13 @@ export class Player {
   constructor(scene) {
     this.mesh = new THREE.Group();
 
-    // Het blauwe poppetje (wordt vervangen als er een 3D-model is)
-    this.placeholder = new THREE.Group();
+    // Het poppetje uit character.js (wordt vervangen als er een 3D-model is)
+    const character = buildCharacter();
+    this.placeholder = character.group;
+    this.limbs = character.limbs;
+    this.walkPhase = 0;
+    this.walkAmount = 0;
     this.mesh.add(this.placeholder);
-
-    // Lichaam: een capsule
-    const body = new THREE.Mesh(
-      new THREE.CapsuleGeometry(RADIUS, HEIGHT - RADIUS * 2, 8, 16),
-      new THREE.MeshStandardMaterial({ color: 0x4f8cff, roughness: 0.5 })
-    );
-    body.position.y = HEIGHT / 2;
-    body.castShadow = true;
-    this.placeholder.add(body);
-
-    // Ogen, zodat je ziet welke kant de speler op kijkt (+Z = voorkant)
-    const eyeGeo = new THREE.SphereGeometry(0.09, 12, 12);
-    const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
-    const pupilGeo = new THREE.SphereGeometry(0.045, 8, 8);
-    const pupilMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
-    for (const side of [-1, 1]) {
-      const eye = new THREE.Mesh(eyeGeo, eyeMat);
-      eye.position.set(side * 0.17, HEIGHT - 0.4, RADIUS - 0.04);
-      const pupil = new THREE.Mesh(pupilGeo, pupilMat);
-      pupil.position.z = 0.07;
-      eye.add(pupil);
-      this.placeholder.add(eye);
-    }
 
     this.sword = new Sword(this.mesh);
 
@@ -109,13 +91,20 @@ export class Player {
         }
       },
       undefined,
-      (error) => console.info(`Kon ${MODEL_URL} niet laden, je speelt met het blauwe poppetje.`, error)
+      (error) => console.info(`Kon ${MODEL_URL} niet laden, je speelt met het standaard poppetje.`, error)
     );
   }
 
   /** Kies de juiste animatie: stilstaan, lopen of springen. */
   updateAnimation(dt, moving) {
-    if (!this.mixer) return;
+    if (!this.mixer) {
+      // Poppetje uit character.js: armen en benen laten zwaaien
+      const target = moving && this.onGround ? 1 : 0;
+      this.walkAmount += (target - this.walkAmount) * Math.min(1, 12 * dt);
+      if (moving) this.walkPhase += dt * 11;
+      animateLimbs(this.limbs, this.walkPhase, this.walkAmount);
+      return;
+    }
     let name = 'idle';
     if (!this.onGround && this.actions.jump) name = 'jump';
     else if (moving) name = 'walk';

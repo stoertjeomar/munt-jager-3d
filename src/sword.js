@@ -42,7 +42,7 @@ const SWORD_PIXELS = [
   '...dlmld...',
   '....ddd....',
 ];
-const PIXEL = 0.065; // grootte van één blokje
+const PIXEL = 0.052; // grootte van één blokje
 const HANDLE_ROW = 19; // deze regel zit in de hand
 
 const PIXEL_COLORS = {
@@ -85,7 +85,7 @@ export class Sword {
   constructor(holder) {
     // Twee draaipunten in elkaar: yaw (links/rechts) en pitch (omhoog/naar voren)
     this.yawPivot = new THREE.Group();
-    this.yawPivot.position.set(-0.55, 0.85, 0.1); // rechterhand (+Z is de voorkant)
+    this.yawPivot.position.set(-0.3, 0.8, 0.26); // rechterhand (+Z is de voorkant)
     this.pitchPivot = new THREE.Group();
     this.yawPivot.add(this.pitchPivot);
     holder.add(this.yawPivot);

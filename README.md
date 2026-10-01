@@ -62,6 +62,7 @@ munt-jager-3d/
 ├── models/         → zet hier speler.glb neer voor je eigen poppetje
 └── src/
     ├── main.js     → start alles op, game loop, score, gevechten en winnen
+    ├── character.js → het poppetje: strohoed, rood hemd, blauwe broek, lopende armen en benen
     ├── player.js   → speler: lopen, springen, zwaartekracht, botsingen, levens
     ├── sword.js    → zwaard: model en zwaai-animatie
     ├── enemies.js  → vijanden: looproutes, achtervolgen, geraakt worden
@@ -74,6 +75,7 @@ munt-jager-3d/
 
 - **Sneller lopen / hoger springen** → constanten bovenaan `src/player.js` (`SPEED`, `JUMP_SPEED`, `GRAVITY`)
 - **Eigen level bouwen** → de lijsten `BLOCKS` en `COINS` bovenaan `src/world.js`
+- **Poppetje aanpassen** → kleuren en vormen in `src/character.js`
 - **Eigen 3D-poppetje** → exporteer je model als **.glb** (bijv. uit Tripo) en zet het in `models/speler.glb`.
   Het wordt vanzelf op de goede grootte gezet; heeft het animaties (idle / walk / run / jump), dan worden die afgespeeld.
   Kijkt het de verkeerde kant op? Pas `MODEL_TURN` aan bovenaan `src/player.js`.
