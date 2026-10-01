@@ -2,6 +2,7 @@
 
 Een 3D-platformgame in de browser, gemaakt met **JavaScript** en **[Three.js](https://threejs.org/)**.
 Loop rond, spring over blokken en zwevende platforms en verzamel alle 15 munten zo snel mogelijk.
+Pas op voor de boze slijmballen — sla ze met je zwaard of spring erop!
 
 ![Screenshot van Munt Jager 3D](docs/screenshot.png)
 
@@ -33,6 +34,7 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 | --------------- | ---------------- |
 | WASD / pijltjes | Lopen            |
 | Spatie          | Springen         |
+| F / klik        | Zwaard zwaaien   |
 | Muis slepen     | Camera draaien   |
 | Scrollen        | Zoomen           |
 | R               | Opnieuw beginnen |
@@ -44,6 +46,9 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 - Eigen botsingsdetectie (AABB): landen op blokken, hoofd stoten, langs muren schuiven
 - Van de wereld vallen → terug naar start
 - Munten verzamelen, timer en win-scherm
+- Zwaard met zwaai-animatie: twee klappen en een vijand is verslagen
+- Vijanden (slijmballen) die heen en weer lopen en je achterna gaan als je dichtbij komt
+- 3 levens: een vijand raken kost een hartje (met terugstoot), op een vijand springen verslaat hem meteen
 - Realtime schaduwen en mist
 
 ## Projectstructuur
@@ -54,8 +59,10 @@ munt-jager-3d/
 ├── style.css       → opmaak van de HUD
 ├── lib/            → Three.js (r170) + licentie
 └── src/
-    ├── main.js     → start alles op, game loop, score en winnen
-    ├── player.js   → speler: lopen, springen, zwaartekracht, botsingen
+    ├── main.js     → start alles op, game loop, score, gevechten en winnen
+    ├── player.js   → speler: lopen, springen, zwaartekracht, botsingen, levens
+    ├── sword.js    → zwaard: model en zwaai-animatie
+    ├── enemies.js  → vijanden: looproutes, achtervolgen, geraakt worden
     ├── world.js    → level: vloer, licht, blokken en munten
     ├── camera.js   → third-person camera
     └── input.js    → toetsenbord uitlezen
@@ -65,11 +72,13 @@ munt-jager-3d/
 
 - **Sneller lopen / hoger springen** → constanten bovenaan `src/player.js` (`SPEED`, `JUMP_SPEED`, `GRAVITY`)
 - **Eigen level bouwen** → de lijsten `BLOCKS` en `COINS` bovenaan `src/world.js`
+- **Vijanden aanpassen** → `PATROLS` (looproutes), snelheden en `MAX_HP` bovenaan `src/enemies.js`
 - **Debuggen** → open de console (F12) en typ bijvoorbeeld `game.player.position`
 
 ## Roadmap
 
-- [ ] Vijanden die heen en weer lopen
+- [x] Vijanden die heen en weer lopen
+- [x] Zwaard
 - [ ] Bewegende platforms
 - [ ] Geluidseffecten
 - [ ] 3D-model als speler (`GLTFLoader`)

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Sword } from './sword.js';
 
 // Instellingen van de speler — speel hiermee om het gevoel te veranderen!
 const SPEED = 7; // loopsnelheid (eenheden per seconde)
@@ -7,6 +8,8 @@ const GRAVITY = 25; // zwaartekracht
 const RADIUS = 0.45; // dikte van de speler
 const HEIGHT = 1.6; // lengte van de speler
 const FALL_LIMIT = -25; // onder deze hoogte: respawn
+export const MAX_HEALTH = 3; // aantal levens (hartjes)
+const INVULNERABLE_TIME = 1.2; // na een klap ben je even onkwetsbaar
 
 export class Player {
   constructor(scene) {
@@ -35,12 +38,15 @@ export class Player {
       this.mesh.add(eye);
     }
 
+    this.sword = new Sword(this.mesh);
+
     scene.add(this.mesh);
 
     this.velocity = new THREE.Vector3();
+    this.knockback = new THREE.Vector3();
     this.onGround = false;
     this.spawnPoint = new THREE.Vector3(0, 0, 8);
-    this.respawn();
+    this.reset();
   }
 
   get position() {
@@ -50,7 +56,47 @@ export class Player {
   respawn() {
     this.position.copy(this.spawnPoint);
     this.velocity.set(0, 0, 0);
+    this.knockback.set(0, 0, 0);
     this.mesh.rotation.y = Math.PI; // kijk de wereld in
+  }
+
+  /** Helemaal opnieuw beginnen: terug naar start met volle levens. */
+  reset() {
+    this.health = MAX_HEALTH;
+    this.invulnerable = 0;
+    this.mesh.visible = true;
+    this.sword.reset();
+    this.respawn();
+  }
+
+  /** Richting waarin de speler kijkt (op de grond). */
+  get facing() {
+    return new THREE.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y));
+  }
+
+  get alive() {
+    return this.health > 0;
+  }
+
+  /** Geraakt door een vijand op positie `from`. Geeft true terug als het pijn deed. */
+  hurt(from) {
+    if (this.invulnerable > 0 || !this.alive) return false;
+    this.health--;
+    this.invulnerable = INVULNERABLE_TIME;
+
+    // Wegstoten van de vijand, met een klein sprongetje
+    const away = this.position.clone().sub(from).setY(0);
+    if (away.lengthSq() < 1e-6) away.copy(this.facing).negate();
+    this.knockback.copy(away.normalize().multiplyScalar(12));
+    this.velocity.y = 6;
+    this.onGround = false;
+    return true;
+  }
+
+  /** Na het springen op een vijand: omhoog stuiteren. */
+  bounce() {
+    this.velocity.y = JUMP_SPEED * 0.75;
+    this.onGround = false;
   }
 
   /**
@@ -75,8 +121,16 @@ export class Player {
       this.mesh.rotation.y += diff * Math.min(1, 15 * dt);
     }
 
-    this.velocity.x = move.x * SPEED;
-    this.velocity.z = move.z * SPEED;
+    this.velocity.x = move.x * SPEED + this.knockback.x;
+    this.velocity.z = move.z * SPEED + this.knockback.z;
+    this.knockback.multiplyScalar(Math.exp(-6 * dt));
+
+    // Zwaard + knipperen als je net geraakt bent
+    this.sword.update(dt);
+    if (this.invulnerable > 0) {
+      this.invulnerable -= dt;
+      this.mesh.visible = this.invulnerable <= 0 || Math.floor(this.invulnerable * 12) % 2 === 0;
+    }
 
     // 2. Springen
     if (this.onGround && input.isDown('Space')) {

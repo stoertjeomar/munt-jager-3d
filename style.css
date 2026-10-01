@@ -34,6 +34,17 @@ canvas:active {
   pointer-events: none;
 }
 
+#hud #health {
+  color: #ff4d5e;
+  font-size: 28px;
+  letter-spacing: 2px;
+}
+
+#hud #score {
+  font-size: 20px;
+  font-weight: 700;
+}
+
 #hud div + div {
   margin-top: 4px;
   font-size: 16px;
@@ -72,6 +83,10 @@ canvas:active {
 #message h1 {
   font-size: 48px;
   color: #ffd84d;
+}
+
+#message h1.lose {
+  color: #ff4d5e;
 }
 
 .hidden {
