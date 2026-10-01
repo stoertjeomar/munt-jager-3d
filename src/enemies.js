@@ -2,50 +2,55 @@ import * as THREE from 'three';
 import { play } from './audio.js';
 
 // Soorten vijanden — speel met deze getallen om ze makkelijker of moeilijker te maken!
-//   hp            = hoeveel schade ze kunnen hebben
+//   hp            = levenspunten
 //   radius/height = hoe groot ze zijn
 //   patrolSpeed / chaseSpeed = loopsnelheid (heen en weer / achter je aan)
 //   sight         = binnen deze afstand komen ze achter je aan
 //   knockback     = hoe ver ze wegvliegen als je ze raakt (0 = helemaal niet)
-//   damage        = hoeveel hartjes je kwijtraakt als ze je raken
+//   damage        = schade als ze je raken (de golem: met zijn schokgolf)
 //   stompable     = kun je erop springen om ze te verslaan?
-//   heartChance   = kans (0 - 1) dat ze een hartje laten vallen
+//   runes         = hoeveel munten je krijgt als je ze verslaat
 export const ENEMY_TYPES = {
   slijmpje: {
-    name: 'Slijmpje', hp: 1, radius: 0.4, height: 0.65, color: 0x6fd36a,
-    patrolSpeed: 1.5, chaseSpeed: 2.8, sight: 6, knockback: 1.3, damage: 1, stompable: true, heartChance: 0.15,
+    name: 'Slijmpje', hp: 30, radius: 0.4, height: 0.65, color: 0x6fd36a,
+    patrolSpeed: 1.5, chaseSpeed: 2.8, sight: 7, knockback: 1.3, damage: 10, stompable: true, runes: 6,
   },
   slijmbal: {
-    name: 'Slijmbal', hp: 2, radius: 0.6, height: 1.0, color: 0xd64545,
-    patrolSpeed: 2, chaseSpeed: 3.8, sight: 7, knockback: 1, damage: 1, stompable: true, heartChance: 0.25,
+    name: 'Slijmbal', hp: 60, radius: 0.6, height: 1.0, color: 0xd64545,
+    patrolSpeed: 2, chaseSpeed: 3.8, sight: 8, knockback: 1, damage: 16, stompable: true, runes: 14,
   },
   spook: {
-    name: 'Spook', hp: 3, radius: 0.5, height: 1.1, color: 0xa98bff, flies: true,
-    patrolSpeed: 1.8, chaseSpeed: 4.3, sight: 9, knockback: 1.2, damage: 1, stompable: false, heartChance: 0.4,
+    name: 'Spook', hp: 80, radius: 0.5, height: 1.1, color: 0xa98bff, flies: true,
+    patrolSpeed: 1.8, chaseSpeed: 4.3, sight: 10, knockback: 1.2, damage: 18, stompable: false, runes: 28,
   },
   golem: {
-    name: 'Rotsgolem', hp: 8, radius: 0.9, height: 2.0, color: 0x8a8f99,
-    patrolSpeed: 1.1, chaseSpeed: 2.3, sight: 8, knockback: 0.15, damage: 1, stompable: false, heartChance: 1,
+    name: 'Rotsgolem', hp: 260, radius: 0.9, height: 2.0, color: 0x8a8f99,
+    patrolSpeed: 1.1, chaseSpeed: 2.3, sight: 9, knockback: 0.15, damage: 30, stompable: false, runes: 80,
   },
 };
 
-const LEASH = 15; // verder dan dit van huis geeft een vijand het op en gaat terug
+const LEASH = 16; // verder dan dit van huis geeft een vijand het op en gaat terug
+const ACTIVE_RANGE = 70; // vijanden verder weg dan dit staan stil (scheelt rekenwerk)
 
 // Waar de vijanden lopen: [soort, x1, z1, x2, z2] — ze lopen heen en weer tussen die twee punten
-const SPAWNS = [
-  ['slijmpje', -7, 3, -4, 5],
-  ['slijmpje', 8, 5, 10, 8],
-  ['slijmpje', -11, 10, -7, 13],
-  ['slijmpje', 4, 15, 9, 18],
-  ['slijmbal', -7, -1, -2, -1],
-  ['slijmbal', 3, -10, 8, -10],
-  ['slijmbal', 15, 7, 15, 17],
-  ['slijmbal', -23, -4, -23, -20],
-  ['spook', -20, 12, -14, 20],
-  ['spook', -6, -21, 6, -21],
-  ['spook', 22, -8, 22, 4],
-  ['golem', 18, -18, 24, -24],
-  ['golem', 17, 22, 23, 18], // bewaakt de knots!
+export const SPAWNS = [
+  // Groene Weide: vooral slijmpjes, een paar slijmballen
+  ['slijmpje', -7, 3, -4, 5], ['slijmpje', 8, 5, 10, 8], ['slijmpje', -11, 10, -7, 13], ['slijmpje', 14, 30, 18, 34],
+  ['slijmpje', -24, 20, -20, 26], ['slijmpje', 26, 12, 30, 16], ['slijmpje', 18, 40, 24, 44], ['slijmpje', -18, 40, -12, 44],
+  ['slijmbal', -7, -1, -2, -1], ['slijmbal', 3, -10, 8, -10], ['slijmbal', 25, -20, 30, -26], ['slijmbal', -28, -16, -24, -22],
+  // Pad naar Koning Slijm
+  ['slijmbal', -4, -30, 4, -30], ['slijmbal', 5, -40, 9, -36], ['slijmpje', -6, -38, -3, -42], ['slijmpje', 6, -55, 9, -58],
+  ['slijmbal', -8, -58, -5, -54],
+  // Spookwoud: spoken en slijmballen
+  ['spook', -50, 25, -50, 40], ['spook', -62, -5, -70, 5], ['spook', -85, 20, -90, 30], ['spook', -100, -10, -95, 0],
+  ['spook', -66, 55, -74, 62], ['spook', -88, -70, -80, -76], ['slijmbal', -45, -12, -50, -18], ['slijmbal', -60, 30, -64, 26],
+  ['slijmbal', -92, 8, -96, 14], ['slijmbal', -70, -36, -74, -30], ['spook', -82, -30, -86, -26], ['slijmbal', -110, 40, -104, 46],
+  // Noordelijke ruïnes
+  ['slijmbal', -28, -54, -24, -58], ['spook', -38, -70, -30, -74], ['slijmpje', -20, -66, -16, -70],
+  // Rotshoogland: golems en spoken
+  ['golem', 66, -10, 70, -4], ['golem', 82, 20, 88, 14], ['golem', 76, -40, 86, -40], ['golem', 100, -10, 104, 0],
+  ['golem', 62, 56, 66, 62], ['spook', 50, -25, 58, -30], ['spook', 95, 40, 100, 30], ['spook', 70, 80, 78, 86],
+  ['slijmbal', 48, 20, 52, 26], ['slijmbal', 58, -50, 62, -56], ['golem', 52, -66, 46, -60], ['spook', 104, -60, 96, -66],
 ];
 
 // Golem-aanval: opladen en dan op de grond slaan
@@ -83,7 +88,7 @@ function addEyes(parent, { spread, y, z, size, angry = false, color = 0xffffff, 
 
 // ---------- Modellen ----------
 
-function buildSlime(type, angry) {
+export function buildSlime(type, angry) {
   const body = new THREE.Group(); // stuitert en squasht
   const bodyMat = mat(type.color, { roughness: 0.35, transparent: true, opacity: 0.92 });
   const blob = new THREE.Mesh(new THREE.SphereGeometry(type.radius, 22, 16), bodyMat);
@@ -125,7 +130,7 @@ function buildGhost(type) {
   return { body, materials: [bodyMat] };
 }
 
-function buildGolem(type) {
+export function buildGolem(type) {
   const body = new THREE.Group();
   const stone = mat(type.color, { roughness: 0.9, flatShading: true });
   const dark = mat(0x5d626b, { roughness: 0.95, flatShading: true });
@@ -304,6 +309,7 @@ class Enemy {
       return;
     }
     if (!this.alive) return;
+    if (this.position.distanceTo(ctx.player.position) > ACTIVE_RANGE) return;
 
     const playerPos = ctx.player.position;
     const toPlayer = playerPos.clone().sub(this.position);
@@ -311,7 +317,7 @@ class Enemy {
     const distToPlayer = flatToPlayer.length();
     const distFromHome = this.position.clone().setY(0).distanceTo(this.home);
     const reachable = type.flies || playerPos.y < this.position.y + 2.5; // niet achter je aan als je hoog op een blok staat
-    this.chasing = ctx.player.alive && distToPlayer < type.sight && distFromHome < LEASH && reachable;
+    this.chasing = ctx.player.alive && !ctx.player.resting && distToPlayer < type.sight && distFromHome < LEASH && reachable;
 
     // ---------- Golem: opladen en slaan ----------
     if (this.typeKey === 'golem') {
@@ -330,7 +336,7 @@ class Enemy {
           this.state = 'recover';
           this.stateTimer = RECOVER_TIME;
           this.slamCooldown = SLAM_COOLDOWN;
-          ctx.onSlam(this, SLAM_RADIUS);
+          ctx.onSlam(this, SLAM_RADIUS, this.type.damage);
         } else if (this.state === 'recover' && this.stateTimer <= 0) {
           this.state = 'walk';
         }
@@ -455,4 +461,11 @@ class Enemy {
 
 export function createEnemies(scene) {
   return SPAWNS.map(([typeKey, ...patrol]) => new Enemy(scene, typeKey, patrol));
+}
+
+/** Een losse vijand op een plek neerzetten (bijv. slijmpjes die Koning Slijm oproept). */
+export function spawnEnemy(scene, typeKey, x, z) {
+  const enemy = new Enemy(scene, typeKey, [x, z, x + 0.5, z + 0.5]);
+  enemy.summoned = true;
+  return enemy;
 }

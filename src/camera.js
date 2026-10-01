@@ -10,15 +10,19 @@ export class CameraRig {
     this.camera = camera;
     this.yaw = 0; // horizontale hoek (radialen)
     this.pitch = 0.45; // verticale hoek (radialen)
-    this.distance = 9;
+    this.distance = 7.5;
     this.target = new THREE.Vector3();
     this.domElement = domElement;
+    this.ray = new THREE.Ray();
+    this.hitPoint = new THREE.Vector3();
+    this.mouseIdle = 0; // hoe lang de muis al stil is (dan draait de camera vanzelf achter je)
 
     domElement.addEventListener('pointerdown', () => {
       if (!this.locked) domElement.requestPointerLock();
     });
     document.addEventListener('mousemove', (e) => {
       if (!this.locked) return;
+      if (Math.abs(e.movementX) + Math.abs(e.movementY) > 2) this.mouseIdle = 0;
       this.yaw -= e.movementX * MOUSE_SENSITIVITY;
       this.pitch += e.movementY * MOUSE_SENSITIVITY;
       this.pitch = THREE.MathUtils.clamp(this.pitch, 0.05, 1.3);
@@ -48,7 +52,31 @@ export class CameraRig {
     return new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
   }
 
-  update(dt, followPosition) {
+  /**
+   * @param {object} [follow]  { facing: kijkhoek van de speler, moving, lockTarget: Vector3 }
+   */
+  update(dt, followPosition, follow = {}) {
+    this.mouseIdle += dt;
+    let goalYaw = null;
+    let speed = 0;
+    if (follow.lockTarget) {
+      // Vastgezet op een vijand: kijk over je schouder naar het doel
+      const dx = follow.lockTarget.x - followPosition.x;
+      const dz = follow.lockTarget.z - followPosition.z;
+      goalYaw = Math.atan2(-dx, -dz);
+      speed = 7;
+      this.pitch += (0.35 - this.pitch) * Math.min(1, 3 * dt);
+    } else if (follow.moving && this.mouseIdle > 0.7) {
+      // Muis stil en je loopt: de camera draait rustig achter je hoofd aan
+      goalYaw = follow.facing + Math.PI;
+      speed = 1.8;
+    }
+    if (goalYaw !== null) {
+      let diff = goalYaw - this.yaw;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      this.yaw += diff * Math.min(1, speed * dt);
+    }
+
     // Soepel achter de speler aan bewegen
     const goal = followPosition.clone().add(new THREE.Vector3(0, 1.2, 0));
     this.target.lerp(goal, 1 - Math.exp(-10 * dt));
@@ -59,6 +87,21 @@ export class CameraRig {
       Math.sin(this.pitch) * d,
       Math.cos(this.yaw) * Math.cos(this.pitch) * d
     );
+
+    // Camera-botsing: staat er iets (pilaar, boom) tussen jou en de camera? Dan schuift hij dichterbij.
+    if (follow.colliders) {
+      const dir = offset.clone().normalize();
+      this.ray.set(this.target, dir);
+      let nearest = d;
+      for (const box of follow.colliders) {
+        if (box.distanceToPoint(this.target) > nearest) continue;
+        const hit = this.ray.intersectBox(box, this.hitPoint);
+        if (hit) nearest = Math.min(nearest, hit.distanceTo(this.target) - 0.3);
+      }
+      this.smoothDistance = Math.min(this.smoothDistance ?? d, Math.max(1.2, nearest));
+      this.smoothDistance += (Math.max(1.2, nearest) - this.smoothDistance) * Math.min(1, 4 * dt);
+      offset.setLength(this.smoothDistance);
+    }
 
     this.camera.position.copy(this.target).add(offset);
     this.camera.lookAt(this.target);

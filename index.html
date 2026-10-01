@@ -18,24 +18,54 @@
   </script>
 </head>
 <body>
-  <div id="hud">
-    <div id="health">❤❤❤</div>
-    <div id="score">Munten: 0 / 0</div>
-    <div id="weapon">Wapen: Diamanten zwaard</div>
-    <div id="enemies">Vijanden verslagen: 0 / 0</div>
-    <div id="timer">Tijd: 0.0s</div>
+  <!-- Levens, stamina en level (linksboven) -->
+  <div id="bars">
+    <div id="level">Level 1</div>
+    <div id="hp-bar" class="bar"><div id="hp-lag" class="lag"></div><div id="hp-fill" class="fill"></div><span id="hp-text"></span></div>
+    <div id="st-bar" class="bar thin"><div id="st-fill" class="fill"></div></div>
   </div>
 
-  <div id="help">
-    <b>WASD / pijltjes</b> lopen &nbsp;·&nbsp; <b>Spatie</b> springen &nbsp;·&nbsp; <b>F / klik</b> slaan &nbsp;·&nbsp; <b>E</b> wapen pakken &nbsp;·&nbsp;
-    <b>Muis</b> rondkijken &nbsp;·&nbsp; <b>Esc</b> muis vrij &nbsp;·&nbsp; <b>Scrollen</b> zoomen &nbsp;·&nbsp; <b>M</b> geluid &nbsp;·&nbsp; <b>R</b> opnieuw
+  <!-- Minimap (rechtsboven) -->
+  <canvas id="minimap" width="170" height="170"></canvas>
+
+  <!-- Uitrusting en krachten (linksonder) -->
+  <div id="equip">
+    <div id="flasks"></div>
+    <div id="equip-weapon"></div>
+    <div id="equip-helmet"></div>
+    <div id="powers"></div>
   </div>
 
-  <div id="pickup-hint" class="hidden"></div>
+  <!-- Munten (rechtsonder) -->
+  <div id="runes-box"><span id="runes-gain"></span><span class="coin">●</span><span id="runes">0</span></div>
 
-  <div id="lock-hint">Klik in het spel om te beginnen</div>
+  <!-- Boss-balk (onderaan) -->
+  <div id="boss" class="hidden">
+    <div id="boss-name"></div>
+    <div class="bar boss-bar"><div id="boss-lag" class="lag"></div><div id="boss-fill" class="fill"></div></div>
+  </div>
 
-  <div id="message" class="hidden"></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="toast" class="hidden"></div>
+  <div id="region"></div>
+  <div id="banner" class="hidden"><div id="banner-text"></div><div id="banner-sub"></div></div>
+
+  <div id="menu" class="hidden">
+    <div id="menu-panel">
+      <h2 id="menu-title"></h2>
+      <div id="menu-body"></div>
+    </div>
+  </div>
+
+  <div id="lock-hint">
+    <h1>MUNT JAGER</h1>
+    <p>Klik om te beginnen</p>
+    <div class="controls">
+      <b>WASD</b> lopen · <b>Shift</b> tik = rollen, houd = sprinten · <b>Spatie</b> springen<br />
+      <b>Klik / F</b> slaan · <b>Q</b> vastzetten op vijand · <b>R</b> flesje drinken · <b>E</b> rusten / openen<br />
+      <b>C</b> dash · <b>V</b> wervelslag · <b>X</b> vuurzwaard · <b>I</b> uitrusting · <b>M</b> geluid · <b>Esc</b> muis vrij
+    </div>
+  </div>
 
   <script type="module" src="src/main.js"></script>
 </body>

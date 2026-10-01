@@ -1,41 +1,65 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { loadGLB } from './assets.js';
 
 // Alle wapens in het spel. Pas de getallen aan om ze sterker of sneller te maken!
-//   damage    = hoeveel schade één klap doet (een vijand heeft 2 levens)
+//   damage    = schade per klap (wordt nog groter met je Kracht-level)
+//   stamina   = hoeveel uithouding één slag kost
 //   range     = hoe ver het wapen reikt
 //   swingTime = hoe lang een slag duurt (kleiner = sneller slaan)
+//   rarity    = gewoon / zeldzaam / episch / legendarisch (bepaalt de kleur in je inventaris)
 //   file      = 3D-model (.glb) in models/wapens/, met het handvat in het midden
 //   scale     = hoe groot het model wordt
 //   blade     = [begin, punt] van het lemmet (afstand vanaf de hand), voor het zwaard-windje
 //   trail     = kleur van het zwaard-windje
 export const WEAPONS = {
-  diamant: { name: 'Diamanten zwaard', damage: 1, range: 2.4, swingTime: 0.34, blade: [0.3, 1.0], trail: 0x5ff7de },
-  sword: { name: 'Ridderzwaard', file: 'models/wapens/Sword.glb', scale: 0.3, damage: 1, range: 2.7, swingTime: 0.38, blade: [0.35, 1.16], trail: 0xb8dcff },
-  katana: { name: 'Katana', file: 'models/wapens/Katana.glb', scale: 0.33, damage: 1, range: 2.8, swingTime: 0.26, blade: [0.3, 1.1], trail: 0xff4f7a },
-  shortsword: { name: 'Kort zwaard', file: 'models/wapens/ShortSword.glb', scale: 0.3, damage: 1, range: 2.1, swingTime: 0.22, blade: [0.25, 0.87], trail: 0xffd36b },
-  club: { name: 'Knots', file: 'models/wapens/Club.glb', scale: 0.42, damage: 2, range: 2.3, swingTime: 0.5, blade: [0.35, 0.87], trail: 0xff8a2b },
+  shortsword: {
+    name: 'Kort zwaard', rarity: 'gewoon', damage: 14, stamina: 10, range: 2.1, swingTime: 0.24,
+    file: 'models/wapens/ShortSword.glb', scale: 0.3, blade: [0.25, 0.87], trail: 0xffd36b,
+    info: 'Snel en licht. Een prima begin.',
+  },
+  sword: {
+    name: 'Ridderzwaard', rarity: 'zeldzaam', damage: 21, stamina: 14, range: 2.7, swingTime: 0.36,
+    file: 'models/wapens/Sword.glb', scale: 0.3, blade: [0.35, 1.16], trail: 0xb8dcff,
+    info: 'Een betrouwbaar zwaard met een lange kling.',
+  },
+  katana: {
+    name: 'Katana', rarity: 'episch', damage: 24, stamina: 12, range: 2.8, swingTime: 0.26,
+    file: 'models/wapens/Katana.glb', scale: 0.33, blade: [0.3, 1.1], trail: 0xff4f7a,
+    info: 'Razendsnel en scherp. Lang bereik.',
+  },
+  club: {
+    name: 'Knots', rarity: 'episch', damage: 34, stamina: 22, range: 2.3, swingTime: 0.5,
+    file: 'models/wapens/Club.glb', scale: 0.42, blade: [0.35, 0.87], trail: 0xff8a2b,
+    info: 'Langzaam maar loeihard.',
+  },
+  diamant: {
+    name: 'Diamanten zwaard', rarity: 'legendarisch', damage: 40, stamina: 15, range: 2.6, swingTime: 0.32,
+    blade: [0.3, 1.0], trail: 0x5ff7de,
+    info: 'Het zwaard van de Gevallen Ridder. Het sterkste wapen dat er is.',
+  },
 };
 
-export const START_WEAPON = 'diamant';
+export const START_WEAPON = 'shortsword';
 
-const loader = new GLTFLoader();
-const loading = {}; // elk bestand maar één keer downloaden
+export const RARITY_COLORS = { gewoon: '#d8d8d8', zeldzaam: '#6fb7ff', episch: '#c77dff', legendarisch: '#ffb340' };
 
 /**
  * Maakt een 3D-wapen. Het handvat zit op (0, 0, 0) en het wapen wijst langs +Y.
  * Modellen worden op de achtergrond geladen en verschijnen zodra ze binnen zijn.
  */
-export function createWeaponMesh(key) {
+export function createWeaponMesh(key, scaleMultiplier = 1) {
   const weapon = WEAPONS[key];
-  if (!weapon.file) return buildBlockSword();
+  if (!weapon.file) {
+    const block = buildBlockSword();
+    block.scale.setScalar(scaleMultiplier);
+    return block;
+  }
 
   const group = new THREE.Group();
-  loading[weapon.file] ??= loader.loadAsync(weapon.file);
-  loading[weapon.file].then(
+  loadGLB(weapon.file).then(
     (gltf) => {
       const model = gltf.scene.clone();
-      model.scale.setScalar(weapon.scale);
+      model.scale.setScalar(weapon.scale * scaleMultiplier);
       model.traverse((child) => {
         if (child.isMesh) child.castShadow = true;
       });

@@ -25,6 +25,7 @@ export class Effects {
 
     this.texts = []; // zwevende getallen
     this.rings = []; // schokgolven
+    this.warnings = []; // rode waarschuwings-cirkels op de grond
     this.tmpMatrix = new THREE.Matrix4();
     this.tmpQuat = new THREE.Quaternion();
     this.tmpColor = new THREE.Color();
@@ -95,6 +96,28 @@ export class Effects {
     this.rings.push({ ring, age: 0, life: 0.45, maxRadius });
   }
 
+  /**
+   * Rode cirkel op de grond die zich vult: "hier gaat zo iets raken!"
+   * @param {number} duration  hoe lang tot de klap (seconden)
+   */
+  warnCircle(pos, radius, duration) {
+    const group = new THREE.Group();
+    group.position.set(pos.x, pos.y + 0.04, pos.z);
+    const edge = new THREE.Mesh(
+      new THREE.RingGeometry(radius * 0.94, radius, 48),
+      new THREE.MeshBasicMaterial({ color: 0xff2a2a, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })
+    );
+    const fill = new THREE.Mesh(
+      new THREE.CircleGeometry(radius, 48),
+      new THREE.MeshBasicMaterial({ color: 0xff2a2a, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })
+    );
+    edge.rotation.x = fill.rotation.x = -Math.PI / 2;
+    fill.position.y = 0.01;
+    group.add(edge, fill);
+    this.scene.add(group);
+    this.warnings.push({ group, fill, edge, age: 0, life: duration });
+  }
+
   /** Laat de camera schudden. */
   shake(amount) {
     this.shakeAmount = Math.max(this.shakeAmount, amount);
@@ -161,6 +184,20 @@ export class Effects {
       t.sprite.material.opacity = k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
     }
 
+    // Waarschuwings-cirkels: vullen zich van binnen naar buiten, en knipperen op het eind
+    for (let i = this.warnings.length - 1; i >= 0; i--) {
+      const w = this.warnings[i];
+      w.age += dt;
+      const k = w.age / w.life;
+      if (k >= 1) {
+        this.scene.remove(w.group);
+        this.warnings.splice(i, 1);
+        continue;
+      }
+      w.fill.scale.setScalar(Math.max(0.01, k));
+      w.edge.material.opacity = k > 0.75 ? 0.5 + 0.5 * Math.sin(w.age * 40) : 0.9;
+    }
+
     // Schokgolven
     for (let i = this.rings.length - 1; i >= 0; i--) {
       const r = this.rings[i];
@@ -181,6 +218,8 @@ export class Effects {
 
   clear() {
     this.particles.length = 0;
+    for (const w of this.warnings) this.scene.remove(w.group);
+    this.warnings.length = 0;
     for (const t of this.texts) this.scene.remove(t.sprite);
     for (const r of this.rings) this.scene.remove(r.ring);
     this.texts.length = 0;

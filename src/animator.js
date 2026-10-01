@@ -103,5 +103,42 @@ export class CharacterAnimator {
       legL.rotation.x += -0.35 * reach; // door de knieën (ongeveer)
       legR.rotation.x += 0.25 * reach;
     }
+
+    // ---------- Flesje drinken: linkerhand naar de mond ----------
+    if (s.drink) {
+      const lift = Math.sin(Math.min(1, s.drink * 1.4) * Math.PI);
+      armL.rotation.x = THREE.MathUtils.lerp(armL.rotation.x, -2.4, lift);
+      armL.rotation.z = THREE.MathUtils.lerp(armL.rotation.z, -0.5, lift);
+      hips.rotation.x -= 0.15 * lift; // hoofd een beetje naar achteren
+    }
+
+    // ---------- Wervelslag: wapen recht opzij gestrekt ----------
+    if (s.spin) {
+      armR.rotation.x = -1.45;
+      armR.rotation.z = -1.4;
+      handR.rotation.x = 1.4;
+      armL.rotation.z = 1.2;
+    }
+
+    // ---------- Rollen / dashen / grondslag: ineengedoken ----------
+    if (s.tuck) {
+      legL.rotation.x = -1.3;
+      legR.rotation.x = -1.1;
+      armL.rotation.x = -1;
+      armR.rotation.x = -0.8;
+      hips.rotation.x = 0.5;
+    }
+
+    // ---------- Rusten bij een Plek van Genade: op één knie ----------
+    if (s.rest) {
+      legL.rotation.x = -1.5;
+      legR.rotation.x = 0.9;
+      hips.position.y = this.baseHipsY - 0.35 * this.rig.unit;
+      hips.rotation.x = 0.25;
+      armR.rotation.x = -0.4;
+      handR.rotation.x = 1.5; // zwaard met de punt in de grond
+      armL.rotation.x = -0.6;
+      armL.rotation.z = 0.2;
+    }
   }
 }

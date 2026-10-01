@@ -1,15 +1,17 @@
 import * as THREE from 'three';
 import { Input } from './input.js';
 import { CameraRig } from './camera.js';
-import { Player, MAX_HEALTH } from './player.js';
-import { createWorld, animateCoins } from './world.js';
-import { createEnemies } from './enemies.js';
+import { Player } from './player.js';
+import { createWorld, GRACES, ARENAS, CHESTS, REGION_NAMES, WALKABLE_HALF } from './world.js';
+import { createEnemies, spawnEnemy } from './enemies.js';
+import { createBosses, BOSS_INFO } from './bosses.js';
+import { Sites } from './sites.js';
+import { Stats, POWERS } from './stats.js';
+import { itemInfo } from './gear.js';
 import { Effects } from './effects.js';
 import { SwordTrail } from './trail.js';
-import { Drops } from './drops.js';
+import { UI } from './ui.js';
 import { play, unlockAudio, toggleMute } from './audio.js';
-import { WEAPONS } from './weapons.js';
-import { createPickups, resetPickups, findNearbyPickup, swapWeapon } from './pickups.js';
 
 // ---------- Basis: renderer, scene, camera ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -19,10 +21,10 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; // mooiere, zachtere kleuren
 renderer.toneMappingExposure = 1.15;
-document.body.appendChild(renderer.domElement);
+document.body.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 400);
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -31,155 +33,206 @@ window.addEventListener('resize', () => {
 });
 
 // ---------- Game-objecten ----------
+const stats = new Stats();
+const ui = new UI(stats);
 const input = new Input();
 const world = createWorld(scene);
-const player = new Player(scene);
+const sites = new Sites(scene, { graces: GRACES, chests: CHESTS }, stats);
+const player = new Player(scene, stats);
 const enemies = createEnemies(scene);
-const pickups = createPickups(scene);
+const bosses = createBosses(scene, ARENAS, stats.data.bosses);
 const effects = new Effects(scene);
 const trail = new SwordTrail(scene);
-const drops = new Drops(scene);
 const cameraRig = new CameraRig(camera, renderer.domElement);
-cameraRig.snapTo(player.position);
 
-// ---------- HUD ----------
-const scoreEl = document.getElementById('score');
-const timerEl = document.getElementById('timer');
-const healthEl = document.getElementById('health');
-const enemiesEl = document.getElementById('enemies');
-const weaponEl = document.getElementById('weapon');
-const pickupHintEl = document.getElementById('pickup-hint');
-const messageEl = document.getElementById('message');
-
-// ---------- Game state ----------
 const state = {
-  score: 0,
-  time: 0,
-  finished: false,
   hitstop: 0, // heel even stilstaan bij een klap: dan voelt het krachtiger
+  deathTimer: 0,
+  activeBoss: null,
+  lockTarget: null,
+  attackRequested: false,
+  saveTimer: 0,
 };
 
-function resetGame() {
-  state.score = 0;
-  state.time = 0;
-  state.finished = false;
-  for (const enemy of enemies) enemy.reset();
-  resetPickups(pickups);
-  effects.clear();
-  drops.clear();
-  trail.cut();
-  for (const coin of world.coins) {
-    coin.collected = false;
-    coin.mesh.visible = true;
-  }
-  player.reset();
-  cameraRig.snapTo(player.position);
-  messageEl.classList.add('hidden');
+/** Waar je terugkomt bij een Plek van Genade (net naast het licht). */
+function graceSpawn(id) {
+  const grace = sites.grace(id) ?? sites.grace('weide');
+  return grace.position.clone().add(new THREE.Vector3(0, 0, 2.5));
 }
 
-function collectCoins() {
-  const playerCenter = player.position.clone().add(new THREE.Vector3(0, 0.8, 0));
-  for (const coin of world.coins) {
-    if (coin.collected) continue;
-    if (coin.mesh.position.distanceTo(playerCenter) < 1.1) {
-      coin.collected = true;
-      coin.mesh.visible = false;
-      state.score++;
-      play('coin');
-      effects.burst(coin.mesh.position, 0xffd700, { count: 12, speed: 4, size: 0.1, life: 0.5, up: 3 });
-    }
-  }
+player.respawnAt(graceSpawn(stats.data.lastGrace));
+cameraRig.snapTo(player.position);
+cameraRig.yaw = 0;
 
-  if (state.score === world.coins.length && !state.finished) {
-    state.finished = true;
-    messageEl.innerHTML = `
-      <h1>Gewonnen!</h1>
-      <p>Alle ${world.coins.length} munten in ${state.time.toFixed(1)} seconden</p>
-      <p>Vijanden verslagen: ${enemies.filter((e) => !e.alive).length} / ${enemies.length}</p>
-      <p>Druk op <b>R</b> om opnieuw te spelen</p>`;
-    messageEl.classList.remove('hidden');
-    play('win');
-  }
-}
+// Lock-on markering: een rood bolletje op je doel
+const lockMarker = new THREE.Mesh(
+  new THREE.RingGeometry(0.12, 0.2, 24),
+  new THREE.MeshBasicMaterial({ color: 0xff3b3b, depthTest: false, transparent: true, toneMapped: false })
+);
+lockMarker.renderOrder = 20;
+lockMarker.visible = false;
+scene.add(lockMarker);
 
-// ---------- Zwaard: slaan met F, of klikken (als de muis vastzit in het spel) ----------
-let attackRequested = false;
-renderer.domElement.addEventListener('pointerdown', (e) => {
-  unlockAudio(); // geluid mag pas na een klik
-  // De eerste klik zet alleen de muis vast; daarna is klikken = slaan
-  if (e.button === 0 && cameraRig.locked) attackRequested = true;
-});
+// ---------- Hulpjes ----------
 
-// Uitleg "klik om te spelen" tonen zolang de muis niet vastzit
-const lockHintEl = document.getElementById('lock-hint');
-document.addEventListener('pointerlockchange', () => {
-  lockHintEl.classList.toggle('hidden', cameraRig.locked);
-});
-
-function swordAttack() {
-  if ((input.wasPressed('KeyF') || attackRequested) && !player.isBusy && player.sword.swing()) {
-    play(player.sword.weaponKey === 'club' ? 'heavySwing' : 'swing');
-    trail.cut();
-    trail.setColor(player.sword.trailColor);
-  }
-  attackRequested = false;
-  if (!player.sword.isHitting) return;
-
-  const facing = player.facing;
-  const chest = player.position.y + 0.9;
-  for (const enemy of enemies) {
-    if (!enemy.alive) continue;
-    const toEnemy = enemy.position.clone().sub(player.position);
-    if (Math.abs(enemy.center.y - chest) > enemy.type.height / 2 + 1) continue; // te ver boven of onder je
-    toEnemy.y = 0;
-    const dist = toEnemy.length();
-    if (dist > player.sword.range + enemy.type.radius) continue;
-    // Alleen vijanden vóór je (of vlak naast je) worden geraakt
-    if (dist > 1.2 && toEnemy.normalize().dot(facing) < 0) continue;
-
-    const result = enemy.hit(player.position, player.sword.swingId, player.sword.damage);
-    if (!result) continue;
-    // Effecten: vonken, slijm-spetters, een schade-getal, schudden en heel even pauze
-    const at = enemy.center;
-    effects.sparks(at, player.sword.trailColor);
-    effects.burst(at, enemy.type.color, { count: 8, speed: 5, size: 0.12, life: 0.5 });
-    effects.floatText(at.clone().setY(at.y + enemy.type.height * 0.6), `${result.damage}`, result.damage > 1 ? '#ffb347' : '#ffffff');
-    play('hit');
-    state.hitstop = result.killed ? 0.09 : 0.05;
-    effects.shake(result.killed ? 0.25 : 0.12);
-    if (result.killed) onEnemyDefeated(enemy);
-  }
-}
-
-function onEnemyDefeated(enemy) {
-  play('defeat');
-  effects.burst(enemy.center, enemy.type.color, { count: 26, speed: 7, size: 0.16, life: 0.8, up: 3 });
-  effects.burst(enemy.center, 0xffffff, { count: 8, speed: 4, size: 0.08, life: 0.4 });
-  if (Math.random() < enemy.type.heartChance) drops.spawnHeart(enemy.position);
-}
-
-/** De golem slaat op de grond: schokgolf, en pijn als je te dichtbij staat. */
-function onGolemSlam(enemy, radius) {
-  play('slam');
-  effects.shockwave(enemy.position, 0xd8c9a8, radius);
-  effects.burst(enemy.position.clone().setY(0.2), 0x9a8f7a, { count: 30, speed: 7, size: 0.18, life: 0.7, up: 2 });
-  const dist = player.position.clone().setY(0).distanceTo(enemy.position.clone().setY(0));
-  effects.shake(dist < radius * 2 ? 0.55 : 0.2);
-  if (dist < radius && player.position.y < enemy.position.y + 0.8) hurtPlayer(enemy.position, enemy.type.damage);
+/** Alles wat je kunt raken: gewone vijanden en wakkere bosses. */
+function targets() {
+  return [...enemies.filter((e) => e.alive), ...bosses.filter((b) => b.alive && b.awake)];
 }
 
 function hurtPlayer(from, damage) {
-  if (!player.hurt(from, damage)) return;
+  const taken = player.hurt(from, damage);
+  if (!taken) return false;
   play('hurt');
-  effects.shake(0.35);
+  effects.shake(Math.min(0.6, 0.2 + taken / 80));
   const at = player.position.clone().setY(player.position.y + 1);
   effects.burst(at, 0xff3355, { count: 12, speed: 5, size: 0.1, life: 0.5 });
-  effects.floatText(at.setY(at.y + 0.6), `-${damage}`, '#ff4d5e', 0.55);
+  effects.floatText(at.setY(at.y + 0.7), `-${taken}`, '#ff4d5e', 0.55);
+  return true;
+}
+
+function giveRunes(amount) {
+  stats.addRunes(amount);
+  ui.addRunes(amount);
+}
+
+function addSummon(typeKey, x, z) {
+  const e = spawnEnemy(scene, typeKey, x, z);
+  enemies.push(e);
+  return e;
+}
+
+function removeSummons() {
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    if (!enemies[i].summoned) continue;
+    scene.remove(enemies[i].mesh);
+    enemies.splice(i, 1);
+  }
+}
+
+/** Vijanden terug tot leven (na rusten of doodgaan), net als in Elden Ring. */
+function respawnWorld() {
+  removeSummons();
+  for (const e of enemies) e.reset();
+  for (const b of bosses) if (!b.dead) b.resetFight();
+  state.activeBoss = null;
+  state.lockTarget = null;
+  effects.clear();
+  trail.cut();
+}
+
+/** Iets geraakt: effecten + munten als hij verslagen is. */
+function onHit(target, result, color) {
+  const at = target.center;
+  effects.sparks(at, color);
+  effects.burst(at, target.type.color, { count: 8, speed: 5, size: 0.12, life: 0.5 });
+  effects.floatText(at.clone().setY(at.y + target.type.height * 0.6), `${result.damage}`, player.fireTimer > 0 ? '#ff9a3c' : '#ffffff');
+  play('hit');
+  state.hitstop = result.killed ? 0.09 : 0.05;
+  effects.shake(result.killed ? 0.25 : 0.12);
+  if (result.killed) onDefeated(target);
+}
+
+function onDefeated(target) {
+  if (bosses.includes(target)) {
+    onBossDefeated(target);
+    return;
+  }
+  play('defeat');
+  effects.burst(target.center, target.type.color, { count: 26, speed: 7, size: 0.16, life: 0.8, up: 3 });
+  effects.burst(target.center, 0xffd700, { count: 8, speed: 3, size: 0.08, life: 0.6, up: 4 });
+  if (!target.summoned) giveRunes(target.type.runes);
+  if (state.lockTarget === target) state.lockTarget = null;
+}
+
+const BOSS_REWARDS = {
+  koning: [{ kind: 'helmet', key: 'goud' }, { kind: 'flask' }],
+  ridder: [{ kind: 'weapon', key: 'diamant' }],
+  reus: [],
+};
+
+function onBossDefeated(boss) {
+  const before = stats.unlockedPowers();
+  play('win');
+  effects.shake(0.5);
+  ui.banner('VIJAND GEVELD', boss.name, 'gold', 5);
+  giveRunes(BOSS_INFO[boss.id].runes);
+  stats.data.bosses.push(boss.id);
+  for (const item of BOSS_REWARDS[boss.id]) stats.addItem(item);
+  state.activeBoss = null;
+  state.lockTarget = null;
+  removeSummons();
+  stats.save();
+
+  const rewards = BOSS_REWARDS[boss.id].map((i) => itemInfo(i).name);
+  setTimeout(() => {
+    if (rewards.length) ui.toast(`Beloning: <b>${rewards.join(', ')}</b><br><small>Open je uitrusting met I</small>`, 5);
+    announceNewPowers(before, 1.5);
+    if (['koning', 'ridder', 'reus'].every((id) => stats.data.bosses.includes(id)) && !stats.data.victory) {
+      stats.data.victory = true;
+      stats.save();
+      setTimeout(() => ui.banner('DE WERELD IS GERED', 'Alle drie de bosses zijn verslagen. Jij bent de echte Munt Jager!', 'gold', 8), 4000);
+    }
+  }, 5000);
+}
+
+/** Laat zien welke krachten je net hebt vrijgespeeld. */
+function announceNewPowers(before, delay = 0) {
+  const fresh = stats.unlockedPowers().filter((k) => !before.includes(k));
+  fresh.forEach((key, i) => {
+    setTimeout(() => {
+      play('pickup');
+      ui.banner(`NIEUWE KRACHT: ${POWERS[key].name.toUpperCase()}`, `${POWERS[key].key} — ${POWERS[key].info}`, 'power', 4.5);
+    }, (delay + i * 4.8) * 1000);
+  });
+}
+
+// ---------- Gevecht ----------
+
+function swordHits() {
+  if (!player.sword.isHitting) return;
+  const facing = player.facing;
+  const chest = player.position.y + 0.9;
+  for (const target of targets()) {
+    const toTarget = target.position.clone().sub(player.position);
+    if (Math.abs(target.center.y - chest) > target.type.height / 2 + 1.2) continue; // te ver boven of onder je
+    toTarget.y = 0;
+    const dist = toTarget.length();
+    if (dist > player.sword.range + target.type.radius) continue;
+    // Alleen wat vóór je (of vlak naast je) staat wordt geraakt
+    if (dist > 1.2 + target.type.radius && toTarget.normalize().dot(facing) < 0) continue;
+    const result = target.hit(player.position, player.sword.swingId, player.attackDamage);
+    if (result) onHit(target, result, player.fireTimer > 0 ? 0xff8a2b : player.sword.trailColor);
+  }
+}
+
+function spinHits() {
+  if (player.spinTimer <= 0) return;
+  for (const target of targets()) {
+    const d = target.position.clone().setY(0).distanceTo(player.position.clone().setY(0));
+    if (d > 3.2 + target.type.radius || Math.abs(target.center.y - player.position.y - 0.9) > target.type.height / 2 + 1.5) continue;
+    const result = target.hit(player.position, player.spinId, Math.round(player.attackDamage * 1.2));
+    if (result) onHit(target, result, 0x9be7ff);
+  }
+}
+
+function slamLanded() {
+  play('slam');
+  effects.shockwave(player.position, 0x9be7ff, 5);
+  effects.burst(player.position.clone().setY(0.3), 0x9be7ff, { count: 30, speed: 8, size: 0.14, life: 0.6, up: 2 });
+  effects.shake(0.45);
+  const id = `slam-${Math.random()}`;
+  for (const target of targets()) {
+    const d = target.position.clone().setY(0).distanceTo(player.position.clone().setY(0));
+    if (d > 5 + target.type.radius) continue;
+    const result = target.hit(player.position, id, Math.round(player.attackDamage * 1.6));
+    if (result) onHit(target, result, 0x9be7ff);
+  }
 }
 
 function enemyContact() {
-  for (const enemy of enemies) {
-    if (!enemy.alive) continue;
+  for (const enemy of [...enemies, ...bosses]) {
+    if (!enemy.alive || enemy.awake === false) continue;
     const type = enemy.type;
     const dx = player.position.x - enemy.position.x;
     const dz = player.position.z - enemy.position.z;
@@ -193,110 +246,380 @@ function enemyContact() {
       enemy.stomp();
       player.bounce();
       effects.shake(0.15);
-      onEnemyDefeated(enemy);
+      onDefeated(enemy);
     } else {
       hurtPlayer(enemy.position, type.damage);
     }
   }
-
-  if (!player.alive && !state.finished) {
-    state.finished = true;
-    messageEl.innerHTML = `
-      <h1 class="lose">Game over</h1>
-      <p>Je had ${state.score} van de ${world.coins.length} munten</p>
-      <p>Druk op <b>R</b> om opnieuw te spelen</p>`;
-    messageEl.classList.remove('hidden');
-    play('lose');
-  }
 }
 
-/** Het zwaard-windje: volg het lemmet tijdens de slag. */
-function updateTrail(dt) {
-  const t = player.sword.attackProgress;
-  if (t !== null && t > 0.2 && t < 0.9) {
-    player.mesh.updateMatrixWorld(true);
-    const base = new THREE.Vector3();
-    const tip = new THREE.Vector3();
-    player.sword.getBladeWorld(base, tip);
-    trail.addSample(base, tip);
-  }
-  trail.update(dt);
+/** De golem slaat op de grond: schokgolf, en pijn als je te dichtbij staat. */
+function onGolemSlam(enemy, radius, damage) {
+  play('slam');
+  effects.shockwave(enemy.position, 0xd8c9a8, radius);
+  effects.burst(enemy.position.clone().setY(0.2), 0x9a8f7a, { count: 30, speed: 7, size: 0.18, life: 0.7, up: 2 });
+  const dist = player.position.clone().setY(0).distanceTo(enemy.position.clone().setY(0));
+  effects.shake(dist < radius * 2 ? 0.45 : 0.15);
+  if (dist < radius && player.position.y < enemy.position.y + 0.8) hurtPlayer(enemy.position, damage);
 }
 
-// ---------- Wapens oppakken met E ----------
-function weaponPickup() {
-  const pickup = player.isBusy ? null : findNearbyPickup(pickups, player.position);
-  if (pickup && input.wasPressed('KeyE')) {
-    // Eerst bukken; als de hand bij de grond is, wisselen we echt van wapen
-    player.startPickup(() => {
-      swapWeapon(pickup, player.sword);
+// ---------- Doodgaan, rusten, reizen ----------
+
+function die() {
+  state.deathTimer = 4;
+  play('lose');
+  ui.banner('JE BENT GESTORVEN', stats.runes > 0 ? 'Je munten liggen nog waar je viel...' : '', 'death', 3.8);
+  // Munten laten vallen; vorige verloren munten zijn nu echt weg
+  if (stats.runes > 0) {
+    stats.data.lostRunes = { x: player.position.x, y: player.position.y, z: player.position.z, amount: stats.runes };
+    stats.data.runes = 0;
+  } else {
+    stats.data.lostRunes = null;
+  }
+  sites.lostRunes.show(stats.data.lostRunes);
+  stats.save();
+}
+
+function respawnAfterDeath() {
+  respawnWorld();
+  player.respawnAt(graceSpawn(stats.data.lastGrace));
+  cameraRig.snapTo(player.position);
+}
+
+function rest(grace) {
+  stats.data.lastGrace = grace.id;
+  stats.save();
+  respawnWorld();
+  player.respawnAt(player.position.clone());
+  player.mesh.rotation.y = Math.atan2(grace.position.x - player.position.x, grace.position.z - player.position.z);
+  player.resting = true;
+  play('heal');
+  document.exitPointerLock?.();
+  ui.openGraceMenu(grace, {
+    leave: () => {
+      player.resting = false;
+      ui.closeMenu();
+      renderer.domElement.requestPointerLock();
+    },
+    travel: (id) => {
+      stats.data.lastGrace = id;
+      stats.save();
+      player.resting = false;
+      ui.closeMenu();
+      player.respawnAt(graceSpawn(id));
+      cameraRig.snapTo(player.position);
+      renderer.domElement.requestPointerLock();
+      ui.toast(`Gereisd naar <b>${sites.grace(id).name}</b>`);
+    },
+    leveled: (before) => {
       play('pickup');
-      effects.burst(pickup.position.clone().setY(pickup.position.y + 0.6), 0xffe066, { count: 16, speed: 4, size: 0.08, life: 0.5, up: 2 });
-    });
-  }
-
-  pickupHintEl.classList.toggle('hidden', !pickup || player.isBusy);
-  if (pickup) {
-    pickupHintEl.innerHTML = `Druk op <b>E</b>: ${WEAPONS[pickup.key].name} pakken`;
-  }
+      player.health = player.maxHealth;
+      player.stamina = player.maxStamina;
+      announceNewPowers(before);
+    },
+    equip,
+  });
 }
 
-function updateHud() {
-  scoreEl.textContent = `Munten: ${state.score} / ${world.coins.length}`;
-  healthEl.textContent = '❤'.repeat(player.health) + '♡'.repeat(MAX_HEALTH - player.health);
-  weaponEl.textContent = `Wapen: ${player.sword.name}`;
-  enemiesEl.textContent = `Vijanden verslagen: ${enemies.filter((e) => !e.alive).length} / ${enemies.length}`;
-  timerEl.textContent = `Tijd: ${state.time.toFixed(1)}s`;
+function equip(item) {
+  if (item.kind === 'weapon') {
+    stats.data.weapon = item.key;
+    player.sword.setWeapon(item.key);
+  } else if (item.kind === 'helmet') {
+    stats.data.helmet = item.key;
+    player.setHelmet(item.key);
+  }
+  stats.save();
 }
 
-// ---------- Game loop ----------
-const clock = new THREE.Clock();
+function openChest(chest) {
+  player.startPickup(() => {
+    chest.open();
+    stats.addItem(chest.item);
+    stats.data.chests.push(chest.id);
+    stats.save();
+    play('pickup');
+    effects.burst(chest.position.clone().setY(chest.position.y + 1), 0xffd76a, { count: 24, speed: 4, size: 0.1, life: 0.8, up: 3 });
+    const info = itemInfo(chest.item);
+    ui.toast(`Gevonden: <b style="color:${info.rarity === 'legendarisch' ? '#ffb340' : '#f3d27a'}">${info.name}</b><br><small>${info.info}${chest.item.kind === 'flask' ? '' : ' — open je uitrusting met I'}</small>`, 5);
+  });
+}
+
+function toggleInventory() {
+  if (ui.menuOpen === 'inventory') {
+    ui.closeMenu();
+    renderer.domElement.requestPointerLock();
+    return;
+  }
+  if (ui.menuOpen) return;
+  document.exitPointerLock?.();
+  ui.openInventory({
+    close: () => {
+      ui.closeMenu();
+      renderer.domElement.requestPointerLock();
+    },
+    equip,
+    wipe: () => {
+      stats.wipe();
+      location.reload();
+    },
+  });
+}
+
+// ---------- Lock-on (Q) ----------
+
+function toggleLock() {
+  if (state.lockTarget) {
+    state.lockTarget = null;
+    return;
+  }
+  const camForward = new THREE.Vector3();
+  camera.getWorldDirection(camForward);
+  let best = null;
+  let bestScore = Infinity;
+  for (const t of targets()) {
+    const to = t.center.sub(camera.position);
+    const dist = t.position.distanceTo(player.position);
+    if (dist > 24) continue;
+    const dot = to.normalize().dot(camForward);
+    if (dot < 0.3) continue;
+    const score = dist * (1.5 - dot); // dichtbij en midden in beeld wint
+    if (score < bestScore) {
+      best = t;
+      bestScore = score;
+    }
+  }
+  state.lockTarget = best;
+}
+
+// ---------- Invoer ----------
+
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  unlockAudio(); // geluid mag pas na een klik
+  // De eerste klik zet alleen de muis vast; daarna is klikken = slaan
+  if (e.button === 0 && cameraRig.locked) state.attackRequested = true;
+});
+
+const lockHintEl = document.getElementById('lock-hint');
+document.addEventListener('pointerlockchange', () => {
+  lockHintEl.classList.toggle('hidden', cameraRig.locked || !!ui.menuOpen);
+});
 
 window.addEventListener('keydown', (e) => {
   unlockAudio();
   if (e.code === 'KeyM') toggleMute();
 });
 
+/** Welke kant wil de speler op? (WASD, ten opzichte van de camera) */
+function readMove() {
+  const f = (input.isDown('KeyW', 'ArrowUp') ? 1 : 0) - (input.isDown('KeyS', 'ArrowDown') ? 1 : 0);
+  const r = (input.isDown('KeyD', 'ArrowRight') ? 1 : 0) - (input.isDown('KeyA', 'ArrowLeft') ? 1 : 0);
+  return cameraRig.forward.multiplyScalar(f).add(cameraRig.right.multiplyScalar(r));
+}
+
+function handleActions(move) {
+  const attack = input.wasPressed('KeyF') || state.attackRequested;
+  state.attackRequested = false;
+
+  // Shift: kort tikken = rollen, ingedrukt houden = sprinten
+  const shiftUp = input.wasReleased('ShiftLeft') ?? input.wasReleased('ShiftRight');
+  if (shiftUp !== null && shiftUp < 0.22 && player.tryRoll(move)) play('swing');
+
+  if (attack) {
+    if (!player.onGround && player.position.y > 1.2 && player.trySlam()) play('heavySwing');
+    else if (player.tryAttack()) {
+      play(player.sword.weaponKey === 'club' ? 'heavySwing' : 'swing');
+      trail.cut();
+    }
+  }
+  if (input.wasPressed('KeyC') && player.tryDash(move)) play('swing');
+  if (input.wasPressed('KeyV') && player.trySpin()) {
+    play('heavySwing');
+    trail.cut();
+  }
+  if (input.wasPressed('KeyX') && player.tryFire()) play('charge');
+  if (input.wasPressed('KeyR')) player.tryDrink();
+  if (input.wasPressed('KeyQ')) toggleLock();
+  if (input.wasPressed('KeyI') || input.wasPressed('Tab')) toggleInventory();
+
+  // E: rusten of een kist openen
+  const near = player.isBusy ? null : sites.nearbyInteraction(player.position);
+  if (near?.kind === 'grace') ui.prompt(`<b>E</b> Rusten bij ${near.target.name}`);
+  else if (near?.kind === 'chest') ui.prompt('<b>E</b> Kist openen');
+  else ui.prompt(null);
+  if (near && input.wasPressed('KeyE')) {
+    ui.prompt(null);
+    if (near.kind === 'grace') rest(near.target);
+    else openChest(near.target);
+  }
+}
+
+/** Gebeurtenissen van de speler (rollen, dash, landen na een grondslag...) */
+function handlePlayerEvents() {
+  for (const ev of player.events) {
+    if (ev === 'dash') {
+      effects.burst(player.position.clone().setY(player.position.y + 0.9), 0x9be7ff, { count: 16, speed: 3, size: 0.1, life: 0.35, gravity: 0 });
+    } else if (ev === 'doubleJump') {
+      play('jump');
+      effects.shockwave(player.position, 0xffffff, 1.2);
+    } else if (ev === 'slamLand') {
+      slamLanded();
+    } else if (ev === 'heal') {
+      play('heal');
+      const at = player.position.clone().setY(player.position.y + 1);
+      effects.burst(at, 0x7dff9a, { count: 18, speed: 3, size: 0.09, life: 0.7, up: 3, gravity: -0.3 });
+      effects.floatText(at.setY(at.y + 0.9), `+${Math.round(player.maxHealth * 0.45)}`, '#7dff9a', 0.55);
+    } else if (ev === 'fire') {
+      ui.toast('🔥 <b>Vuurzwaard!</b> 50% meer schade', 2);
+    }
+  }
+  player.events.length = 0;
+}
+
+// ---------- Effecten bij het wapen ----------
+
+function updateTrail(dt) {
+  const t = player.sword.attackProgress;
+  if ((t !== null && t > 0.2 && t < 0.9) || player.spinTimer > 0) {
+    player.mesh.updateMatrixWorld(true);
+    const base = new THREE.Vector3();
+    const tip = new THREE.Vector3();
+    player.sword.getBladeWorld(base, tip);
+    trail.setColor(player.fireTimer > 0 ? 0xff7a1a : player.spinTimer > 0 ? 0x9be7ff : player.sword.trailColor);
+    trail.addSample(base, tip);
+  }
+  trail.update(dt);
+
+  // Vlammetjes langs het wapen tijdens Vuurzwaard
+  if (player.fireTimer > 0 && dt > 0 && Math.random() < 0.7) {
+    player.mesh.updateMatrixWorld(true);
+    const base = new THREE.Vector3();
+    const tip = new THREE.Vector3();
+    player.sword.getBladeWorld(base, tip);
+    const at = base.lerp(tip, Math.random());
+    effects.burst(at, Math.random() < 0.5 ? 0xff7a1a : 0xffd23a, { count: 1, speed: 0.6, size: 0.09, life: 0.4, up: 1.6, gravity: -0.2 });
+  }
+}
+
+// ---------- Bosses: arena in = gevecht ----------
+
+function updateBossFights() {
+  if (!state.activeBoss) {
+    for (const b of bosses) {
+      if (b.dead || b.awake) continue;
+      const d = player.position.clone().setY(0).distanceTo(b.arena.center);
+      if (d < b.arena.radius - 1.5) {
+        b.wake();
+        state.activeBoss = b;
+        ui.banner(b.name.toUpperCase(), BOSS_INFO[b.id].title, 'gold', 3);
+      }
+    }
+  }
+  // Tijdens het gevecht kun je niet door de mistmuur naar buiten
+  const boss = state.activeBoss;
+  if (boss && boss.awake && !boss.dead) {
+    const offset = player.position.clone().sub(boss.arena.center).setY(0);
+    const max = boss.arena.radius - 0.6;
+    if (offset.length() > max) {
+      offset.setLength(max);
+      player.position.x = boss.arena.center.x + offset.x;
+      player.position.z = boss.arena.center.z + offset.z;
+    }
+  }
+}
+
+// ---------- Game loop ----------
+const clock = new THREE.Clock();
+const bossCtx = { player, effects, hurtPlayer, spawnEnemy: addSummon, camera };
+
 function gameLoop() {
   // realDt = tijd sinds vorige frame. Begrensd zodat een lag-piek je niet door de vloer laat vallen.
   const realDt = Math.min(clock.getDelta(), 0.05);
-  // Tijdens een "hitstop" staat het spel heel even stil (de camera niet)
-  const dt = state.hitstop > 0 ? 0 : realDt;
+  // Tijdens een "hitstop" of een menu staat het spel even stil (de camera niet)
+  const paused = !!ui.menuOpen && ui.menuOpen !== 'grace';
+  const dt = state.hitstop > 0 || paused ? 0 : realDt;
   state.hitstop -= realDt;
   const elapsed = clock.elapsedTime;
 
-  if (input.wasPressed('KeyR')) resetGame();
+  const move = readMove();
+  const canAct = player.alive && !ui.menuOpen && state.deathTimer <= 0;
+  if (canAct) handleActions(move);
+  else ui.prompt(null);
 
-  if (!state.finished) {
-    state.time += dt;
-    player.update(dt, input, cameraRig, world.colliders, world.groundHalfSize);
+  // Lock-on doel nog geldig?
+  const lock = state.lockTarget;
+  if (lock && (!lock.alive || lock.position.distanceTo(player.position) > 30)) state.lockTarget = null;
+
+  if (player.alive && state.deathTimer <= 0) {
+    const sprintHeld = input.heldFor('ShiftLeft') > 0.22 || input.heldFor('ShiftRight') > 0.22;
+    const faceTarget = state.lockTarget ? state.lockTarget.position.clone().sub(player.position).setY(0) : null;
+    player.update(dt, {
+      move: canAct ? move : new THREE.Vector3(),
+      sprint: canAct && sprintHeld,
+      jumpPressed: canAct && input.wasPressed('Space'),
+      faceTarget,
+    }, world.colliders, WALKABLE_HALF);
     if (player.jumped) play('jump');
-    weaponPickup();
-    swordAttack();
-    collectCoins();
+    handlePlayerEvents();
+    swordHits();
+    spinHits();
     enemyContact();
+    updateBossFights();
+
+    const found = sites.discover(player.position);
+    if (found) {
+      play('heal');
+      ui.banner('PLEK VAN GENADE GEVONDEN', found.name, 'gold', 3.5);
+    }
+    const recovered = sites.touchLostRunes(player.position);
+    if (recovered) {
+      giveRunes(recovered);
+      stats.data.lostRunes = null;
+      stats.save();
+      play('pickup');
+      ui.toast(`Je munten terug: <b>+${recovered}</b>`);
+    }
+  } else if (state.deathTimer > 0) {
+    state.deathTimer -= realDt;
+    if (state.deathTimer <= 0) respawnAfterDeath();
   }
+  if (!player.alive && state.deathTimer <= 0) die();
 
-  const enemyCtx = {
-    time: elapsed, player, colliders: world.colliders, groundHalfSize: world.groundHalfSize, camera, onSlam: onGolemSlam,
-  };
+  const enemyCtx = { time: elapsed, player, colliders: world.colliders, groundHalfSize: WALKABLE_HALF, camera, onSlam: onGolemSlam };
   for (const enemy of enemies) enemy.update(dt, enemyCtx);
+  for (const boss of bosses) boss.update(dt, bossCtx);
+  // Is de boss dood door iets anders dan een klap? (bijv. schade terwijl je doodging)
+  if (state.activeBoss && (!state.activeBoss.awake || state.activeBoss.dead)) state.activeBoss = null;
 
-  drops.update(dt, elapsed, player.position, () => {
-    if (!player.heal()) return false; // al vol: laat het hartje liggen
-    play('heal');
-    effects.floatText(player.position.clone().setY(player.position.y + 2), '+1', '#ff6b9d', 0.55);
-    effects.burst(player.position.clone().setY(player.position.y + 1), 0xff6b9d, { count: 14, speed: 3, size: 0.09, life: 0.6, up: 3 });
-    return true;
-  });
-
-  animateCoins(world.coins, elapsed);
-  for (const pickup of pickups) pickup.update(elapsed);
+  sites.update(dt, elapsed);
   updateTrail(dt);
   effects.update(dt);
-  cameraRig.update(realDt, player.position);
+  world.updateSun(player.position);
+
+  cameraRig.update(realDt, player.position, {
+    facing: player.mesh.rotation.y,
+    moving: player.moving && !paused,
+    lockTarget: state.lockTarget?.center ?? null,
+    colliders: world.colliders,
+  });
   effects.applyShake(camera, realDt);
-  updateHud();
+
+  // Lock-on markering
+  lockMarker.visible = !!state.lockTarget;
+  if (state.lockTarget) {
+    lockMarker.position.copy(state.lockTarget.center);
+    lockMarker.quaternion.copy(camera.quaternion);
+  }
+
+  ui.update(realDt, player, state.activeBoss, elapsed);
+  ui.checkRegion(player.position, REGION_NAMES);
+
+  // Af en toe automatisch opslaan
+  state.saveTimer += realDt;
+  if (state.saveTimer > 10) {
+    state.saveTimer = 0;
+    stats.save();
+  }
 
   renderer.render(scene, camera);
   input.endFrame();
@@ -304,5 +627,14 @@ function gameLoop() {
 
 renderer.setAnimationLoop(gameLoop);
 
+// Eerste keer spelen? Een kleine uitleg.
+if (stats.level === 1 && stats.runes === 0 && stats.data.bosses.length === 0) {
+  document.addEventListener('pointerlockchange', function intro() {
+    if (!cameraRig.locked) return;
+    document.removeEventListener('pointerlockchange', intro);
+    setTimeout(() => ui.toast('Versla vijanden voor <b>munten</b>.<br>Rust bij de gouden <b>Plek van Genade</b> (E) om sterker te worden.', 7), 800);
+  });
+}
+
 // Handig voor debuggen in de browser-console (F12): typ bijvoorbeeld `game.player.position`
-window.game = { scene, player, enemies, pickups, world, state, camera, renderer, effects, trail, drops, loop: gameLoop };
+window.game = { scene, player, enemies, bosses, sites, stats, ui, world, state, camera, renderer, effects, trail, loop: gameLoop };

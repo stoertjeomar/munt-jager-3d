@@ -39,6 +39,7 @@ export class Sword {
     this.swingTime = weapon.swingTime;
     this.blade = weapon.blade;
     this.trailColor = weapon.trail;
+    this.stamina = weapon.stamina;
 
     if (this.weaponMesh) this.grip.remove(this.weaponMesh);
     this.weaponMesh = createWeaponMesh(key);
