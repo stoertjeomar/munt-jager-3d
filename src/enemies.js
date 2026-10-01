@@ -86,11 +86,11 @@ class Enemy {
     this.hopPhase = Math.random() * Math.PI * 2;
   }
 
-  /** Geraakt door het zwaard. `from` = positie van de aanvaller. */
-  hit(from, swingId) {
+  /** Geraakt door een wapen. `from` = positie van de aanvaller, `damage` = schade van het wapen. */
+  hit(from, swingId, damage = 1) {
     if (!this.alive || this.lastSwingId === swingId) return false;
     this.lastSwingId = swingId;
-    this.hp--;
+    this.hp = Math.max(0, this.hp - damage);
     this.flash = 0.15;
 
     const away = this.position.clone().sub(from).setY(0);

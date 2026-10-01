@@ -34,7 +34,8 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 | --------------- | ---------------- |
 | WASD / pijltjes | Lopen            |
 | Spatie          | Springen         |
-| F / klik        | Zwaard zwaaien   |
+| F / klik        | Slaan met je wapen |
+| E               | Wapen oppakken (je oude wapen blijft liggen) |
 | Muis bewegen    | Rondkijken (klik eerst in het spel) |
 | Esc             | Muis weer vrij   |
 | Scrollen        | Zoomen           |
@@ -49,6 +50,8 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 - Munten verzamelen, timer en win-scherm
 - Diamanten zwaard van blokjes (pixel art, zelf te tekenen in `src/sword.js`) met zwaai-animatie: twee klappen en een vijand is verslagen
 - Vijanden (slijmballen) die heen en weer lopen en je achterna gaan als je dichtbij komt
+- 5 wapens: begin met het diamanten zwaard, vind in de wereld het ridderzwaard, kort zwaard, de knots en (bovenop het hoogste platform) de katana.
+  Elk wapen heeft eigen schade, bereik en snelheid; de knots verslaat een vijand in één klap
 - 3 levens: een vijand raken kost een hartje (met terugstoot), op een vijand springen verslaat hem meteen
 - Realtime schaduwen en mist
 
@@ -64,7 +67,9 @@ munt-jager-3d/
     ├── main.js     → start alles op, game loop, score, gevechten en winnen
     ├── character.js → het poppetje: strohoed, rood hemd, blauwe broek, lopende armen en benen
     ├── player.js   → speler: lopen, springen, zwaartekracht, botsingen, levens
-    ├── sword.js    → zwaard: model en zwaai-animatie
+    ├── sword.js    → de hand met het wapen: zwaai-animatie
+    ├── weapons.js  → alle wapens: schade, bereik, snelheid en 3D-model
+    ├── pickups.js  → wapens die in de wereld liggen om op te pakken
     ├── enemies.js  → vijanden: looproutes, achtervolgen, geraakt worden
     ├── world.js    → level: vloer, licht, blokken en munten
     ├── camera.js   → third-person camera
@@ -80,6 +85,7 @@ munt-jager-3d/
   Het wordt vanzelf op de goede grootte gezet; heeft het animaties (idle / walk / run / jump), dan worden die afgespeeld.
   Kijkt het de verkeerde kant op? Pas `MODEL_TURN` aan bovenaan `src/player.js`; zit het zwaard niet in de hand, pas dan `MODEL_HAND` aan.
   Wil je het poppetje uit `character.js` terug? Verwijder (of hernoem) `models/speler.glb`.
+- **Wapens aanpassen** → `WEAPONS` in `src/weapons.js` (schade, bereik, snelheid) en `PICKUP_SPOTS` in `src/pickups.js` (waar ze liggen)
 - **Vijanden aanpassen** → `PATROLS` (looproutes), snelheden en `MAX_HP` bovenaan `src/enemies.js`
 - **Debuggen** → open de console (F12) en typ bijvoorbeeld `game.player.position`
 
@@ -94,7 +100,7 @@ munt-jager-3d/
 
 ## Credits
 
-- Ridder (`models/speler.glb`): **Knight Pack** door [Quaternius](https://quaternius.com) — CC0 1.0 (public domain)
+- Ridder (`models/speler.glb`) en wapens (`models/wapens/`): **Knight Pack** door [Quaternius](https://quaternius.com) — CC0 1.0 (public domain)
 
 ## Licentie
 

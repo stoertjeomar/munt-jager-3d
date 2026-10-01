@@ -4,7 +4,8 @@ import { CameraRig } from './camera.js';
 import { Player, MAX_HEALTH } from './player.js';
 import { createWorld, animateCoins } from './world.js';
 import { createEnemies, ENEMY_RADIUS, ENEMY_HEIGHT } from './enemies.js';
-import { SWORD_RANGE } from './sword.js';
+import { WEAPONS } from './weapons.js';
+import { createPickups, resetPickups, findNearbyPickup, swapWeapon } from './pickups.js';
 
 // ---------- Basis: renderer, scene, camera ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -28,6 +29,7 @@ const input = new Input();
 const world = createWorld(scene);
 const player = new Player(scene);
 const enemies = createEnemies(scene);
+const pickups = createPickups(scene);
 const cameraRig = new CameraRig(camera, renderer.domElement);
 cameraRig.snapTo(player.position);
 
@@ -36,6 +38,8 @@ const scoreEl = document.getElementById('score');
 const timerEl = document.getElementById('timer');
 const healthEl = document.getElementById('health');
 const enemiesEl = document.getElementById('enemies');
+const weaponEl = document.getElementById('weapon');
+const pickupHintEl = document.getElementById('pickup-hint');
 const messageEl = document.getElementById('message');
 
 // ---------- Game state ----------
@@ -50,6 +54,7 @@ function resetGame() {
   state.time = 0;
   state.finished = false;
   for (const enemy of enemies) enemy.reset();
+  resetPickups(pickups);
   for (const coin of world.coins) {
     coin.collected = false;
     coin.mesh.visible = true;
@@ -106,10 +111,10 @@ function swordAttack() {
     if (Math.abs(toEnemy.y) > 1.5) continue; // te ver boven of onder je
     toEnemy.y = 0;
     const dist = toEnemy.length();
-    if (dist > SWORD_RANGE + ENEMY_RADIUS) continue;
+    if (dist > player.sword.range + ENEMY_RADIUS) continue;
     // Alleen vijanden vóór je (of vlak naast je) worden geraakt
     if (dist > 1.2 && toEnemy.normalize().dot(facing) < 0) continue;
-    enemy.hit(player.position, player.sword.swingId);
+    enemy.hit(player.position, player.sword.swingId, player.sword.damage);
   }
 }
 
@@ -141,9 +146,21 @@ function enemyContact() {
   }
 }
 
+// ---------- Wapens oppakken met E ----------
+function weaponPickup() {
+  const pickup = findNearbyPickup(pickups, player.position);
+  if (pickup && input.wasPressed('KeyE')) swapWeapon(pickup, player.sword);
+
+  pickupHintEl.classList.toggle('hidden', !pickup);
+  if (pickup) {
+    pickupHintEl.innerHTML = `Druk op <b>E</b>: ${WEAPONS[pickup.key].name} pakken`;
+  }
+}
+
 function updateHud() {
   scoreEl.textContent = `Munten: ${state.score} / ${world.coins.length}`;
   healthEl.textContent = '❤'.repeat(player.health) + '♡'.repeat(MAX_HEALTH - player.health);
+  weaponEl.textContent = `Wapen: ${player.sword.name}`;
   enemiesEl.textContent = `Vijanden verslagen: ${enemies.filter((e) => !e.alive).length} / ${enemies.length}`;
   timerEl.textContent = `Tijd: ${state.time.toFixed(1)}s`;
 }
@@ -161,6 +178,7 @@ function gameLoop() {
   if (!state.finished) {
     state.time += dt;
     player.update(dt, input, cameraRig, world.colliders, world.groundHalfSize);
+    weaponPickup();
     swordAttack();
     collectCoins();
     enemyContact();
@@ -171,6 +189,7 @@ function gameLoop() {
   }
 
   animateCoins(world.coins, elapsed);
+  for (const pickup of pickups) pickup.update(elapsed);
   cameraRig.update(dt, player.position);
   updateHud();
 
@@ -181,4 +200,4 @@ function gameLoop() {
 renderer.setAnimationLoop(gameLoop);
 
 // Handig voor debuggen in de browser-console (F12): typ bijvoorbeeld `game.player.position`
-window.game = { scene, player, enemies, world, state, camera };
+window.game = { scene, player, enemies, pickups, world, state, camera };
