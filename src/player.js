@@ -17,6 +17,7 @@ const INVULNERABLE_TIME = 1.2; // na een klap ben je even onkwetsbaar
 // Staat het bestand er niet, dan speel je met het poppetje uit character.js.
 const MODEL_URL = 'models/speler.glb';
 const MODEL_TURN = 0; // kijkt het model de verkeerde kant op? Probeer Math.PI of Math.PI / 2
+const MODEL_HAND = [-0.34, 0.55, 0.14]; // waar de rechterhand van het model zit: daar komt het zwaard
 
 export class Player {
   constructor(scene) {
@@ -74,6 +75,9 @@ export class Player {
 
         this.mesh.remove(this.placeholder);
         this.mesh.add(model);
+        this.model = model;
+        this.modelBaseY = model.position.y;
+        this.sword.yawPivot.position.fromArray(MODEL_HAND);
 
         // Animaties (als het model "gerigd" is, bijvoorbeeld idle / walk / run / jump)
         if (gltf.animations.length > 0) {
@@ -97,6 +101,15 @@ export class Player {
 
   /** Kies de juiste animatie: stilstaan, lopen of springen. */
   updateAnimation(dt, moving) {
+    if (this.model && !this.mixer) {
+      // Model zonder animaties: een beetje op en neer wippen tijdens het lopen
+      const target = moving && this.onGround ? 1 : 0;
+      this.walkAmount += (target - this.walkAmount) * Math.min(1, 12 * dt);
+      if (moving) this.walkPhase += dt * 11;
+      this.model.position.y = this.modelBaseY + Math.abs(Math.sin(this.walkPhase)) * 0.08 * this.walkAmount;
+      this.model.rotation.z = Math.sin(this.walkPhase) * 0.06 * this.walkAmount; // waggelen
+      return;
+    }
     if (!this.mixer) {
       // Poppetje uit character.js: armen en benen laten zwaaien
       const target = moving && this.onGround ? 1 : 0;

@@ -78,7 +78,8 @@ munt-jager-3d/
 - **Poppetje aanpassen** → kleuren en vormen in `src/character.js`
 - **Eigen 3D-poppetje** → exporteer je model als **.glb** (bijv. uit Tripo) en zet het in `models/speler.glb`.
   Het wordt vanzelf op de goede grootte gezet; heeft het animaties (idle / walk / run / jump), dan worden die afgespeeld.
-  Kijkt het de verkeerde kant op? Pas `MODEL_TURN` aan bovenaan `src/player.js`.
+  Kijkt het de verkeerde kant op? Pas `MODEL_TURN` aan bovenaan `src/player.js`; zit het zwaard niet in de hand, pas dan `MODEL_HAND` aan.
+  Wil je het poppetje uit `character.js` terug? Verwijder (of hernoem) `models/speler.glb`.
 - **Vijanden aanpassen** → `PATROLS` (looproutes), snelheden en `MAX_HP` bovenaan `src/enemies.js`
 - **Debuggen** → open de console (F12) en typ bijvoorbeeld `game.player.position`
 
@@ -90,6 +91,10 @@ munt-jager-3d/
 - [ ] Geluidseffecten
 - [x] 3D-model als speler (`GLTFLoader`)
 - [ ] Meerdere levels en een opgeslagen beste tijd
+
+## Credits
+
+- Ridder (`models/speler.glb`): **Knight Pack** door [Quaternius](https://quaternius.com) — CC0 1.0 (public domain)
 
 ## Licentie
 

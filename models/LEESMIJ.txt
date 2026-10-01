@@ -1,2 +1,3 @@
-Zet hier je eigen 3D-poppetje neer als: speler.glb
-(bijvoorbeeld gedownload uit Tripo als GLB). Zonder dit bestand speel je met het blauwe poppetje.
+speler.glb = de ridder uit de Knight Pack van Quaternius (CC0 1.0, https://quaternius.com),
+met Helmet1 en ShoulderPads erop. Vervang dit bestand door je eigen .glb voor een ander poppetje.
+Zonder dit bestand speel je met het poppetje uit src/character.js.
