@@ -14,6 +14,7 @@ export const GRACES = [
   ['ruine', 'Woudruïne', -78, -22],
   ['hoogland', 'Voet van het Hoogland', 55, 6],
   ['top', 'Rotsentop', 74, 38],
+  ['zuid', 'Zuiderveld', 12, 66],
 ].map(([id, name, x, z]) => ({ id, name, position: new THREE.Vector3(x, 0, z) }));
 
 // Boss-arena's: [id, x, z, straal]
@@ -21,6 +22,7 @@ export const ARENAS = [
   ['koning', 0, -78, 17],
   ['ridder', -96, -48, 16],
   ['reus', 92, 66, 19],
+  ['mario', 24, 94, 20],
 ].map(([id, x, z, radius]) => ({ id, center: new THREE.Vector3(x, 0, z), radius }));
 
 // Kisten: [id, x, y, z, voorwerp]. y = hoogte waar de kist op staat.
@@ -32,6 +34,10 @@ export const CHESTS = [
   ['c-noord', -32, 0, -62, { kind: 'flask' }],
   ['c-golem', 82, 0, -32, { kind: 'weapon', key: 'club' }],
   ['c-hoog', 50, 0, -64, { kind: 'helmet', key: 'kap' }],
+  ['c-dorp', -24.5, 0, 50.5, { kind: 'weapon', key: 'revolver' }], // bij de put in Muntdorp
+  ['c-boog', -88, 0, -62, { kind: 'weapon', key: 'bow' }],
+  ['c-hagel', 98, 0, 8, { kind: 'weapon', key: 'shotgun' }],
+  ['c-geweer', 40, 0, -100, { kind: 'weapon', key: 'rifle' }],
 ].map(([id, x, y, z, item]) => ({ id, position: new THREE.Vector3(x, y, z), item }));
 
 // Muntdorp: huizen rond een dorpsplein. [x, z, breedte, diepte, hoogte, muur, dak]
@@ -47,6 +53,7 @@ const HOUSES = [
 // Paden tussen plekken (lijnstukken), zodat je de weg kunt vinden
 const PATHS = [
   [[0, 16], [-28, 47]],
+  [[0, 16], [12, 66]], [[12, 66], [18, 76]],
   [[0, 16], [0, -48]], [[0, -48], [0, -62]],
   [[0, 16], [-55, 6]], [[-55, 6], [-78, -22]], [[-78, -22], [-90, -36]],
   [[0, 16], [55, 6]], [[55, 6], [74, 38]], [[74, 38], [84, 54]],

@@ -46,6 +46,7 @@ function freshSave() {
     str: 5,
     end: 5,
     runes: 0, // munten
+    character: 'ridder',
     weapon: 'shortsword',
     helmet: 'geen',
     inventory: [{ kind: 'weapon', key: 'shortsword' }, { kind: 'helmet', key: 'geen' }],

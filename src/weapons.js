@@ -32,6 +32,35 @@ export const WEAPONS = {
     file: 'models/wapens/Club.glb', scale: 0.42, blade: [0.35, 0.87], trail: 0xff8a2b,
     info: 'Langzaam maar loeihard.',
   },
+  // ---------- Afstandswapens ----------
+  //   ranged   = soort projectiel: 'bullet' (kogel) of 'arrow' (pijl)
+  //   fireRate = tijd tussen twee schoten · auto = blijven schieten als je de knop ingedrukt houdt
+  //   pellets/spread = hagel (shotgun) · pierce = gaat door vijanden heen · muzzle = waar de loop eindigt
+  revolver: {
+    name: 'Revolver', rarity: 'zeldzaam', ranged: 'bullet', damage: 26, stamina: 6, fireRate: 0.42, speed: 75,
+    file: 'models/wapens/Revolver.glb', scale: 1, muzzle: 0.33, range: 0, swingTime: 0.3, trail: 0xffe27a,
+    info: 'Zes schoten, elk raak. Mik met de muis.',
+  },
+  shotgun: {
+    name: 'Shotgun', rarity: 'episch', ranged: 'bullet', damage: 13, pellets: 7, spread: 0.11, stamina: 14, fireRate: 0.95, speed: 60, life: 0.4,
+    file: 'models/wapens/Shotgun.glb', scale: 1, muzzle: 0.83, range: 0, swingTime: 0.3, trail: 0xffe27a,
+    info: 'Van dichtbij verwoestend. Hagel waaiert uit.',
+  },
+  rifle: {
+    name: 'Machinegeweer', rarity: 'episch', ranged: 'bullet', damage: 11, stamina: 2.5, fireRate: 0.1, auto: true, spread: 0.025, speed: 80,
+    file: 'models/wapens/AssaultRifle.glb', scale: 1, muzzle: 0.73, range: 0, swingTime: 0.3, trail: 0xffe27a,
+    info: 'Houd de knop ingedrukt voor een regen van kogels.',
+  },
+  sniper: {
+    name: 'Sluipschuttersgeweer', rarity: 'legendarisch', ranged: 'bullet', damage: 95, stamina: 18, fireRate: 1.3, speed: 150, pierce: true,
+    file: 'models/wapens/SniperRifle.glb', scale: 1, muzzle: 1, range: 0, swingTime: 0.3, trail: 0xbfe8ff,
+    info: 'De beloning van Budget Mario. Gaat dwars door vijanden heen.',
+  },
+  bow: {
+    name: 'Boog', rarity: 'zeldzaam', ranged: 'arrow', damage: 34, stamina: 10, fireRate: 0.75, speed: 42, gravity: 7,
+    file: 'models/wapens/Bow.glb', scale: 1, muzzle: 0.15, range: 0, swingTime: 0.3, trail: 0xffd27a,
+    info: 'Stil en sterk. Pijlen vallen een beetje, dus mik iets hoger.',
+  },
   diamant: {
     name: 'Diamanten zwaard', rarity: 'legendarisch', damage: 40, stamina: 15, range: 2.6, swingTime: 0.32,
     blade: [0.3, 1.0], trail: 0x5ff7de,
@@ -61,7 +90,13 @@ export function createWeaponMesh(key, scaleMultiplier = 1) {
       const model = gltf.scene.clone();
       model.scale.setScalar(weapon.scale * scaleMultiplier);
       model.traverse((child) => {
-        if (child.isMesh) child.castShadow = true;
+        if (!child.isMesh) return;
+        child.castShadow = true;
+        // Zonder omgevingsreflectie lijkt metaal zwart: iets lichter en minder metalig maken
+        child.material = child.material.clone();
+        child.material.metalness = Math.min(child.material.metalness, 0.35);
+        const hsl = child.material.color.getHSL({});
+        if (hsl.l < 0.18) child.material.color.setHSL(hsl.h, hsl.s, 0.18);
       });
       group.add(model);
     },

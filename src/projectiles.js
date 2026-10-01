@@ -33,6 +33,7 @@ export class Projectiles {
       pierce: p.pierce ?? false,
       id: `proj-${Math.random()}`,
       age: 0,
+      life: p.life ?? MAX_LIFE,
       hitIds: new Set(),
     };
     proj.mesh = this.buildMesh(p.kind, p.color);
@@ -93,7 +94,7 @@ export class Projectiles {
       if (p.kind === 'fire' && Math.random() < 0.6) ctx.effects.burst(p.pos, Math.random() < 0.5 ? 0xff7a1a : 0xffd23a, { count: 1, speed: 0.5, size: 0.12, life: 0.3, up: 0.5, gravity: 0 });
       if (p.kind === 'energy' && Math.random() < 0.5) ctx.effects.burst(p.pos, 0x5ff0ff, { count: 1, speed: 0.4, size: 0.1, life: 0.25, up: 0, gravity: 0 });
 
-      let dead = p.age > MAX_LIFE;
+      let dead = p.age > p.life;
 
       // Grond: stuiteren (vuurballen) of ontploffen
       if (p.pos.y < 0.15) {

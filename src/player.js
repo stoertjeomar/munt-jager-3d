@@ -1,10 +1,22 @@
 import * as THREE from 'three';
 import { loadGLB } from './assets.js';
+import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { Sword } from './sword.js';
 import { buildCharacter } from './character.js';
 import { CharacterAnimator } from './animator.js';
 import { HELMETS, createHelmetMesh } from './gear.js';
 import { POWERS } from './stats.js';
+import { createMixamoRig } from './mixamo.js';
+
+// Personages waaruit je kunt kiezen (aan het begin van het spel, of later in het startscherm met Esc)
+export const CHARACTERS = [
+  { id: 'ridder', name: 'Ridder', file: 'models/speler.glb', info: 'Een stoere ridder in zwart harnas. Past alle helmen.' },
+  { id: 'eve', name: 'Eve', file: 'models/personages/eve.glb', info: 'Ruimtepiraat met een litteken en lef.' },
+  { id: 'soldaat', name: 'Soldaat', file: 'models/personages/soldaat.glb', info: 'Getrainde soldaat in kogelvrij vest.' },
+  { id: 'mila', name: 'Mila', file: 'models/personages/mila.glb', info: 'Klein, snel en dapper, met turquoise haar.' },
+  { id: 'robot', name: 'Robot', file: 'models/robot.glb', height: 1.25, info: 'Een vrolijke robot uit het Kenney-pakket.' },
+  { id: 'strohoed', name: 'Strohoed', file: null, info: 'Het allereerste poppetje van deze game!' },
+];
 
 // Instellingen van de speler — speel hiermee om het gevoel te veranderen!
 const SPEED = 6.5; // loopsnelheid (meter per seconde)
@@ -23,12 +35,16 @@ const SPIN_TIME = 0.55;
 const DRINK = { time: 0.95, healAt: 0.5, heal: 0.45 }; // een flesje drinken: 45% van je leven terug
 const SLAM_SPEED = 32;
 
-// Eigen 3D-poppetje: zet een .glb-bestand op deze plek.
-// Staat het bestand er niet, dan speel je met het poppetje uit character.js.
-const MODEL_URL = 'models/speler.glb';
 const MODEL_TURN = 0; // kijkt het model de verkeerde kant op? Probeer Math.PI of Math.PI / 2
 const MODEL_HAND = [-0.34, 0.55, 0.14]; // alleen voor modellen zonder rig: waar de rechterhand zit
 const PICKUP_TIME = 0.6; // hoe lang bukken en oppakken duurt (seconden)
+
+/** Kopie van een model; skeletten (Mixamo) hebben een speciale kopie nodig. */
+function cloneModel(scene) {
+  let skinned = false;
+  scene.traverse((c) => (skinned ||= c.isSkinnedMesh));
+  return skinned ? cloneSkinned(scene) : scene.clone(true);
+}
 
 export class Player {
   /**
@@ -49,6 +65,7 @@ export class Player {
     // Het poppetje uit character.js (wordt vervangen als er een 3D-model is)
     const character = buildCharacter();
     this.placeholder = character.group;
+    this.placeholderRig = character.rig;
     this.inner.add(this.placeholder);
     this.useRig(character.rig);
 
@@ -63,7 +80,34 @@ export class Player {
     this.currentAction = null;
     this.spawnPoint = new THREE.Vector3(0, 0, 8);
     this.reset();
-    this.loadModel();
+    this.setCharacter(stats.data.character ?? 'ridder');
+  }
+
+  /** Ander personage kiezen (zie CHARACTERS). */
+  setCharacter(id) {
+    const character = CHARACTERS.find((c) => c.id === id) ?? CHARACTERS[0];
+    this.characterId = character.id;
+    this.loadToken = (this.loadToken ?? 0) + 1;
+    if (!character.file) {
+      this.showModel(this.placeholder);
+      this.model = null;
+      this.mixer = null;
+      this.headSlot = null;
+      this.useRig(this.placeholderRig);
+      return;
+    }
+    this.loadModel(character.file, this.loadToken, character.height ?? HEIGHT);
+  }
+
+  /** Haal het huidige model weg en laat dit zien. */
+  showModel(object) {
+    if (this.model) this.inner.remove(this.model);
+    this.inner.remove(this.placeholder);
+    if (this.fallbackHand) {
+      this.inner.remove(this.fallbackHand);
+      this.fallbackHand = null;
+    }
+    this.inner.add(object);
   }
 
   get position() {
@@ -113,6 +157,8 @@ export class Player {
     this.invulnerable = 0;
     this.pickupTimer = this.rollTimer = this.dashTimer = this.drinkTimer = this.spinTimer = 0;
     this.dashCooldown = this.spinCooldown = this.fireCooldown = this.fireTimer = 0;
+    this.shootCooldown = this.aimTimer = this.recoil = 0;
+    this.aimPitch = 0;
     this.slamming = false;
     this.airJumps = 0;
     this.airDashes = 0;
@@ -134,7 +180,7 @@ export class Player {
   useRig(rig) {
     this.rig = rig;
     this.animator = new CharacterAnimator(rig);
-    this.sword.attachTo(rig.handR, rig.unit);
+    this.sword.attachTo(rig.gripParent ?? rig.handR, rig.unit);
   }
 
   setHelmet(key) {
@@ -154,18 +200,19 @@ export class Player {
     return Math.round(this.sword.damage * this.stats.damageMultiplier * fire);
   }
 
-  /** Probeer het eigen 3D-model te laden. */
-  loadModel() {
-    loadGLB(MODEL_URL).then(
+  /** Een 3D-personage laden. */
+  loadModel(url, token, height = HEIGHT) {
+    loadGLB(url).then(
       (gltf) => {
-        const model = gltf.scene.clone(true);
+        if (token !== this.loadToken) return; // intussen al een ander personage gekozen
+        const model = cloneModel(gltf.scene);
         model.rotation.y = MODEL_TURN;
 
         // Even groot maken als de speler, met de voeten op de grond en het midden in het midden
         model.updateMatrixWorld(true);
         const box = new THREE.Box3().setFromObject(model);
         const size = box.getSize(new THREE.Vector3());
-        const scale = HEIGHT / size.y;
+        const scale = height / size.y;
         model.scale.setScalar(scale);
         model.updateMatrixWorld(true);
         box.setFromObject(model);
@@ -176,12 +223,13 @@ export class Player {
           if (child.isMesh) {
             child.castShadow = true;
             child.receiveShadow = true;
+            if (child.isSkinnedMesh) child.frustumCulled = false; // anders verdwijnt hij soms
           }
         });
 
-        this.inner.remove(this.placeholder);
-        this.inner.add(model);
+        this.showModel(model);
         this.model = model;
+        this.mixer = null;
         this.modelBaseY = model.position.y;
 
         // Heeft het model losse onderdelen met deze namen? Dan kunnen we het zelf laten bewegen.
@@ -196,11 +244,22 @@ export class Player {
           return;
         }
 
+        // Een Mixamo-personage (met skelet)? Dan vertalen we onze animaties naar zijn botten.
+        const mixamoRig = createMixamoRig(model);
+        if (mixamoRig) {
+          this.useRig(mixamoRig);
+          this.headSlot = mixamoRig.headSlot;
+          this.setHelmet(this.helmetKey);
+          return;
+        }
+
         // Anders: wapen in een vaste "hand" naast het model
         this.rig = null;
+        this.headSlot = null;
         const hand = new THREE.Group();
         hand.position.fromArray(MODEL_HAND);
         this.inner.add(hand);
+        this.fallbackHand = hand;
         this.sword.attachTo(hand);
         if (gltf.animations.length > 0) {
           this.mixer = new THREE.AnimationMixer(model);
@@ -209,7 +268,7 @@ export class Player {
           for (const [name, clip] of Object.entries(clips)) if (clip) this.actions[name] = this.mixer.clipAction(clip);
         }
       },
-      (error) => console.info(`Kon ${MODEL_URL} niet laden, je speelt met het standaard poppetje.`, error)
+      (error) => console.info(`Kon ${url} niet laden, je speelt met het standaard poppetje.`, error)
     );
   }
 
@@ -222,8 +281,17 @@ export class Player {
     return true;
   }
 
-  /** Slaan met je wapen. */
+  /** Slaan met je wapen (of schieten met een afstandswapen). */
   tryAttack() {
+    if (this.sword.ranged) {
+      if (this.isBusy || this.shootCooldown > 0) return false;
+      if (!this.useStamina(this.sword.stamina)) return false;
+      this.shootCooldown = this.sword.weapon.fireRate;
+      this.aimTimer = 0.6; // nog even in richthouding blijven
+      this.recoil = 1;
+      this.events.push('shoot');
+      return true;
+    }
     if (this.isBusy || this.sword.attackProgress !== null) return false;
     if (!this.useStamina(this.sword.stamina)) return false;
     return this.sword.swing();
@@ -335,7 +403,8 @@ export class Player {
     if (hasMove) move.normalize();
 
     // Timers
-    for (const key of ['invulnerable', 'dashCooldown', 'spinCooldown', 'fireCooldown', 'fireTimer']) this[key] = Math.max(0, this[key] - dt);
+    for (const key of ['invulnerable', 'dashCooldown', 'spinCooldown', 'fireCooldown', 'fireTimer', 'shootCooldown', 'aimTimer']) this[key] = Math.max(0, this[key] - dt);
+    this.recoil = Math.max(0, this.recoil - dt * 6);
     this.sword.update(dt);
 
     // Stamina komt vanzelf terug (niet tijdens sprinten of acties)
@@ -473,7 +542,10 @@ export class Player {
         spin: this.spinTimer > 0,
         rest: this.resting,
         tuck: this.rollTimer > 0 || this.dashTimer > 0 || this.slamming,
+        ranged: !!this.sword.ranged,
+        aim: this.sword.ranged && (this.aimTimer > 0 || this.aiming) ? { pitch: this.aimPitch, recoil: this.recoil, twoHanded: this.sword.weaponKey !== 'revolver' } : null,
       });
+      this.rig.apply?.(); // Mixamo-skelet bijwerken
       return;
     }
     if (!this.mixer) {

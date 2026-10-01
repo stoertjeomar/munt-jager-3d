@@ -15,6 +15,7 @@ export class CameraRig {
     this.domElement = domElement;
     this.ray = new THREE.Ray();
     this.hitPoint = new THREE.Vector3();
+    this.lookUp = 0;
     this.mouseIdle = 0; // hoe lang de muis al stil is (dan draait de camera vanzelf achter je)
 
     domElement.addEventListener('pointerdown', () => {
@@ -65,7 +66,11 @@ export class CameraRig {
       const dz = follow.lockTarget.z - followPosition.z;
       goalYaw = Math.atan2(-dx, -dz);
       speed = 7;
-      this.pitch += (0.35 - this.pitch) * Math.min(1, 3 * dt);
+      // Hoog doel (zoals een vliegende boss)? Dan kijkt de camera mee omhoog
+      const above = follow.lockTarget.y - (followPosition.y + 1.2);
+      const goalPitch = THREE.MathUtils.clamp(0.35 - above * 0.05, 0.05, 0.6);
+      this.pitch += (goalPitch - this.pitch) * Math.min(1, 3 * dt);
+      this.lookUp = THREE.MathUtils.clamp(above * 0.45, 0, 4);
     } else if (follow.moving && this.mouseIdle > 0.7) {
       // Muis stil en je loopt: de camera draait rustig achter je hoofd aan
       goalYaw = follow.facing + Math.PI;
@@ -104,7 +109,9 @@ export class CameraRig {
     }
 
     this.camera.position.copy(this.target).add(offset);
-    this.camera.lookAt(this.target);
+    if (!follow.lockTarget) this.lookUp = 0;
+    this.smoothLookUp = (this.smoothLookUp ?? 0) + (this.lookUp - (this.smoothLookUp ?? 0)) * Math.min(1, 4 * dt);
+    this.camera.lookAt(this.target.x, this.target.y + this.smoothLookUp, this.target.z);
   }
 
   snapTo(position) {

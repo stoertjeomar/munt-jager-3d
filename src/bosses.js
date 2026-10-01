@@ -14,6 +14,7 @@ export const BOSS_INFO = {
   koning: { name: 'Koning Slijm', title: 'Heerser van de Weide', hp: 700, runes: 350 },
   ridder: { name: 'De Gevallen Ridder', title: 'Bewaker van het Spookwoud', hp: 1100, runes: 900 },
   reus: { name: 'Steenreus Gorath', title: 'Hart van het Hoogland', hp: 1800, runes: 2000 },
+  mario: { name: 'Budget Mario', title: 'De Vliegende Loodgieter', hp: 1400, runes: 1200 },
 };
 
 const tmp = new THREE.Vector3();
@@ -793,9 +794,221 @@ class StoneGiant extends Boss {
   }
 }
 
+// ======================================================================
+// Boss 4: Budget Mario — vliegt als Superman, duikt op je af, stampt op de grond en gooit vuurballen.
+// Met een zwaard raak je hem alleen als hij op de grond is; met een geweer of boog ook in de lucht!
+// ======================================================================
+const MARIO_LENGTH = 3.6;
+const FLY_HEIGHT = 5;
+
+class FlyingMario extends Boss {
+  constructor(scene, arena) {
+    super(scene, arena, 'mario');
+    this.type = { name: this.name, radius: 1.4, height: 2, color: 0xe23b2e, damage: 20, stompable: false };
+    this.pivot = new THREE.Group(); // draait het model: liggend (vliegen) of rechtop (staan)
+    this.mesh.add(this.pivot);
+    this.standing = 1; // 1 = rechtop, 0 = vliegend
+    loadGLB('models/bosses/mario.glb').then((gltf) => {
+      const model = gltf.scene.clone(true);
+      model.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const s = MARIO_LENGTH / size.z;
+      model.scale.setScalar(s);
+      model.position.copy(center).multiplyScalar(-s); // midden van het model in het draaipunt
+      const mats = [];
+      model.traverse((c) => {
+        if (!c.isMesh) return;
+        c.castShadow = true;
+        c.material = c.material.clone();
+        mats.push(c.material);
+      });
+      this.pivot.add(model);
+      this.rememberMaterials(mats.filter((m) => m.emissive));
+    });
+  }
+
+  resetFight() {
+    super.resetFight();
+    this.orbit = 0;
+    this.standing = 1;
+    this.vel = new THREE.Vector3();
+  }
+
+  /** Model rechtop (1) of liggend in vliegstand (0). */
+  applyStance(dt, target) {
+    this.standing += (target - this.standing) * Math.min(1, 6 * dt);
+    this.pivot.rotation.x = -Math.PI / 2 * this.standing;
+    this.pivot.position.y = (MARIO_LENGTH / 2) * this.standing + 0.6 * (1 - this.standing);
+  }
+
+  idleAnimation(dt) {
+    this.applyStance(dt ?? 0.016, 1);
+    this.pivot.rotation.z = Math.sin((this.time ?? 0) * 2) * 0.05;
+  }
+
+  think(dt, ctx) {
+    const player = ctx.player.position;
+    const dist = flatDist(this.position, player);
+    const speedUp = this.phase2 ? 1.3 : 1;
+    this.timer -= dt * speedUp;
+
+    switch (this.state) {
+      case 'idle':
+        this.state = 'takeoff';
+        this.timer = 1;
+        break;
+      case 'takeoff': {
+        this.applyStance(dt, 0);
+        this.position.y += (FLY_HEIGHT - this.position.y) * Math.min(1, 3 * dt);
+        if (Math.random() < 0.4) ctx.effects.burst(this.position.clone(), 0xffffff, { count: 1, speed: 1, size: 0.2, life: 0.5, up: -1, gravity: 0 });
+        if (this.timer <= 0) {
+          this.state = 'fly';
+          this.cooldown = 1.5;
+        }
+        break;
+      }
+      case 'fly': {
+        // Rondjes vliegen om de speler heen
+        this.applyStance(dt, 0);
+        this.orbit += dt * (this.phase2 ? 0.9 : 0.6);
+        const goal = player.clone().add(new THREE.Vector3(Math.sin(this.orbit) * 10, 0, Math.cos(this.orbit) * 10));
+        goal.y = FLY_HEIGHT + Math.sin(this.time * 2) * 0.7;
+        const before = this.position.clone();
+        this.position.lerp(goal, Math.min(1, 1.6 * dt));
+        const vel = this.position.clone().sub(before);
+        if (vel.lengthSq() > 1e-6) turnTowards(this.mesh, Math.atan2(vel.x, vel.z), 5, dt);
+        this.pivot.rotation.z = Math.sin(this.time * 3) * 0.25; // schuin hangen in de bocht
+        this.cooldown -= dt * speedUp;
+        if (this.cooldown <= 0) {
+          const r = Math.random();
+          if (r < 0.4) {
+            this.state = 'diveAim';
+            this.timer = 0.7;
+          } else if (r < 0.72) {
+            this.state = 'poundRise';
+            this.timer = 1.1;
+          } else {
+            this.state = 'fireballs';
+            this.timer = 0.4;
+            this.shotsLeft = this.phase2 ? 5 : 3;
+          }
+          play('charge');
+        }
+        break;
+      }
+      case 'diveAim': {
+        // Hangt stil en kijkt je aan... en dan: duiken!
+        this.applyStance(dt, 0);
+        turnTowards(this.mesh, angleTo(this.position, player), 8, dt);
+        this.pivot.rotation.z = Math.sin(this.time * 40) * 0.08;
+        if (this.timer <= 0) {
+          this.diveTarget = player.clone().setY(0.6);
+          ctx.effects.warnCircle(this.diveTarget.clone().setY(0), 2.4, 0.5);
+          this.vel = this.diveTarget.clone().sub(this.position).setLength(24);
+          this.state = 'dive';
+          this.timer = 1.2;
+          this.hitThisAttack = false;
+          play('heavySwing');
+        }
+        break;
+      }
+      case 'dive': {
+        this.position.addScaledVector(this.vel, dt);
+        this.pivot.rotation.z += dt * 14; // tollen als een kurkentrekker
+        if (!this.hitThisAttack && this.center.distanceTo(player.clone().setY(player.y + 0.9)) < 2) {
+          if (ctx.hurtPlayer(this.position, 30)) this.hitThisAttack = true;
+        }
+        if (this.position.y <= 0.3 || this.timer <= 0) {
+          this.position.y = 0;
+          this.groundImpact(ctx, this.position, 2.6, 0, 0xff8a6a);
+          this.state = 'skid';
+          this.timer = 1.1;
+          this.vel.y = 0;
+        }
+        break;
+      }
+      case 'skid': {
+        // Glijdt over de grond: kwetsbaar!
+        this.pivot.rotation.z *= 0.9;
+        this.applyStance(dt, 0.15);
+        this.position.addScaledVector(this.vel, dt * Math.max(0, this.timer) * 0.6);
+        if (Math.random() < 0.5) ctx.effects.burst(this.position.clone().setY(0.2), 0xb8a58c, { count: 2, speed: 2, size: 0.15, life: 0.4, up: 1 });
+        if (this.timer <= 0) {
+          this.state = 'takeoff';
+          this.timer = 1;
+        }
+        break;
+      }
+      case 'poundRise': {
+        // Vliegt hoog boven je hoofd en volgt je...
+        this.applyStance(dt, 0.6);
+        const goal = player.clone().setY(10);
+        this.position.lerp(goal, Math.min(1, 4 * dt));
+        this.pivot.rotation.z += dt * 10;
+        if (this.timer <= 0) {
+          this.state = 'poundHang';
+          this.timer = 0.5;
+          this.poundAt = this.position.clone().setY(0);
+          ctx.effects.warnCircle(this.poundAt, 3.8, 0.5 / speedUp + 0.3);
+        }
+        break;
+      }
+      case 'poundHang': {
+        this.applyStance(dt, 1);
+        this.pivot.rotation.z = 0;
+        if (this.timer <= 0) this.state = 'poundFall';
+        break;
+      }
+      case 'poundFall': {
+        this.position.y -= 32 * dt;
+        if (this.position.y <= 0) {
+          this.position.y = 0;
+          this.groundImpact(ctx, this.position, 3.8, 36, 0xff5a3a);
+          this.state = 'stunned';
+          this.timer = this.phase2 ? 1.4 : 1.9;
+        }
+        break;
+      }
+      case 'stunned': {
+        // Duizelig op de grond: sla hem nu!
+        this.applyStance(dt, 1);
+        this.pivot.rotation.z = Math.sin(this.time * 10) * 0.12;
+        if (Math.random() < 0.3) ctx.effects.burst(this.position.clone().setY(MARIO_LENGTH + 0.3), 0xffe066, { count: 1, speed: 1, size: 0.14, life: 0.5, up: 0.5, gravity: 0 });
+        if (this.timer <= 0) {
+          this.state = 'takeoff';
+          this.timer = 1;
+        }
+        break;
+      }
+      case 'fireballs': {
+        this.applyStance(dt, 0.3);
+        turnTowards(this.mesh, angleTo(this.position, player), 6, dt);
+        if (this.timer <= 0) {
+          const from = this.center;
+          const to = player.clone().add(ctx.player.velocity.clone().setY(0).multiplyScalar(0.5));
+          const dir = to.sub(from);
+          const flat = Math.hypot(dir.x, dir.z);
+          dir.y = flat * 0.35; // een boogje
+          ctx.projectiles.spawn({ from, dir, speed: Math.min(16, 6 + flat * 0.6), damage: 18, owner: 'enemy', kind: 'fire', gravity: 9, bounces: 2, radius: 0.4 });
+          play('swing');
+          this.shotsLeft--;
+          this.timer = 0.35;
+          if (this.shotsLeft <= 0) {
+            this.state = 'fly';
+            this.cooldown = this.phase2 ? 1 : 1.8;
+          }
+        }
+        break;
+      }
+    }
+  }
+}
+
 /** Maak alle bosses. `defeated` = lijst met id's van bosses die al verslagen zijn (uit de save). */
 export function createBosses(scene, arenas, defeated) {
-  const classes = { koning: KingSlime, ridder: FallenKnight, reus: StoneGiant };
+  const classes = { koning: KingSlime, ridder: FallenKnight, reus: StoneGiant, mario: FlyingMario };
   return arenas.map((arena) => {
     const boss = new classes[arena.id](scene, arena);
     if (defeated.includes(arena.id)) boss.setDefeated();

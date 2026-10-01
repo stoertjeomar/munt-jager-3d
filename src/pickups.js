@@ -16,7 +16,7 @@ export const DIAMONDS = [
   ['d6', -30, 3, -66], // op de noordelijke ruïne
   ['d7', 110, 0, -108], // verste hoek van het Hoogland
   ['d8', 105, 0, 20],
-  ['d9', 40, 0, 105],
+  ['d9', 52, 0, 108],
   ['d10', -60, 0, -105],
   ['d11', 86, 2, -28], // op de ruïne bij de golems
   ['d12', -110, 0, 108],

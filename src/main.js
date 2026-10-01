@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Input } from './input.js';
 import { CameraRig } from './camera.js';
-import { Player } from './player.js';
+import { Player, CHARACTERS } from './player.js';
 import { createWorld, GRACES, ARENAS, CHESTS, REGION_NAMES, WALKABLE_HALF } from './world.js';
 import { createEnemies, spawnEnemy } from './enemies.js';
 import { createBosses, BOSS_INFO } from './bosses.js';
@@ -57,6 +57,8 @@ const state = {
   activeBoss: null,
   lockTarget: null,
   attackRequested: false,
+  mouseDown: false,
+  forceRun: false, // voor tests: doorspelen zonder dat de muis vastzit
   saveTimer: 0,
 };
 
@@ -161,6 +163,7 @@ const BOSS_REWARDS = {
   koning: [{ kind: 'helmet', key: 'goud' }, { kind: 'flask' }],
   ridder: [{ kind: 'weapon', key: 'diamant' }],
   reus: [],
+  mario: [{ kind: 'weapon', key: 'sniper' }, { kind: 'flask' }],
 };
 
 function onBossDefeated(boss) {
@@ -181,10 +184,10 @@ function onBossDefeated(boss) {
   setTimeout(() => {
     if (rewards.length) ui.toast(`Beloning: <b>${rewards.join(', ')}</b><br><small>Open je uitrusting met I</small>`, 5);
     announceNewPowers(before, 1.5);
-    if (['koning', 'ridder', 'reus'].every((id) => stats.data.bosses.includes(id)) && !stats.data.victory) {
+    if (['koning', 'ridder', 'reus', 'mario'].every((id) => stats.data.bosses.includes(id)) && !stats.data.victory) {
       stats.data.victory = true;
       stats.save();
-      setTimeout(() => ui.banner('DE WERELD IS GERED', 'Alle drie de bosses zijn verslagen. Jij bent de echte Munt Jager!', 'gold', 8), 4000);
+      setTimeout(() => ui.banner('DE WERELD IS GERED', 'Alle vier de bosses zijn verslagen. Jij bent de echte Munt Jager!', 'gold', 8), 4000);
     }
   }, 5000);
 }
@@ -410,12 +413,52 @@ function toggleLock() {
 renderer.domElement.addEventListener('pointerdown', (e) => {
   unlockAudio(); // geluid mag pas na een klik
   // De eerste klik zet alleen de muis vast; daarna is klikken = slaan
-  if (e.button === 0 && cameraRig.locked) state.attackRequested = true;
+  if (e.button === 0 && cameraRig.locked) {
+    state.attackRequested = true;
+    state.mouseDown = true;
+  }
+});
+window.addEventListener('pointerup', (e) => {
+  if (e.button === 0) state.mouseDown = false;
 });
 
+// ---------- Startscherm: kies je held ----------
 const lockHintEl = document.getElementById('lock-hint');
+const crosshairEl = document.getElementById('crosshair');
+const charSelectEl = document.getElementById('char-select');
+const startBtn = document.getElementById('start-btn');
+let gameStarted = false;
+
+function renderCharacterSelect() {
+  charSelectEl.innerHTML = CHARACTERS.map((c) => `
+    <button class="char-card ${stats.data.character === c.id ? 'selected' : ''}" data-id="${c.id}">
+      <img src="images/personages/${c.id}.png" alt="" onerror="this.style.visibility='hidden'">
+      <b>${c.name}</b><small>${c.info}</small>
+    </button>`).join('');
+}
+renderCharacterSelect();
+
+charSelectEl.addEventListener('click', (e) => {
+  const card = e.target.closest('.char-card');
+  if (!card) return;
+  unlockAudio();
+  play('pickup');
+  stats.data.character = card.dataset.id;
+  stats.save();
+  player.setCharacter(card.dataset.id);
+  renderCharacterSelect();
+});
+
+startBtn.addEventListener('click', () => {
+  unlockAudio();
+  gameStarted = true;
+  renderer.domElement.requestPointerLock();
+});
+
 document.addEventListener('pointerlockchange', () => {
   lockHintEl.classList.toggle('hidden', cameraRig.locked || !!ui.menuOpen);
+  // Na het begin is dit scherm ook het pauzescherm
+  startBtn.textContent = gameStarted ? 'Doorgaan' : 'Spelen';
 });
 
 window.addEventListener('keydown', (e) => {
@@ -438,7 +481,11 @@ function handleActions(move) {
   const shiftUp = input.wasReleased('ShiftLeft') ?? input.wasReleased('ShiftRight');
   if (shiftUp !== null && shiftUp < 0.22 && player.tryRoll(move)) play('swing');
 
-  if (attack) {
+  // Automatische wapens: blijven schieten zolang je de knop ingedrukt houdt
+  const holding = state.mouseDown || input.isDown('KeyF');
+  player.aiming = !!player.sword.ranged && holding;
+  if (player.sword.weapon?.auto && holding) player.tryAttack();
+  else if (attack) {
     if (!player.onGround && player.position.y > 1.2 && player.trySlam()) play('heavySwing');
     else if (player.tryAttack()) {
       play(player.sword.weaponKey === 'club' ? 'heavySwing' : 'swing');
@@ -482,6 +529,8 @@ function handlePlayerEvents() {
       const at = player.position.clone().setY(player.position.y + 1);
       effects.burst(at, 0x7dff9a, { count: 18, speed: 3, size: 0.09, life: 0.7, up: 3, gravity: -0.3 });
       effects.floatText(at.setY(at.y + 0.9), `+${Math.round(player.maxHealth * 0.45)}`, '#7dff9a', 0.55);
+    } else if (ev === 'shoot') {
+      shoot();
     } else if (ev === 'land') {
       play('land');
     } else if (ev === 'fire') {
@@ -489,6 +538,45 @@ function handlePlayerEvents() {
     }
   }
   player.events.length = 0;
+}
+
+// ---------- Schieten ----------
+
+function shoot() {
+  const w = player.sword.weapon;
+  // Waar mik je op? Je vastgezette doel, of anders het midden van het scherm
+  let aimPoint;
+  if (state.lockTarget) aimPoint = state.lockTarget.center;
+  else {
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    aimPoint = camera.position.clone().addScaledVector(dir, 60);
+  }
+  const flat = aimPoint.clone().sub(player.position).setY(0);
+  player.mesh.rotation.y = Math.atan2(flat.x, flat.z);
+  player.aimPitch = THREE.MathUtils.clamp(Math.atan2(aimPoint.y - (player.position.y + 1.3), flat.length()), -0.8, 0.8);
+
+  const facing = player.facing;
+  const right = new THREE.Vector3(-facing.z, 0, facing.x); // rechterhand-kant van het personage
+  const muzzle = player.position.clone().add(new THREE.Vector3(0, 1.3, 0)).addScaledVector(facing, 0.5 + (w.muzzle ?? 0.5)).addScaledVector(right, 0.25);
+  const fire = player.fireTimer > 0 ? 1.5 : 1;
+  const damage = Math.round(w.damage * stats.damageMultiplier * fire);
+  for (let i = 0; i < (w.pellets ?? 1); i++) {
+    const dir = aimPoint.clone().sub(muzzle).normalize();
+    const spread = w.spread ?? 0;
+    dir.x += (Math.random() - 0.5) * spread * 2;
+    dir.y += (Math.random() - 0.5) * spread * 2;
+    dir.z += (Math.random() - 0.5) * spread * 2;
+    projectiles.spawn({
+      from: muzzle, dir, speed: w.speed, damage, owner: 'player', kind: w.ranged,
+      gravity: w.gravity ?? 0, pierce: w.pierce, radius: 0.35, life: w.life,
+      color: player.fireTimer > 0 ? 0xff7a1a : undefined,
+    });
+  }
+  // Mondingsvuur, geluid en een klein schokje
+  effects.burst(muzzle, w.ranged === 'arrow' ? 0xffffff : 0xffd27a, { count: w.ranged === 'arrow' ? 3 : 8, speed: 3, size: 0.07, life: 0.12, up: 0, gravity: 0 });
+  play(w.ranged === 'arrow' ? 'bow' : w.damage >= 50 || w.pellets ? 'bigShot' : 'shot');
+  effects.shake(w.damage >= 50 || w.pellets ? 0.12 : 0.04);
 }
 
 // ---------- Effecten bij het wapen ----------
@@ -551,13 +639,15 @@ function gameLoop() {
   // realDt = tijd sinds vorige frame. Begrensd zodat een lag-piek je niet door de vloer laat vallen.
   const realDt = Math.min(clock.getDelta(), 0.05);
   // Tijdens een "hitstop" of een menu staat het spel even stil (de camera niet)
-  const paused = !!ui.menuOpen && ui.menuOpen !== 'grace';
+  // Pauze: in een menu (behalve rusten), of op het start-/pauzescherm (muis niet vast)
+  const paused = (!!ui.menuOpen && ui.menuOpen !== 'grace') || (!ui.menuOpen && !cameraRig.locked && !state.forceRun);
   const dt = state.hitstop > 0 || paused ? 0 : realDt;
   state.hitstop -= realDt;
   const elapsed = clock.elapsedTime;
 
   const move = readMove();
-  const canAct = player.alive && !ui.menuOpen && state.deathTimer <= 0;
+  const canAct = player.alive && !ui.menuOpen && state.deathTimer <= 0 && !paused;
+  crosshairEl.classList.toggle('hidden', !player.sword.ranged || !cameraRig.locked);
   if (canAct) handleActions(move);
   else ui.prompt(null);
 
@@ -632,7 +722,7 @@ function gameLoop() {
       ui.toast(`💎 <b>Diamant gevonden!</b> +${value} munten<br><small>${stats.data.diamonds.length} / ${DIAMONDS.length} diamanten</small>`, 4);
     },
   });
-  const walking = player.moving && player.onGround && player.rollTimer <= 0 && !ui.menuOpen && player.alive;
+  const walking = player.moving && player.onGround && player.rollTimer <= 0 && !ui.menuOpen && player.alive && !paused;
   setFootsteps(walking, input.heldFor('ShiftLeft') > 0.22 || input.heldFor('ShiftRight') > 0.22);
   decor.update(dt, elapsed, player.position);
   updateTrail(dt);

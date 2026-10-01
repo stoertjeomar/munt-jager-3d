@@ -45,6 +45,7 @@
     <div class="bar boss-bar"><div id="boss-lag" class="lag"></div><div id="boss-fill" class="fill"></div></div>
   </div>
 
+  <div id="crosshair" class="hidden"></div>
   <div id="prompt" class="hidden"></div>
   <div id="toast" class="hidden"></div>
   <div id="region"></div>
@@ -59,7 +60,9 @@
 
   <div id="lock-hint">
     <h1>MUNT JAGER</h1>
-    <p>Klik om te beginnen</p>
+    <p id="pick-title">Kies je held</p>
+    <div id="char-select"></div>
+    <button id="start-btn">Spelen</button>
     <div class="controls">
       <b>WASD</b> lopen · <b>Shift</b> tik = rollen, houd = sprinten · <b>Spatie</b> springen<br />
       <b>Klik / F</b> slaan · <b>Q</b> vastzetten op vijand · <b>R</b> flesje drinken · <b>E</b> rusten / openen<br />

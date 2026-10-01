@@ -81,6 +81,11 @@ export class CharacterAnimator {
     armR.rotation.x = READY_ARM.x + swing * 0.15 * w - 0.4 * air;
     armR.rotation.z = READY_ARM.z - 0.4 * air;
     handR.rotation.x = READY_ARM.wrist;
+    if (s.ranged) {
+      // Geweer of boog in rust: loop schuin naar voren en omlaag
+      armR.rotation.x = -0.25 + swing * 0.1 * w - 0.4 * air;
+      handR.rotation.x = 1.25;
+    }
 
     // ---------- Slaan ----------
     if (s.attack !== null) {
@@ -127,6 +132,20 @@ export class CharacterAnimator {
       armL.rotation.x = -1;
       armR.rotation.x = -0.8;
       hips.rotation.x = 0.5;
+    }
+
+    // ---------- Richten met een afstandswapen ----------
+    if (s.aim && !s.tuck && !s.rest) {
+      const pitch = s.aim.pitch;
+      armR.rotation.x = -Math.PI / 2 - pitch;
+      armR.rotation.z = 0.05;
+      handR.rotation.x = Math.PI / 2 - s.aim.recoil * 0.35; // terugslag: loop schiet even omhoog
+      if (s.aim.twoHanded) {
+        // tweede hand ondersteunt het geweer
+        armL.rotation.x = -Math.PI / 2 - pitch + 0.15;
+        armL.rotation.z = -0.55;
+      }
+      hips.rotation.y -= 0.15;
     }
 
     // ---------- Rusten bij een Plek van Genade: op één knie ----------

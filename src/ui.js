@@ -230,7 +230,7 @@ export class UI {
     const row = (item) => {
       const info = itemInfo(item);
       const equipped = (item.kind === 'weapon' && d.weapon === item.key) || (item.kind === 'helmet' && d.helmet === item.key);
-      const stat = item.kind === 'weapon' ? `${info.damage} schade` : `${Math.round(info.defense * 100)}% bescherming`;
+      const stat = item.kind === 'weapon' ? `${info.damage}${info.pellets ? ` × ${info.pellets}` : ''} schade${info.ranged ? ' · afstand' : ''}` : `${Math.round(info.defense * 100)}% bescherming`;
       return `<button data-equip='${JSON.stringify(item)}' class="item ${equipped ? 'equipped' : ''}">
         <span style="color:${itemColor(item)}">${item.kind === 'weapon' ? '⚔' : '⛑'} ${info.name}</span>
         <small>${stat} · ${info.info}</small>${equipped ? '<em>uitgerust</em>' : ''}</button>`;
