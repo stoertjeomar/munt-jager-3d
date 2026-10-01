@@ -100,7 +100,7 @@ document.addEventListener('pointerlockchange', () => {
 });
 
 function swordAttack() {
-  if (input.wasPressed('KeyF') || attackRequested) player.sword.swing();
+  if ((input.wasPressed('KeyF') || attackRequested) && !player.isBusy) player.sword.swing();
   attackRequested = false;
   if (!player.sword.isHitting) return;
 
@@ -148,10 +148,13 @@ function enemyContact() {
 
 // ---------- Wapens oppakken met E ----------
 function weaponPickup() {
-  const pickup = findNearbyPickup(pickups, player.position);
-  if (pickup && input.wasPressed('KeyE')) swapWeapon(pickup, player.sword);
+  const pickup = player.isBusy ? null : findNearbyPickup(pickups, player.position);
+  if (pickup && input.wasPressed('KeyE')) {
+    // Eerst bukken; als de hand bij de grond is, wisselen we echt van wapen
+    player.startPickup(() => swapWeapon(pickup, player.sword));
+  }
 
-  pickupHintEl.classList.toggle('hidden', !pickup);
+  pickupHintEl.classList.toggle('hidden', !pickup || player.isBusy);
   if (pickup) {
     pickupHintEl.innerHTML = `Druk op <b>E</b>: ${WEAPONS[pickup.key].name} pakken`;
   }
@@ -200,4 +203,4 @@ function gameLoop() {
 renderer.setAnimationLoop(gameLoop);
 
 // Handig voor debuggen in de browser-console (F12): typ bijvoorbeeld `game.player.position`
-window.game = { scene, player, enemies, pickups, world, state, camera };
+window.game = { scene, player, enemies, pickups, world, state, camera, renderer };

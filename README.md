@@ -48,6 +48,8 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 - Eigen botsingsdetectie (AABB): landen op blokken, hoofd stoten, langs muren schuiven
 - Van de wereld vallen → terug naar start
 - Munten verzamelen, timer en win-scherm
+- Bewegend poppetje: armen en benen zwaaien tijdens het lopen, uithalen en slaan met het wapen in de hand,
+  armen uit elkaar bij springen, bukken om een wapen op te pakken (`src/animator.js`)
 - Diamanten zwaard van blokjes (pixel art, zelf te tekenen in `src/sword.js`) met zwaai-animatie: twee klappen en een vijand is verslagen
 - Vijanden (slijmballen) die heen en weer lopen en je achterna gaan als je dichtbij komt
 - 5 wapens: begin met het diamanten zwaard, vind in de wereld het ridderzwaard, kort zwaard, de knots en (bovenop het hoogste platform) de katana.
@@ -67,7 +69,8 @@ munt-jager-3d/
     ├── main.js     → start alles op, game loop, score, gevechten en winnen
     ├── character.js → het poppetje: strohoed, rood hemd, blauwe broek, lopende armen en benen
     ├── player.js   → speler: lopen, springen, zwaartekracht, botsingen, levens
-    ├── sword.js    → de hand met het wapen: zwaai-animatie
+    ├── animator.js → laat het poppetje bewegen: lopen, slaan, springen, oppakken
+    ├── sword.js    → het wapen in de hand: welk wapen en de timing van een slag
     ├── weapons.js  → alle wapens: schade, bereik, snelheid en 3D-model
     ├── pickups.js  → wapens die in de wereld liggen om op te pakken
     ├── enemies.js  → vijanden: looproutes, achtervolgen, geraakt worden

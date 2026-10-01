@@ -28,10 +28,19 @@ function part(geometry, color, x = 0, y = 0, z = 0) {
 
 export function buildCharacter() {
   const group = new THREE.Group();
-  const limbs = {};
+  const rig = { unit: 1 }; // de onderdelen die animator.js laat bewegen
+
+  // Bovenlijf: draait om de heupen. Binnenin gebruiken we gewone hoogtes (upper staat op y = 0).
+  const hips = new THREE.Group();
+  hips.position.y = 0.72;
+  group.add(hips);
+  const upper = new THREE.Group();
+  upper.position.y = -0.72;
+  hips.add(upper);
+  rig.hips = hips;
 
   // ---------- Benen (draaien om de heup) ----------
-  for (const [name, side] of [['leftLeg', 1], ['rightLeg', -1]]) {
+  for (const [name, side] of [['legL', 1], ['legR', -1]]) {
     const hip = new THREE.Group();
     hip.position.set(side * 0.11, 0.72, 0);
     // korte broek
@@ -43,34 +52,39 @@ export function buildCharacter() {
     // sandaal
     hip.add(part(new THREE.BoxGeometry(0.13, 0.04, 0.26), COLORS.sandal, 0, -0.7, 0.04));
     group.add(hip);
-    limbs[name] = hip;
+    rig[name] = hip;
   }
 
   // ---------- Romp ----------
-  group.add(part(new THREE.CylinderGeometry(0.2, 0.19, 0.08, 16), COLORS.sash, 0, 0.74, 0)); // gele sjerp
-  group.add(part(new THREE.BoxGeometry(0.4, 0.38, 0.24), COLORS.shirt, 0, 0.96, 0)); // rood hemd
-  group.add(part(new THREE.BoxGeometry(0.1, 0.3, 0.02), COLORS.skin, 0, 1.0, 0.121)); // open hemd: blote borst
+  upper.add(part(new THREE.CylinderGeometry(0.2, 0.19, 0.08, 16), COLORS.sash, 0, 0.74, 0)); // gele sjerp
+  upper.add(part(new THREE.BoxGeometry(0.4, 0.38, 0.24), COLORS.shirt, 0, 0.96, 0)); // rood hemd
+  upper.add(part(new THREE.BoxGeometry(0.1, 0.3, 0.02), COLORS.skin, 0, 1.0, 0.121)); // open hemd: blote borst
   for (const y of [0.88, 0.96, 1.04]) {
-    group.add(part(new THREE.SphereGeometry(0.018, 8, 8), COLORS.sash, 0.07, y, 0.125)); // knoopjes
+    upper.add(part(new THREE.SphereGeometry(0.018, 8, 8), COLORS.sash, 0.07, y, 0.125)); // knoopjes
   }
 
   // ---------- Armen (draaien om de schouder) ----------
-  for (const [name, side] of [['leftArm', 1], ['rightArm', -1]]) {
+  for (const [name, side] of [['armL', 1], ['armR', -1]]) {
     const shoulder = new THREE.Group();
     shoulder.position.set(side * 0.26, 1.1, 0);
     shoulder.add(part(new THREE.SphereGeometry(0.075, 12, 12), COLORS.shirt, 0, 0, 0));
     shoulder.add(part(new THREE.CylinderGeometry(0.065, 0.06, 0.26, 10), COLORS.shirt, 0, -0.14, 0)); // mouw
     shoulder.add(part(new THREE.CylinderGeometry(0.045, 0.04, 0.14, 10), COLORS.skin, 0, -0.33, 0)); // onderarm
     shoulder.add(part(new THREE.SphereGeometry(0.055, 10, 10), COLORS.skin, 0, -0.42, 0)); // hand
-    shoulder.rotation.z = side * 0.12; // armen een beetje van het lijf af
-    group.add(shoulder);
-    limbs[name] = shoulder;
+    upper.add(shoulder);
+    rig[name] = shoulder;
+    if (side === -1) {
+      // Rechterhand: hier komt het wapen
+      rig.handR = new THREE.Group();
+      rig.handR.position.y = -0.42;
+      shoulder.add(rig.handR);
+    }
   }
 
   // ---------- Hoofd ----------
   const head = new THREE.Group();
   head.position.y = 1.33;
-  group.add(head);
+  upper.add(head);
   head.add(part(new THREE.SphereGeometry(0.19, 20, 16), COLORS.skin)); // gezicht
   head.add(part(new THREE.CylinderGeometry(0.06, 0.07, 0.06, 10), COLORS.skin, 0, -0.18, 0)); // nek
 
@@ -105,19 +119,5 @@ export function buildCharacter() {
   hat.add(part(new THREE.CylinderGeometry(0.213, 0.213, 0.05, 24), COLORS.band, 0, 0.04, 0)); // rode band
   head.add(hat);
 
-  return { group, limbs };
-}
-
-/**
- * Laat armen en benen zwaaien tijdens het lopen.
- * @param {number} phase   loopt op terwijl je loopt
- * @param {number} amount  0 = stilstaan, 1 = volop lopen
- */
-export function animateLimbs(limbs, phase, amount) {
-  const swing = Math.sin(phase) * 0.8 * amount;
-  limbs.leftLeg.rotation.x = swing;
-  limbs.rightLeg.rotation.x = -swing;
-  limbs.leftArm.rotation.x = -swing * 0.8;
-  // De rechterarm houdt het zwaard vast, die steekt een beetje naar voren
-  limbs.rightArm.rotation.x = -0.7;
+  return { group, rig };
 }

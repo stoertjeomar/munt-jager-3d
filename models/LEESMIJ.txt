@@ -1,3 +1,5 @@
 speler.glb = de ridder uit de Knight Pack van Quaternius (CC0 1.0, https://quaternius.com),
-met Helmet1 en ShoulderPads erop. Vervang dit bestand door je eigen .glb voor een ander poppetje.
+met Helmet1 en ShoulderPads erop. Hij is in losse delen geknipt (Hips, ArmL, ArmR, LegL, LegR, HandR)
+zodat animator.js zijn armen en benen kan bewegen.
+Vervang dit bestand door je eigen .glb voor een ander poppetje.
 Zonder dit bestand speel je met het poppetje uit src/character.js.

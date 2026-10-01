@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Sword } from './sword.js';
-import { buildCharacter, animateLimbs } from './character.js';
+import { buildCharacter } from './character.js';
+import { CharacterAnimator } from './animator.js';
 
 // Instellingen van de speler — speel hiermee om het gevoel te veranderen!
 const SPEED = 7; // loopsnelheid (eenheden per seconde)
@@ -17,27 +18,28 @@ const INVULNERABLE_TIME = 1.2; // na een klap ben je even onkwetsbaar
 // Staat het bestand er niet, dan speel je met het poppetje uit character.js.
 const MODEL_URL = 'models/speler.glb';
 const MODEL_TURN = 0; // kijkt het model de verkeerde kant op? Probeer Math.PI of Math.PI / 2
-const MODEL_HAND = [-0.34, 0.55, 0.14]; // waar de rechterhand van het model zit: daar komt het zwaard
+const MODEL_HAND = [-0.34, 0.55, 0.14]; // alleen voor modellen zonder rig: waar de rechterhand zit
+const PICKUP_TIME = 0.6; // hoe lang bukken en oppakken duurt (seconden)
 
 export class Player {
   constructor(scene) {
     this.mesh = new THREE.Group();
+    this.sword = new Sword();
 
     // Het poppetje uit character.js (wordt vervangen als er een 3D-model is)
     const character = buildCharacter();
     this.placeholder = character.group;
-    this.limbs = character.limbs;
-    this.walkPhase = 0;
-    this.walkAmount = 0;
     this.mesh.add(this.placeholder);
-
-    this.sword = new Sword(this.mesh);
+    this.useRig(character.rig);
 
     scene.add(this.mesh);
 
     this.velocity = new THREE.Vector3();
     this.knockback = new THREE.Vector3();
     this.onGround = false;
+    this.moving = false;
+    this.pickupTimer = 0; // > 0: bezig met bukken om iets op te pakken
+    this.onGrab = null; // wat er gebeurt als de hand de grond raakt
     this.spawnPoint = new THREE.Vector3(0, 0, 8);
     this.reset();
 
@@ -45,6 +47,13 @@ export class Player {
     this.actions = {};
     this.currentAction = null;
     this.loadModel();
+  }
+
+  /** Gebruik een rig (armen, benen, heupen, hand): het wapen gaat in de hand en de animator laat alles bewegen. */
+  useRig(rig) {
+    this.rig = rig;
+    this.animator = new CharacterAnimator(rig);
+    this.sword.attachTo(rig.handR, rig.unit);
   }
 
   /** Probeer het eigen 3D-model te laden. */
@@ -77,7 +86,28 @@ export class Player {
         this.mesh.add(model);
         this.model = model;
         this.modelBaseY = model.position.y;
-        this.sword.yawPivot.position.fromArray(MODEL_HAND);
+
+        // Heeft het model losse onderdelen met deze namen? Dan kunnen we het zelf laten bewegen.
+        const part = (name) => model.getObjectByName(name);
+        if (part('Hips') && part('ArmL') && part('ArmR') && part('LegL') && part('LegR') && part('HandR')) {
+          this.useRig({
+            hips: part('Hips'),
+            armL: part('ArmL'),
+            armR: part('ArmR'),
+            legL: part('LegL'),
+            legR: part('LegR'),
+            handR: part('HandR'),
+            unit: 1 / scale,
+          });
+          return;
+        }
+
+        // Anders: wapen in een vaste "hand" naast het model
+        this.rig = null;
+        const hand = new THREE.Group();
+        hand.position.fromArray(MODEL_HAND);
+        this.mesh.add(hand);
+        this.sword.attachTo(hand);
 
         // Animaties (als het model "gerigd" is, bijvoorbeeld idle / walk / run / jump)
         if (gltf.animations.length > 0) {
@@ -99,28 +129,42 @@ export class Player {
     );
   }
 
-  /** Kies de juiste animatie: stilstaan, lopen of springen. */
-  updateAnimation(dt, moving) {
-    if (this.model && !this.mixer) {
-      // Model zonder animaties: een beetje op en neer wippen tijdens het lopen
-      const target = moving && this.onGround ? 1 : 0;
-      this.walkAmount += (target - this.walkAmount) * Math.min(1, 12 * dt);
-      if (moving) this.walkPhase += dt * 11;
-      this.model.position.y = this.modelBaseY + Math.abs(Math.sin(this.walkPhase)) * 0.08 * this.walkAmount;
-      this.model.rotation.z = Math.sin(this.walkPhase) * 0.06 * this.walkAmount; // waggelen
+  /** Bukken om iets op te pakken. `onGrab` wordt uitgevoerd als de hand bij de grond is. */
+  startPickup(onGrab) {
+    if (this.pickupTimer > 0) return;
+    this.pickupTimer = PICKUP_TIME;
+    this.onGrab = onGrab;
+  }
+
+  get isBusy() {
+    return this.pickupTimer > 0;
+  }
+
+  /** Laat het poppetje bewegen: lopen, slaan, springen, oppakken. */
+  updateAnimation(dt) {
+    if (this.pickupTimer > 0) {
+      this.pickupTimer -= dt;
+      if (this.onGrab && this.pickupTimer <= PICKUP_TIME / 2) {
+        this.onGrab(); // hand is beneden: nu wisselen we echt van wapen
+        this.onGrab = null;
+      }
+    }
+    const pickup = this.pickupTimer > 0 ? 1 - this.pickupTimer / PICKUP_TIME : null;
+
+    if (this.rig) {
+      this.animator.update(dt, { moving: this.moving, onGround: this.onGround, attack: this.sword.attackProgress, pickup });
       return;
     }
     if (!this.mixer) {
-      // Poppetje uit character.js: armen en benen laten zwaaien
-      const target = moving && this.onGround ? 1 : 0;
-      this.walkAmount += (target - this.walkAmount) * Math.min(1, 12 * dt);
-      if (moving) this.walkPhase += dt * 11;
-      animateLimbs(this.limbs, this.walkPhase, this.walkAmount);
+      // Model zonder rig en zonder animaties: een beetje op en neer wippen tijdens het lopen
+      this.walkPhase = (this.walkPhase ?? 0) + (this.moving ? dt * 11 : 0);
+      const bob = this.moving && this.onGround ? 1 : 0;
+      this.model.position.y = this.modelBaseY + Math.abs(Math.sin(this.walkPhase)) * 0.08 * bob;
       return;
     }
     let name = 'idle';
     if (!this.onGround && this.actions.jump) name = 'jump';
-    else if (moving) name = 'walk';
+    else if (this.moving) name = 'walk';
 
     const next = this.actions[name] ?? null;
     if (next !== this.currentAction) {
@@ -148,6 +192,8 @@ export class Player {
     this.invulnerable = 0;
     this.mesh.visible = true;
     this.sword.reset();
+    this.pickupTimer = 0;
+    this.onGrab = null;
     this.respawn();
   }
 
@@ -240,8 +286,9 @@ export class Player {
     // 5. Van de wereld gevallen?
     if (pos.y < FALL_LIMIT) this.respawn();
 
-    // 6. Animatie van het 3D-model
-    this.updateAnimation(dt, move.lengthSq() > 0);
+    // 6. Animatie van het poppetje
+    this.moving = move.lengthSq() > 0;
+    this.updateAnimation(dt);
   }
 
   /** Bounding box van de speler op zijn huidige positie. */
