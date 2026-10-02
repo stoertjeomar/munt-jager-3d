@@ -1,7 +1,8 @@
 # Munt Jager 3D
 
-Een 3D-platformgame in de browser, gemaakt met **JavaScript** en **[Three.js](https://threejs.org/)**.
-Loop rond, spring over blokken en zwevende platforms en verzamel alle 15 munten zo snel mogelijk.
+Een **actie-RPG met levels** in de browser, in de stijl van Elden Ring, gemaakt met **JavaScript** en **[Three.js](https://threejs.org/)**.
+Kies je held, volg het pad door 4 levels, versla vijanden voor munten, help de dorpelingen met zij-quests,
+word sterker bij de Plekken van Genade en versla aan het eind van elk level de boss.
 
 ![Screenshot van Munt Jager 3D](docs/screenshot.png)
 
@@ -29,52 +30,106 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 
 ## Besturing
 
-| Toets           | Actie            |
-| --------------- | ---------------- |
-| WASD / pijltjes | Lopen            |
-| Spatie          | Springen         |
-| Muis slepen     | Camera draaien   |
-| Scrollen        | Zoomen           |
-| R               | Opnieuw beginnen |
+| Toets | Actie |
+| ----- | ----- |
+| WASD / pijltjes | Lopen |
+| Muis | Rondkijken (de camera draait ook vanzelf achter je aan) |
+| Shift | Kort tikken = rollen (onkwetsbaar), ingedrukt houden = sprinten |
+| Spatie | Springen (in de lucht nog eens = dubbele sprong) |
+| Klik / F | Slaan of schieten (F in de lucht = grondslag) |
+| Q | Vastzetten op een vijand (lock-on) |
+| R | Flesje drinken (leven terug) |
+| E | Praten met een NPC / rusten bij een Plek van Genade / kist openen |
+| C | Dash |
+| V | Wervelslag |
+| X | Vuurzwaard |
+| I of Tab | Uitrusting (wapens, helmen, krachten) |
+| M | Geluid aan/uit |
+| Esc | Pauze / muis vrij |
 
 ## Wat zit erin
 
-- Third-person camera die om de speler draait (muis) en soepel meebeweegt
-- Beweging relatief aan de camera, met zwaartekracht en springen
-- Eigen botsingsdetectie (AABB): landen op blokken, hoofd stoten, langs muren schuiven
-- Van de wereld vallen → terug naar start
-- Munten verzamelen, timer en win-scherm
-- Realtime schaduwen en mist
+- **4 levels**, elk een pad van het begin naar de boss-arena, met halverwege een checkpoint:
+  1. **Groene Weide** met het dorp Muntdorp → boss **Budget Mario**
+  2. **Ruïnevallei** met een parkour-ruïne → boss **Koning Slijm**
+  3. **Spookwoud** (donker en mistig) → boss **De Gevallen Ridder**
+  4. **Rotshoogland** (de finale) → boss **Steenreus Gorath**
+
+  Versla de boss → *LEVEL VOLTOOID* → door naar het volgende level. Op het startscherm kies je elk level dat je al hebt vrijgespeeld.
+- **Kies je held**: Eve of Soldaat (Mixamo-personages met een echt skelet: knieën, ellebogen, rennen, uitvalspas bij het slaan)
+- **NPC's met zij-quests**: Mila, Strohoed, Robot B-0P en Sir Roestbout wonen in de levels. Praat met ze (E) als er een **!** boven
+  hun hoofd staat, doe de quest (vijanden verslaan of sterren/batterijen zoeken) en haal je beloning op bij het **?**
+- **Huizen waar je in kunt**: loop door de deur naar binnen — met meubels, een haardvuur en het dak verdwijnt zodat je binnen kunt kijken
+- Lantaarns langs het pad, een bos rond elk level, minimap met het pad, **dag-en-nachtritme** met sterren en een zachte **gloed** (bloom)
+- Vijanden (ook spoken) lopen niet meer door muren, bomen of stenen heen
+- **Elden Ring-stijl**: munten verdienen, levelen bij Plekken van Genade (Vitaliteit, Kracht, Uithouding),
+  rusten brengt vijanden terug, doodgaan = je munten blijven liggen waar je viel
+- **Gevechten**: leven en stamina, rollen met onkwetsbaarheid, lock-on, flesjes, zwaard-windje,
+  vonken, schade-getallen, camera-schok en hitstop
+- **5 krachten**: Dash, Dubbele sprong, Wervelslag, Grondslag en Vuurzwaard (vrijspelen door te levelen en bosses te verslaan)
+- **Wapens**: kort zwaard, ridderzwaard, katana, knots, diamanten zwaard, revolver, shotgun, machinegeweer,
+  sluipschuttersgeweer en boog — plus 3 helmen. Te vinden in kisten en bij bosses
+- **Vijanden**: slijmpjes, slijmballen, spoken, rotsgolems, zombies, Spierbonken en Mecha-Wachters
+- **4 bosses** met een mistmuur, boss-balk en een tweede fase: Koning Slijm, De Gevallen Ridder,
+  Steenreus Gorath en Budget Mario
+- 3 verstopte **diamanten** per level, hartjes, munten die naar je toe vliegen
+- Geluidseffecten en **opslaan** in de browser (verder spelen waar je was)
 
 ## Projectstructuur
 
 ```
 munt-jager-3d/
-├── index.html      → pagina + HUD, laadt Three.js via een import map
-├── style.css       → opmaak van de HUD
-├── lib/            → Three.js (r170) + licentie
+├── index.html        → pagina, HUD en startscherm
+├── style.css         → opmaak (Elden Ring-stijl)
+├── lib/              → Three.js (r170) + loaders + licentie
+├── models/           → 3D-modellen (personages, wapens, helmen, bosses, KayKit, Kenney)
+├── textures/         → Kenney Retro Textures (grond, muren, daken, ramen)
+├── sounds/           → geluiden uit het Kenney Starter Kit
+├── images/           → portretten voor het startscherm
 └── src/
-    ├── main.js     → start alles op, game loop, score en winnen
-    ├── player.js   → speler: lopen, springen, zwaartekracht, botsingen
-    ├── world.js    → level: vloer, licht, blokken en munten
-    ├── camera.js   → third-person camera
-    └── input.js    → toetsenbord uitlezen
+    ├── main.js       → start alles op, game loop, gevechten, rusten, doodgaan
+    ├── levels.js     → de 4 levels: pad, vijanden, kisten, NPC's, huizen (pas hier je levels aan!)
+    ├── world.js      → bouwt het level: grond, pad, huizen, ruïnes, natuur, arena, dag en nacht
+    ├── npcs.js       → NPC's en hun zij-quests
+    ├── decor.js      → planten, stenen, wolken, vlaggen en dieren
+    ├── player.js     → speler: bewegen, rollen, krachten, flesjes, personages
+    ├── animator.js   → laat het poppetje bewegen (lopen, slaan, richten, drinken...)
+    ├── mixamo.js     → vertaalt die bewegingen naar een Mixamo-skelet
+    ├── character.js  → het Strohoed-poppetje uit simpele vormen
+    ├── weapons.js    → alle wapens · gear.js → helmen
+    ├── sword.js      → het wapen in de hand · trail.js → het zwaard-windje
+    ├── projectiles.js→ kogels, pijlen, energie- en vuurballen
+    ├── enemies.js    → vijanden en hun aanvallen · bosses.js → de vier bosses
+    ├── sites.js      → Plekken van Genade, kisten, verloren munten
+    ├── pickups.js    → munten, hartjes, diamanten
+    ├── stats.js      → level, eigenschappen, krachten, opslaan
+    ├── ui.js         → balken, menu's, banners, minimap
+    ├── effects.js    → deeltjes, schokgolven, waarschuwingscirkels
+    ├── audio.js      → geluiden · camera.js · input.js · assets.js
 ```
 
 ## Zelf aanpassen
 
-- **Sneller lopen / hoger springen** → constanten bovenaan `src/player.js` (`SPEED`, `JUMP_SPEED`, `GRAVITY`)
-- **Eigen level bouwen** → de lijsten `BLOCKS` en `COINS` bovenaan `src/world.js`
-- **Debuggen** → open de console (F12) en typ bijvoorbeeld `game.player.position`
+- **Levels** → `LEVELS` in `src/levels.js` (welke vijanden, kisten, NPC's, huizen en welke boss). Test een level met `?level=3` achter de link
+- **Quests** → `QUESTS` bovenaan `src/npcs.js`
+- **Vijanden** → `ENEMY_TYPES` bovenaan `src/enemies.js`
+- **Wapens** → `WEAPONS` in `src/weapons.js` · **Helmen** → `HELMETS` in `src/gear.js`
+- **Krachten en levelen** → `POWERS` en `levelCost` in `src/stats.js`
+- **Personages** → `CHARACTERS` en `PLAYABLE` bovenaan `src/player.js`
+- **Opnieuw beginnen** → uitrusting (I) → *Nieuw spel beginnen*
 
-## Roadmap
+## Credits
 
-- [ ] Vijanden die heen en weer lopen
-- [ ] Bewegende platforms
-- [ ] Geluidseffecten
-- [ ] 3D-model als speler (`GLTFLoader`)
-- [ ] Meerdere levels en een opgeslagen beste tijd
+- Ridder, helmen, zwaarden, knots en zombie: [Quaternius](https://quaternius.com) — CC0
+- Mini-Game Variety Pack (planten, stenen, dieren, boog, hart, diamant): [KayKit / Kay Lousberg](https://kaylousberg.com) — CC0
+- Starter Kit 3D Platformer (munt, wolken, gras, vlaggen, robot, geluiden): [Kenney](https://kenney.nl) — MIT
+- Retro Textures Fantasy: [Kenney](https://kenney.nl) — CC0
+- Ultimate Guns Pack (geweren)
+- Personages Eve, Soldaat en Mila: via Mixamo
+- Budget Mario door Teh_LaughingMan, Buff man door joney_lol, MS Gundam RX-78-2 door Tipatat Chennavasin
+  (fan-modellen; Mario en Gundam zijn van Nintendo en Bandai — alleen voor eigen plezier)
 
 ## Licentie
 
 MIT — zie [LICENSE](LICENSE). Three.js valt onder zijn eigen MIT-licentie ([lib/THREE-LICENSE](lib/THREE-LICENSE)).
+De gebruikte modellen en texturen vallen onder de licenties hierboven.
