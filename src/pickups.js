@@ -1,26 +1,14 @@
 import * as THREE from 'three';
 import { loadGLB } from './assets.js';
+import { LEVEL } from './levels.js';
 
 // Dingen die je oppakt door er doorheen te lopen:
 //  - munten die uit verslagen vijanden spatten en naar je toe vliegen
 //  - hartjes (KayKit) die vijanden soms laten vallen: een stuk leven terug
 //  - verborgen diamanten (KayKit) overal in de wereld: veel munten!
 
-// Verstopte diamanten: [id, x, y, z]. Zoek ze allemaal!
-export const DIAMONDS = [
-  ['d1', 2, 6.25, -16], // op een zwevend platform
-  ['d2', 12, 4, -11], // bovenop de trap-ruïne
-  ['d3', -28, 0, 64], // achter het grote huis in Muntdorp
-  ['d4', -112, 0, -100], // diep in de hoek van het Spookwoud
-  ['d5', -100, 0, 60],
-  ['d6', -30, 3, -66], // op de noordelijke ruïne
-  ['d7', 110, 0, -108], // verste hoek van het Hoogland
-  ['d8', 105, 0, 20],
-  ['d9', 52, 0, 108],
-  ['d10', -60, 0, -105],
-  ['d11', 86, 2, -28], // op de ruïne bij de golems
-  ['d12', -110, 0, 108],
-].map(([id, x, y, z]) => ({ id, position: new THREE.Vector3(x, y, z) }));
+// Verstopte diamanten: staan per level in levels.js. Zoek ze allemaal!
+export const DIAMONDS = LEVEL.diamonds.map(([id, x, y, z]) => ({ id, position: new THREE.Vector3(x, y, z) }));
 const DIAMOND_VALUE = 80;
 const HEART_HEAL = 0.25; // 25% van je leven
 

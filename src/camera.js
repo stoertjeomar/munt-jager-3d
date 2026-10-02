@@ -86,7 +86,7 @@ export class CameraRig {
     const goal = followPosition.clone().add(new THREE.Vector3(0, 1.2, 0));
     this.target.lerp(goal, 1 - Math.exp(-10 * dt));
 
-    const d = this.distance;
+    const d = Math.min(this.distance, follow.maxDistance ?? Infinity); // binnen in een huis: dichterbij
     const offset = new THREE.Vector3(
       Math.sin(this.yaw) * Math.cos(this.pitch) * d,
       Math.sin(this.pitch) * d,

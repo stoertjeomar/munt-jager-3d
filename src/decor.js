@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { loadGLB } from './assets.js';
-import { isFree, regionAt, seededRandom, GRACES, WORLD_HALF, VILLAGE_CENTER } from './world.js';
+import { isFree, seededRandom, GRACES, BOUNDS } from './world.js';
+import { LEVEL, LEVEL_INDEX } from './levels.js';
 
 // Extra aankleding van de wereld met modellen uit de KayKit- en Kenney-pakketten:
 // planten, stenen, grasplukjes, wolken, vlaggen bij de Plekken van Genade en rondscharrelende dieren.
@@ -38,10 +39,10 @@ function scatter(scene, gltf, transforms, { shadows = false } = {}) {
 /** Willekeurige plekken in de wereld (die vrij zijn, en eventueel in een bepaald gebied). */
 function spots(rand, count, { regions = null, scaleMin = 1, scaleMax = 1, margin = 0 } = {}) {
   const list = [];
+  if (regions && !regions.includes(LEVEL.theme)) return list;
   for (let tries = 0; list.length < count && tries < count * 30; tries++) {
-    const x = (rand() - 0.5) * (WORLD_HALF * 2 - 10);
-    const z = (rand() - 0.5) * (WORLD_HALF * 2 - 10);
-    if (regions && !regions.includes(regionAt(x, z))) continue;
+    const x = (rand() - 0.5) * (BOUNDS.x * 2 - 4);
+    const z = (rand() - 0.5) * (BOUNDS.z * 2 - 4);
     if (!isFree(x, z, margin)) continue;
     const s = scaleMin + rand() * (scaleMax - scaleMin);
     list.push(new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI * 2), new THREE.Vector3(s, s, s)));
@@ -104,7 +105,7 @@ export class Decor {
 
   async load() {
     const scene = this.scene;
-    const rand = seededRandom(99);
+    const rand = seededRandom(99 + LEVEL_INDEX * 31);
     const [grass, grassSmall, plantA, plantB, rocksA, rocksB, rocksDesA, rocksDesB, detail, cloud, flag, duck, dog, bear] = await Promise.all(
       [
         'models/kenney/grass.glb', 'models/kenney/grass-small.glb',
@@ -117,15 +118,15 @@ export class Decor {
     );
 
     const green = ['weide', 'woud'];
-    if (grass) scatter(scene, grass, spots(rand, 900, { regions: green, scaleMin: 1.4, scaleMax: 2.4 }));
-    if (grassSmall) scatter(scene, grassSmall, spots(rand, 900, { regions: green, scaleMin: 1.4, scaleMax: 2.2 }));
+    if (grass) scatter(scene, grass, spots(rand, 700, { regions: green, scaleMin: 1.4, scaleMax: 2.4 }));
+    if (grassSmall) scatter(scene, grassSmall, spots(rand, 700, { regions: green, scaleMin: 1.4, scaleMax: 2.2 }));
     if (plantA) scatter(scene, plantA, spots(rand, 90, { regions: green, scaleMin: 0.9, scaleMax: 1.5 }));
     if (plantB) scatter(scene, plantB, spots(rand, 90, { regions: green, scaleMin: 0.8, scaleMax: 1.4 }));
     if (detail) scatter(scene, detail, spots(rand, 110, { regions: green, scaleMin: 1, scaleMax: 1.6 }));
-    if (rocksA) scatter(scene, rocksA, spots(rand, 50, { regions: green, scaleMin: 0.8, scaleMax: 1.5 }), { shadows: true });
-    if (rocksB) scatter(scene, rocksB, spots(rand, 50, { regions: green, scaleMin: 0.8, scaleMax: 1.5 }), { shadows: true });
-    if (rocksDesA) scatter(scene, rocksDesA, spots(rand, 70, { regions: ['hoogland'], scaleMin: 1, scaleMax: 2 }), { shadows: true });
-    if (rocksDesB) scatter(scene, rocksDesB, spots(rand, 70, { regions: ['hoogland'], scaleMin: 1, scaleMax: 2 }), { shadows: true });
+    if (rocksA) scatter(scene, rocksA, spots(rand, 25, { regions: green, scaleMin: 0.8, scaleMax: 1.5 }), { shadows: true });
+    if (rocksB) scatter(scene, rocksB, spots(rand, 25, { regions: green, scaleMin: 0.8, scaleMax: 1.5 }), { shadows: true });
+    if (rocksDesA) scatter(scene, rocksDesA, spots(rand, 50, { regions: ['hoogland'], scaleMin: 1, scaleMax: 2 }), { shadows: true });
+    if (rocksDesB) scatter(scene, rocksDesB, spots(rand, 50, { regions: ['hoogland'], scaleMin: 1, scaleMax: 2 }), { shadows: true });
 
     // Vlaggen bij elke Plek van Genade
     if (flag) {
@@ -153,7 +154,7 @@ export class Decor {
       }
     }
 
-    // Dieren: eenden en honden in de weide en het dorp, beren in het bos
+    // Dieren: welke en waar staat per level in levels.js
     const addAnimals = (gltf, count, homes, scale) => {
       if (!gltf) return;
       for (let i = 0; i < count; i++) {
@@ -164,10 +165,8 @@ export class Decor {
         this.animals.push(new Animal(scene, m, new THREE.Vector3(home[0] + (rand() - 0.5) * 6, 0, home[1] + (rand() - 0.5) * 6), 6, rand));
       }
     };
-    const v = VILLAGE_CENTER;
-    addAnimals(duck, 6, [[-8, 30], [12, 40], [v.x + 6, v.z - 4]], 0.9);
-    addAnimals(dog, 3, [[v.x, v.z + 4], [v.x - 5, v.z], [6, 22]], 1);
-    addAnimals(bear, 4, [[-60, 50], [-90, -5], [-75, 70], [-105, 35]], 1.6);
+    const models = { duck: [duck, 0.9], dog: [dog, 1], bear: [bear, 1.6] };
+    for (const [kind, homes, count] of LEVEL.animals) addAnimals(models[kind][0], count, homes, models[kind][1]);
   }
 
   update(dt, time, playerPos) {

@@ -6,15 +6,15 @@ import { createHelmetMesh } from './gear.js';
 import { SwordTrail } from './trail.js';
 import { play } from './audio.js';
 
-// De drie bosses. Elke boss woont in een arena (zie ARENAS in world.js).
+// De vier bosses: aan het eind van elk level één. De boss woont in een arena (zie ARENAS in world.js).
 // Loop je de arena in, dan gaat er een mistmuur omhoog en begint het gevecht.
 // Elke boss heeft een eigen set aanvallen, en wordt bij de helft van zijn leven sneller en gemener (fase 2).
 
 export const BOSS_INFO = {
-  koning: { name: 'Koning Slijm', title: 'Heerser van de Weide', hp: 700, runes: 350 },
+  koning: { name: 'Koning Slijm', title: 'Heerser van de Ruïnevallei', hp: 900, runes: 600 },
   ridder: { name: 'De Gevallen Ridder', title: 'Bewaker van het Spookwoud', hp: 1100, runes: 900 },
   reus: { name: 'Steenreus Gorath', title: 'Hart van het Hoogland', hp: 1800, runes: 2000 },
-  mario: { name: 'Budget Mario', title: 'De Vliegende Loodgieter', hp: 1400, runes: 1200 },
+  mario: { name: 'Budget Mario', title: 'De Vliegende Loodgieter', hp: 650, runes: 300 },
 };
 
 const tmp = new THREE.Vector3();
@@ -919,7 +919,7 @@ class FlyingMario extends Boss {
         this.position.addScaledVector(this.vel, dt);
         this.pivot.rotation.z += dt * 14; // tollen als een kurkentrekker
         if (!this.hitThisAttack && this.center.distanceTo(player.clone().setY(player.y + 0.9)) < 2) {
-          if (ctx.hurtPlayer(this.position, 30)) this.hitThisAttack = true;
+          if (ctx.hurtPlayer(this.position, 22)) this.hitThisAttack = true;
         }
         if (this.position.y <= 0.3 || this.timer <= 0) {
           this.position.y = 0;
@@ -992,7 +992,7 @@ class FlyingMario extends Boss {
           const dir = to.sub(from);
           const flat = Math.hypot(dir.x, dir.z);
           dir.y = flat * 0.35; // een boogje
-          ctx.projectiles.spawn({ from, dir, speed: Math.min(16, 6 + flat * 0.6), damage: 18, owner: 'enemy', kind: 'fire', gravity: 9, bounces: 2, radius: 0.4 });
+          ctx.projectiles.spawn({ from, dir, speed: Math.min(16, 6 + flat * 0.6), damage: 14, owner: 'enemy', kind: 'fire', gravity: 9, bounces: 2, radius: 0.4 });
           play('swing');
           this.shotsLeft--;
           this.timer = 0.35;

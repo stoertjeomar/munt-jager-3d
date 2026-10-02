@@ -9,6 +9,7 @@ import { POWERS } from './stats.js';
 import { createMixamoRig } from './mixamo.js';
 
 // Personages waaruit je kunt kiezen (aan het begin van het spel, of later in het startscherm met Esc)
+// Alle personages. Alleen Eve en Soldaat kun je zelf spelen; de rest woont in de wereld als NPC (zie npcs.js).
 export const CHARACTERS = [
   { id: 'ridder', name: 'Ridder', file: 'models/speler.glb', info: 'Een stoere ridder in zwart harnas. Past alle helmen.' },
   { id: 'eve', name: 'Eve', file: 'models/personages/eve.glb', info: 'Ruimtepiraat met een litteken en lef.' },
@@ -17,6 +18,7 @@ export const CHARACTERS = [
   { id: 'robot', name: 'Robot', file: 'models/robot.glb', height: 1.25, info: 'Een vrolijke robot uit het Kenney-pakket.' },
   { id: 'strohoed', name: 'Strohoed', file: null, info: 'Het allereerste poppetje van deze game!' },
 ];
+export const PLAYABLE = CHARACTERS.filter((c) => ['eve', 'soldaat'].includes(c.id));
 
 // Instellingen van de speler — speel hiermee om het gevoel te veranderen!
 const SPEED = 6.5; // loopsnelheid (meter per seconde)
@@ -80,12 +82,12 @@ export class Player {
     this.currentAction = null;
     this.spawnPoint = new THREE.Vector3(0, 0, 8);
     this.reset();
-    this.setCharacter(stats.data.character ?? 'ridder');
+    this.setCharacter(stats.data.character ?? 'eve');
   }
 
   /** Ander personage kiezen (zie CHARACTERS). */
   setCharacter(id) {
-    const character = CHARACTERS.find((c) => c.id === id) ?? CHARACTERS[0];
+    const character = PLAYABLE.find((c) => c.id === id) ?? PLAYABLE[0];
     this.characterId = character.id;
     this.loadToken = (this.loadToken ?? 0) + 1;
     if (!character.file) {
@@ -397,7 +399,8 @@ export class Player {
    * @param {number} dt
    * @param {object} controls  { move: Vector3 (wereldrichting), sprint, jumpPressed }
    */
-  update(dt, controls, colliders, worldHalf) {
+  /** @param {{x: number, z: number}} bounds  verder dan dit kun je niet lopen */
+  update(dt, controls, colliders, bounds) {
     const move = controls.move.clone();
     const hasMove = move.lengthSq() > 0;
     if (hasMove) move.normalize();
@@ -489,8 +492,8 @@ export class Player {
     this.resolveHorizontal('x', colliders);
     pos.z += this.velocity.z * dt;
     this.resolveHorizontal('z', colliders);
-    pos.x = THREE.MathUtils.clamp(pos.x, -worldHalf, worldHalf);
-    pos.z = THREE.MathUtils.clamp(pos.z, -worldHalf, worldHalf);
+    pos.x = THREE.MathUtils.clamp(pos.x, -bounds.x, bounds.x);
+    pos.z = THREE.MathUtils.clamp(pos.z, -bounds.z, bounds.z);
 
     const prevY = pos.y;
     const wasInAir = !this.onGround;
@@ -518,6 +521,7 @@ export class Player {
 
     // ---------- Animatie ----------
     this.moving = hasMove && !this.resting;
+    this.sprinting = sprinting;
     this.updateAnimation(dt);
   }
 
@@ -535,6 +539,7 @@ export class Player {
     if (this.rig) {
       this.animator.update(dt, {
         moving: this.moving && this.rollTimer <= 0,
+        run: this.sprinting && this.sword.attackProgress === null,
         onGround: this.onGround || this.rollTimer > 0,
         attack: this.sword.attackProgress,
         pickup,

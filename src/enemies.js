@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { play } from './audio.js';
 import { loadGLB } from './assets.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
+import { LEVEL, LEVEL_INDEX } from './levels.js';
+import { seededRandom } from './world.js';
 
 // Soorten vijanden — speel met deze getallen om ze makkelijker of moeilijker te maken!
 //   hp            = levenspunten
@@ -48,33 +50,41 @@ export const ENEMY_TYPES = {
 const LEASH = 16; // verder dan dit van huis geeft een vijand het op en gaat terug
 const ACTIVE_RANGE = 70; // vijanden verder weg dan dit staan stil (scheelt rekenwerk)
 
-// Waar de vijanden lopen: [soort, x1, z1, x2, z2] — ze lopen heen en weer tussen die twee punten
-export const SPAWNS = [
-  // Groene Weide: vooral slijmpjes, een paar slijmballen
-  ['slijmpje', -7, 3, -4, 5], ['slijmpje', 8, 5, 10, 8], ['slijmpje', -11, 10, -7, 13], ['slijmpje', 14, 30, 18, 34],
-  ['slijmpje', -24, 20, -20, 26], ['slijmpje', 26, 12, 30, 16], ['slijmpje', 18, 40, 24, 44], ['slijmpje', -8, 34, -4, 38],
-  ['slijmbal', -7, -1, -2, -1], ['slijmbal', 3, -10, 8, -10], ['slijmbal', 25, -20, 30, -26], ['slijmbal', -28, -16, -24, -22],
-  // Pad naar Koning Slijm
-  ['slijmbal', -4, -30, 4, -30], ['slijmbal', 5, -40, 9, -36], ['slijmpje', -6, -38, -3, -42], ['slijmpje', 6, -55, 9, -58],
-  ['slijmbal', -8, -58, -5, -54],
-  // Spookwoud: spoken en slijmballen
-  ['spook', -50, 25, -50, 40], ['spook', -62, -5, -70, 5], ['spook', -85, 20, -90, 30], ['spook', -100, -10, -95, 0],
-  ['spook', -66, 55, -74, 62], ['spook', -88, -70, -80, -76], ['slijmbal', -45, -12, -50, -18], ['slijmbal', -60, 30, -64, 26],
-  ['slijmbal', -92, 8, -96, 14], ['slijmbal', -70, -36, -74, -30], ['spook', -82, -30, -86, -26], ['slijmbal', -110, 40, -104, 46],
-  // Noordelijke ruïnes
-  ['slijmbal', -28, -54, -24, -58], ['spook', -38, -70, -30, -74], ['slijmpje', -20, -66, -16, -70],
-  // Rotshoogland: golems en spoken
-  ['golem', 66, -10, 70, -4], ['golem', 82, 20, 88, 14], ['golem', 76, -40, 86, -40], ['golem', 100, -10, 104, 0],
-  ['golem', 62, 56, 66, 62], ['spook', 50, -25, 58, -30], ['spook', 95, 40, 100, 30], ['spook', 70, 80, 78, 86],
-  ['slijmbal', 48, 20, 52, 26], ['slijmbal', 58, -50, 62, -56], ['golem', 52, -66, 46, -60], ['spook', 104, -60, 96, -66],
-  // Zombies in het Spookwoud en bij de noordelijke ruïnes
-  ['zombie', -58, 18, -66, 22], ['zombie', -80, 10, -76, 2], ['zombie', -95, 45, -88, 50], ['zombie', -70, -60, -64, -66],
-  ['zombie', -108, -30, -100, -36], ['zombie', -52, -40, -58, -46], ['zombie', -40, -60, -44, -52], ['zombie', -24, -76, -16, -72],
-  // Spierbonken in het hoogland
-  ['spierbonk', 68, 22, 74, 18], ['spierbonk', 92, -20, 98, -26], ['spierbonk', 60, 70, 66, 76],
-  // Mecha-Wachters: bewaken de weg naar Steenreus Gorath en de noordoosthoek
-  ['mecha', 80, 46, 86, 42], ['mecha', 96, -86, 90, -92], ['mecha', 30, -90, 36, -96],
-];
+// Waar de vijanden lopen: dat staat per level in levels.js (spawns = [soort, aantal]).
+// Ze worden langs het pad verdeeld: makkelijke vijanden vooraan, sterke vijanden vlak voor de boss.
+export function levelSpawns(level, seed = 7) {
+  const rand = seededRandom(seed);
+  const pts = level.path;
+  const segs = pts.slice(1).map((p, i) => [pts[i], p, Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1])]);
+  const total = segs.reduce((n, s) => n + s[2], 0);
+  const at = (t) => {
+    let d = t * total;
+    for (const [[ax, az], [bx, bz], len] of segs) {
+      if (d <= len) return { x: ax + ((bx - ax) * d) / len, z: az + ((bz - az) * d) / len, dx: (bx - ax) / len, dz: (bz - az) / len };
+      d -= len;
+    }
+    const [[ax, az], [bx, bz], len] = segs[segs.length - 1];
+    return { x: bx, z: bz, dx: (bx - ax) / len, dz: (bz - az) / len };
+  };
+  const list = level.spawns.flatMap(([kind, n]) => Array.from({ length: n }, () => kind));
+  list.sort((a, b) => ENEMY_TYPES[a].hp - ENEMY_TYPES[b].hp);
+  const safe = level.graces.map(([, , x, z]) => [x, z]);
+  if (level.village) safe.push(level.village.center);
+  return list.map((kind, i) => {
+    for (let tries = 0; ; tries++) {
+      const t = 0.12 + ((i + rand() * 0.8) / list.length) * 0.84;
+      const p = at(t);
+      const side = (rand() - 0.5) * 2 * Math.min(level.half.x - 6, 16);
+      const x = THREE.MathUtils.clamp(p.x - p.dz * side, -level.half.x + 4, level.half.x - 4);
+      const z = p.z + p.dx * side;
+      const tooClose = safe.some(([sx, sz]) => Math.hypot(x - sx, z - sz) < (level.village && sx === level.village.center[0] ? 22 : 10));
+      if (tooClose && tries < 20) continue;
+      const a = rand() * Math.PI * 2;
+      return [kind, x, z, x + Math.sin(a) * 4, z + Math.cos(a) * 4];
+    }
+  });
+}
+export const SPAWNS = levelSpawns(LEVEL, 7 + LEVEL_INDEX);
 
 // Golem-aanval: opladen en dan op de grond slaan
 const SLAM_RANGE = 2.6; // binnen deze afstand begint hij op te laden
@@ -381,7 +391,7 @@ class Enemy {
   }
 
   /**
-   * @param {object} ctx { time, player, colliders, groundHalfSize, camera, effects, onSlam }
+   * @param {object} ctx { time, player, colliders, bounds, camera, effects, onSlam }
    */
   update(dt, ctx) {
     const type = this.type;
@@ -484,16 +494,11 @@ class Enemy {
     this.knockback.multiplyScalar(Math.exp(-8 * dt));
     this.position.addScaledVector(this.velocity, dt);
 
-    if (type.flies) {
-      // Spoken zweven door muren heen, maar niet door de grond
-      this.position.y = Math.max(0.4, this.position.y);
-    } else {
-      this.position.y = 0;
-      this.pushOutOfBlocks(ctx.colliders);
-    }
-    const limit = ctx.groundHalfSize - type.radius;
-    this.position.x = THREE.MathUtils.clamp(this.position.x, -limit, limit);
-    this.position.z = THREE.MathUtils.clamp(this.position.z, -limit, limit);
+    if (type.flies) this.position.y = Math.max(0.4, this.position.y); // zweven, maar niet door de grond
+    else this.position.y = 0;
+    this.pushOutOfBlocks(ctx.colliders); // niemand loopt (of zweeft) door muren, bomen en stenen
+    this.position.x = THREE.MathUtils.clamp(this.position.x, -ctx.bounds.x + type.radius, ctx.bounds.x - type.radius);
+    this.position.z = THREE.MathUtils.clamp(this.position.z, -ctx.bounds.z + type.radius, ctx.bounds.z - type.radius);
 
     // ---------- Draaien naar de looprichting ----------
     const look = this.chasing ? flatToPlayer : dir.clone().setY(0);
@@ -739,7 +744,7 @@ class Enemy {
     const p = this.position;
     const r = this.type.radius;
     for (const box of colliders) {
-      if (box.min.y > this.type.height || box.max.y < 0) continue; // zwevende blokken negeren
+      if (box.min.y > p.y + this.type.height || box.max.y < p.y + 0.05) continue; // boven of onder ons: geen botsing
       const minX = box.min.x - r;
       const maxX = box.max.x + r;
       const minZ = box.min.z - r;

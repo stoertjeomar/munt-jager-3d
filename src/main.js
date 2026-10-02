@@ -1,8 +1,14 @@
 import * as THREE from 'three';
 import { Input } from './input.js';
 import { CameraRig } from './camera.js';
-import { Player, CHARACTERS } from './player.js';
-import { createWorld, GRACES, ARENAS, CHESTS, REGION_NAMES, WALKABLE_HALF } from './world.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { Player, PLAYABLE } from './player.js';
+import { createWorld, GRACES, ARENAS, CHESTS } from './world.js';
+import { LEVELS, LEVEL, LEVEL_INDEX } from './levels.js';
+import { NPCs } from './npcs.js';
 import { createEnemies, spawnEnemy } from './enemies.js';
 import { createBosses, BOSS_INFO } from './bosses.js';
 import { Sites } from './sites.js';
@@ -29,14 +35,26 @@ document.body.prepend(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 230); // verder dan 230 m tekenen we niet (mist)
 
+// Nabewerking: felle dingen (vuur, lampen, zwaard-windjes, de Genade) krijgen een zachte gloed
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth / 2, window.innerHeight / 2), 0.35, 0.5, 0.92);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
 });
 
 // ---------- Game-objecten ----------
 const stats = new Stats();
+// Nieuw level (of een oude save)? Begin bij de eerste Plek van Genade van dit level.
+if (!GRACES.some((g) => g.id === stats.data.lastGrace)) stats.data.lastGrace = GRACES[0].id;
+if (!stats.data.discovered.includes(GRACES[0].id)) stats.data.discovered.push(GRACES[0].id);
+stats.data.currentLevel = LEVEL_INDEX;
 const ui = new UI(stats);
 const input = new Input();
 const world = createWorld(scene);
@@ -46,7 +64,8 @@ const pickups = new Pickups(scene, stats);
 const projectiles = new Projectiles(scene);
 const player = new Player(scene, stats);
 const enemies = createEnemies(scene);
-const bosses = createBosses(scene, ARENAS, stats.data.bosses);
+const bosses = createBosses(scene, ARENAS, []); // de boss van dit level is er altijd (ook als je hem al eens versloeg)
+const npcs = new NPCs(scene, stats, world.colliders);
 const effects = new Effects(scene);
 const trail = new SwordTrail(scene);
 const cameraRig = new CameraRig(camera, renderer.domElement);
@@ -64,7 +83,7 @@ const state = {
 
 /** Waar je terugkomt bij een Plek van Genade (net naast het licht). */
 function graceSpawn(id) {
-  const grace = sites.grace(id) ?? sites.grace('weide');
+  const grace = sites.grace(id) ?? sites.graces[0];
   return grace.position.clone().add(new THREE.Vector3(0, 0, 2.5));
 }
 
@@ -151,6 +170,8 @@ function onDefeated(target) {
   play('defeat');
   effects.burst(target.center, target.type.color, { count: 26, speed: 7, size: 0.16, life: 0.8, up: 3 });
   effects.burst(target.center, 0xffd700, { count: 8, speed: 3, size: 0.08, life: 0.6, up: 4 });
+  const finished = target.typeKey ? npcs.onKill(target.typeKey) : null;
+  if (finished) questReady(finished);
   if (!target.summoned) {
     giveRunes(target.type.runes);
     pickups.coinBurst(target.center, target.type.runes);
@@ -159,37 +180,90 @@ function onDefeated(target) {
   if (state.lockTarget === target) state.lockTarget = null;
 }
 
+// Beloningen voor het verslaan van een boss (alleen de eerste keer)
 const BOSS_REWARDS = {
+  mario: [{ kind: 'helmet', key: 'ijzer' }, { kind: 'flask' }],
   koning: [{ kind: 'helmet', key: 'goud' }, { kind: 'flask' }],
   ridder: [{ kind: 'weapon', key: 'diamant' }],
   reus: [],
-  mario: [{ kind: 'weapon', key: 'sniper' }, { kind: 'flask' }],
 };
 
 function onBossDefeated(boss) {
   const before = stats.unlockedPowers();
+  const firstTime = !stats.data.bosses.includes(boss.id);
   play('win');
   effects.shake(0.5);
   ui.banner('VIJAND GEVELD', boss.name, 'gold', 5);
-  giveRunes(BOSS_INFO[boss.id].runes);
+  giveRunes(firstTime ? BOSS_INFO[boss.id].runes : Math.round(BOSS_INFO[boss.id].runes / 3));
   pickups.coinBurst(boss.center, 100);
-  stats.data.bosses.push(boss.id);
-  for (const item of BOSS_REWARDS[boss.id]) stats.addItem(item);
+  const rewards = firstTime ? BOSS_REWARDS[boss.id] : [];
+  if (firstTime) stats.data.bosses.push(boss.id);
+  for (const item of rewards) stats.addItem(item);
+  stats.data.unlockedLevel = Math.max(stats.data.unlockedLevel, Math.min(LEVELS.length - 1, LEVEL_INDEX + 1));
   state.activeBoss = null;
   state.lockTarget = null;
   removeSummons();
   stats.save();
 
-  const rewards = BOSS_REWARDS[boss.id].map((i) => itemInfo(i).name);
   setTimeout(() => {
-    if (rewards.length) ui.toast(`Beloning: <b>${rewards.join(', ')}</b><br><small>Open je uitrusting met I</small>`, 5);
-    announceNewPowers(before, 1.5);
-    if (['koning', 'ridder', 'reus', 'mario'].every((id) => stats.data.bosses.includes(id)) && !stats.data.victory) {
-      stats.data.victory = true;
+    announceNewPowers(before, 0);
+    showLevelComplete(rewards.map((i) => itemInfo(i).name));
+  }, 4500);
+}
+
+/** "LEVEL VOLTOOID": door naar het volgende level (of het einde van het spel). */
+function showLevelComplete(rewards) {
+  const last = LEVEL_INDEX === LEVELS.length - 1;
+  if (last) {
+    stats.data.victory = true;
+    stats.save();
+  }
+  document.exitPointerLock?.();
+  const next = LEVELS[LEVEL_INDEX + 1];
+  const html = `${last ? 'Alle vier de bosses zijn verslagen. <b>Jij bent de echte Munt Jager!</b>' : `Je hebt <b>${LEVEL.name}</b> gehaald!`}
+    ${rewards.length ? `<br>Beloning: <b>${rewards.join(', ')}</b>` : ''}
+    ${next ? `<br><br>Volgende: <b>${next.subtitle} — ${next.name}</b>` : ''}`;
+  const buttons = [];
+  if (next) buttons.push([`▶ Naar ${next.name}`, () => goToLevel(LEVEL_INDEX + 1)]);
+  buttons.push(['Nog even rondlopen', () => {
+    ui.closeMenu();
+    renderer.domElement.requestPointerLock();
+  }]);
+  ui.openLevelComplete(last ? 'DE WERELD IS GERED' : 'LEVEL VOLTOOID', html, buttons);
+}
+
+/** Ander level laden: opslaan en de pagina opnieuw laden met het nieuwe level. */
+function goToLevel(index) {
+  stats.data.currentLevel = index;
+  stats.data.lastGrace = null;
+  stats.save();
+  if (location.search) location.href = location.pathname; // ?level=... uit de adresbalk halen
+  else location.reload();
+}
+
+/** Een quest is af: terug naar de NPC! */
+function questReady(quest) {
+  play('pickup');
+  ui.toast(`✔ <b>${quest.title}</b> voltooid!<br><small>Ga terug om je beloning te halen.</small>`, 4);
+}
+
+/** Praten met een NPC. */
+function talkTo(npc) {
+  const result = npcs.talk(npc);
+  play('pickup');
+  ui.prompt(null);
+  ui.openDialog(npc.name, result.lines, () => {
+    if (result.started) ui.toast(`Nieuwe quest: <b>${result.started.title}</b>`, 3);
+    if (result.reward) {
+      giveRunes(result.reward.runes);
+      for (const item of result.reward.items) stats.addItem(item);
       stats.save();
-      setTimeout(() => ui.banner('DE WERELD IS GERED', 'Alle vier de bosses zijn verslagen. Jij bent de echte Munt Jager!', 'gold', 8), 4000);
+      play('win');
+      effects.burst(player.position.clone().setY(player.position.y + 1.2), 0xffd76a, { count: 30, speed: 4, size: 0.1, life: 0.9, up: 3 });
+      const names = result.reward.items.map((i) => itemInfo(i).name);
+      ui.toast(`Beloning: <b>+${result.reward.runes} munten</b>${names.length ? ` en <b>${names.join(', ')}</b>` : ''}`, 5);
     }
-  }, 5000);
+  });
 }
 
 /** Laat zien welke krachten je net hebt vrijgespeeld. */
@@ -287,7 +361,7 @@ function die() {
   ui.banner('JE BENT GESTORVEN', stats.runes > 0 ? 'Je munten liggen nog waar je viel...' : '', 'death', 3.8);
   // Munten laten vallen; vorige verloren munten zijn nu echt weg
   if (stats.runes > 0) {
-    stats.data.lostRunes = { x: player.position.x, y: player.position.y, z: player.position.z, amount: stats.runes };
+    stats.data.lostRunes = { level: LEVEL_INDEX, x: player.position.x, y: player.position.y, z: player.position.z, amount: stats.runes };
     stats.data.runes = 0;
   } else {
     stats.data.lostRunes = null;
@@ -431,8 +505,8 @@ const startBtn = document.getElementById('start-btn');
 let gameStarted = false;
 
 function renderCharacterSelect() {
-  charSelectEl.innerHTML = CHARACTERS.map((c) => `
-    <button class="char-card ${stats.data.character === c.id ? 'selected' : ''}" data-id="${c.id}">
+  charSelectEl.innerHTML = PLAYABLE.map((c) => `
+    <button class="char-card ${player.characterId === c.id ? 'selected' : ''}" data-id="${c.id}">
       <img src="images/personages/${c.id}.png" alt="" onerror="this.style.visibility='hidden'">
       <b>${c.name}</b><small>${c.info}</small>
     </button>`).join('');
@@ -450,6 +524,22 @@ charSelectEl.addEventListener('click', (e) => {
   renderCharacterSelect();
 });
 
+// Level kiezen: alleen levels die je al hebt vrijgespeeld
+const levelSelectEl = document.getElementById('level-select');
+function renderLevelSelect() {
+  levelSelectEl.innerHTML = LEVELS.map((l, i) => `
+    <button class="level-card ${i === LEVEL_INDEX ? 'selected' : ''}" data-level="${i}" ${i > stats.data.unlockedLevel ? 'disabled' : ''}>
+      <b>${i > stats.data.unlockedLevel ? '🔒 ' : stats.data.bosses.includes(l.boss) ? '✔ ' : ''}${l.name}</b><small>${l.subtitle} · boss: ${BOSS_INFO[l.boss].name}</small>
+    </button>`).join('');
+}
+renderLevelSelect();
+levelSelectEl.addEventListener('click', (e) => {
+  const card = e.target.closest('.level-card');
+  if (!card || card.disabled || gameStarted) return;
+  const index = Number(card.dataset.level);
+  if (index !== LEVEL_INDEX) goToLevel(index);
+});
+
 startBtn.addEventListener('click', () => {
   unlockAudio();
   gameStarted = true;
@@ -458,8 +548,14 @@ startBtn.addEventListener('click', () => {
 
 document.addEventListener('pointerlockchange', () => {
   lockHintEl.classList.toggle('hidden', cameraRig.locked || !!ui.menuOpen);
-  // Na het begin is dit scherm ook het pauzescherm
+  // Na het begin is dit scherm ook het pauzescherm (dan kun je geen level meer kiezen)
   startBtn.textContent = gameStarted ? 'Doorgaan' : 'Spelen';
+  levelSelectEl.classList.toggle('hidden', gameStarted);
+  document.getElementById('level-title').classList.toggle('hidden', gameStarted);
+  if (gameStarted && cameraRig.locked && !state.introShown) {
+    state.introShown = true;
+    ui.banner(LEVEL.name.toUpperCase(), `${LEVEL.subtitle} — versla ${BOSS_INFO[LEVEL.boss].name} aan het eind van het pad`, 'gold', 4.5);
+  }
 });
 
 window.addEventListener('keydown', (e) => {
@@ -503,7 +599,13 @@ function handleActions(move) {
   if (input.wasPressed('KeyQ')) toggleLock();
   if (input.wasPressed('KeyI') || input.wasPressed('Tab')) toggleInventory();
 
-  // E: rusten of een kist openen
+  // E: praten, rusten of een kist openen
+  const npc = player.isBusy ? null : npcs.nearby(player.position);
+  if (npc) {
+    ui.prompt(`<b>E</b> Praat met ${npc.name}`);
+    if (input.wasPressed('KeyE')) talkTo(npc);
+    return;
+  }
   const near = player.isBusy ? null : sites.nearbyInteraction(player.position);
   if (near?.kind === 'grace') ui.prompt(`<b>E</b> Rusten bij ${near.target.name}`);
   else if (near?.kind === 'chest') ui.prompt('<b>E</b> Kist openen');
@@ -647,7 +749,13 @@ function gameLoop() {
   const elapsed = clock.elapsedTime;
 
   const move = readMove();
-  const canAct = player.alive && !ui.menuOpen && state.deathTimer <= 0 && !paused;
+  // In een gesprek: E, Spatie of klikken = volgende zin
+  const inDialog = ui.menuOpen === 'dialog';
+  if (inDialog && (input.wasPressed('KeyE') || input.wasPressed('Space') || input.wasPressed('Enter') || state.attackRequested)) {
+    state.attackRequested = false;
+    ui.advanceDialog();
+  }
+  const canAct = player.alive && !ui.menuOpen && !inDialog && state.deathTimer <= 0 && !paused;
   crosshairEl.classList.toggle('hidden', !player.sword.ranged || !cameraRig.locked);
   if (canAct) handleActions(move);
   else ui.prompt(null);
@@ -664,7 +772,7 @@ function gameLoop() {
       sprint: canAct && sprintHeld,
       jumpPressed: canAct && input.wasPressed('Space'),
       faceTarget,
-    }, world.colliders, WALKABLE_HALF);
+    }, world.colliders, world.bounds);
     if (player.jumped) play('jump');
     handlePlayerEvents();
     swordHits();
@@ -692,7 +800,7 @@ function gameLoop() {
   if (!player.alive && state.deathTimer <= 0) die();
 
   const enemyCtx = {
-    time: elapsed, player, colliders: world.colliders, groundHalfSize: WALKABLE_HALF, camera, onSlam: onGolemSlam,
+    time: elapsed, player, colliders: world.colliders, bounds: world.bounds, camera, onSlam: onGolemSlam,
     hurtPlayer, projectiles, effects,
   };
   for (const enemy of enemies) enemy.update(dt, enemyCtx);
@@ -705,6 +813,15 @@ function gameLoop() {
   if (state.activeBoss && (!state.activeBoss.awake || state.activeBoss.dead)) state.activeBoss = null;
 
   sites.update(dt, elapsed);
+  const picked = npcs.update(dt, elapsed, player.position);
+  if (picked) {
+    play('coin');
+    effects.burst(picked.picked.mesh.position.clone(), picked.picked.questId.includes('sterren') ? 0xffd76a : 0x4dff8f, { count: 18, speed: 4, size: 0.09, life: 0.6, up: 2 });
+    if (picked.finished) questReady(picked.finished);
+    else ui.toast(`${picked.quest.goal.label[0].toUpperCase() + picked.quest.goal.label.slice(1)}: <b>${picked.count} / ${picked.quest.goal.count}</b>`, 2);
+  }
+  ui.setQuests(npcs.tracker());
+  ui.markers = npcs.mapMarkers();
   pickups.update(dt, elapsed, player, {
     onCoin: () => play('coin'),
     onHeart: (fraction) => {
@@ -720,7 +837,8 @@ function gameLoop() {
       stats.save();
       play('pickup');
       effects.burst(d.position.clone().setY(d.position.y + 1), 0x5aa8ff, { count: 24, speed: 5, size: 0.12, life: 0.8, up: 3 });
-      ui.toast(`💎 <b>Diamant gevonden!</b> +${value} munten<br><small>${stats.data.diamonds.length} / ${DIAMONDS.length} diamanten</small>`, 4);
+      const here = DIAMONDS.filter((x) => stats.data.diamonds.includes(x.id)).length;
+      ui.toast(`💎 <b>Diamant gevonden!</b> +${value} munten<br><small>${here} / ${DIAMONDS.length} diamanten in dit level</small>`, 4);
     },
   });
   const walking = player.moving && player.onGround && player.rollTimer <= 0 && !ui.menuOpen && player.alive && !paused;
@@ -735,6 +853,7 @@ function gameLoop() {
     moving: player.moving && !paused,
     lockTarget: state.lockTarget?.center ?? null,
     colliders: world.colliders,
+    maxDistance: world.insideHouse(player.position) ? 2.8 : null,
   });
   effects.applyShake(camera, realDt);
 
@@ -746,7 +865,6 @@ function gameLoop() {
   }
 
   ui.update(realDt, player, state.activeBoss, elapsed);
-  ui.checkRegion(player.position, REGION_NAMES);
 
   // Af en toe automatisch opslaan
   state.saveTimer += realDt;
@@ -755,7 +873,7 @@ function gameLoop() {
     stats.save();
   }
 
-  renderer.render(scene, camera);
+  composer.render();
   input.endFrame();
 }
 
@@ -766,9 +884,9 @@ if (stats.level === 1 && stats.runes === 0 && stats.data.bosses.length === 0) {
   document.addEventListener('pointerlockchange', function intro() {
     if (!cameraRig.locked) return;
     document.removeEventListener('pointerlockchange', intro);
-    setTimeout(() => ui.toast('Versla vijanden voor <b>munten</b>.<br>Rust bij de gouden <b>Plek van Genade</b> (E) om sterker te worden.', 7), 800);
+    setTimeout(() => ui.toast('Volg het pad naar het noorden en versla de boss.<br>Praat met mensen (<b>E</b>) voor zij-quests, en rust bij de gouden <b>Plek van Genade</b> om sterker te worden.', 8), 5000);
   });
 }
 
 // Handig voor debuggen in de browser-console (F12): typ bijvoorbeeld `game.player.position`
-window.game = { scene, player, enemies, bosses, sites, stats, ui, world, state, camera, cameraRig, renderer, effects, trail, loop: gameLoop };
+window.game = { scene, player, enemies, bosses, sites, npcs, stats, ui, world, state, camera, cameraRig, renderer, composer, effects, trail, onDefeated, loop: gameLoop };

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { LEVEL_INDEX } from './levels.js';
 import { createWeaponMesh } from './weapons.js';
 import { createHelmetMesh } from './gear.js';
 
@@ -201,7 +202,8 @@ export class Sites {
     this.graces = defs.graces.map((g) => new Grace(scene, g));
     this.chests = defs.chests.map((c) => new Chest(scene, c, stats.data.chests.includes(c.id)));
     this.lostRunes = new LostRunes(scene);
-    this.lostRunes.show(stats.data.lostRunes);
+    // Verloren munten liggen alleen in het level waar je ze liet vallen
+    this.lostRunes.show(stats.data.lostRunes?.level === LEVEL_INDEX ? stats.data.lostRunes : null);
   }
 
   grace(id) {

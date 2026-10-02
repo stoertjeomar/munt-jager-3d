@@ -24,6 +24,9 @@ export function createMixamoRig(model) {
     head: bone('Head'),
   };
   if (Object.values(bones).some((b) => !b)) return null;
+  // Knieën en ellebogen (als het skelet ze heeft): dan kan het personage echt door de knieën
+  const extra = { kneeL: bone('LeftLeg'), kneeR: bone('RightLeg'), elbowL: bone('LeftForeArm'), elbowR: bone('RightForeArm') };
+  for (const [key, b] of Object.entries(extra)) if (b) bones[key] = b;
 
   model.updateMatrixWorld(true);
   // Het model draait mee met de speler, dus dit rekenen we elke frame opnieuw uit
@@ -41,9 +44,15 @@ export function createMixamoRig(model) {
     legR: Q(),
     spine: Q(),
   };
+  down.elbowL = down.armL;
+  down.elbowR = down.armR;
+  down.kneeL = down.kneeR = Q();
+  const parentOf = { kneeL: 'legL', kneeR: 'legR', elbowL: 'armL', elbowR: 'armR' };
 
   // "Proxy"-objecten: daar schrijft de animator zijn draaiingen in
-  const proxy = { hips: new THREE.Object3D(), armL: new THREE.Object3D(), armR: new THREE.Object3D(), legL: new THREE.Object3D(), legR: new THREE.Object3D(), handR: new THREE.Object3D() };
+  const proxy = {};
+  for (const key of ['hips', 'armL', 'armR', 'legL', 'legR', 'handR', 'kneeL', 'kneeR', 'elbowL', 'elbowR']) proxy[key] = new THREE.Object3D();
+  let baseY = null; // hoogte van het model in rust (om het lijf te laten veren en door de knieën te gaan)
 
   // Het wapen hangt aan een eigen punt in de hand, met dezelfde assen als bij de ridder
   const handFrame = new THREE.Group();
@@ -76,14 +85,21 @@ export function createMixamoRig(model) {
     apply() {
       model.updateMatrixWorld(true);
       modelQInv = model.getWorldQuaternion(Q()).invert();
-      // Volgorde: eerst de rug (de armen hangen eraan), dan armen en benen
-      for (const key of ['spine', 'legL', 'legR', 'armL', 'armR']) {
+      // Op en neer veren: het hele model iets omhoog of omlaag
+      baseY ??= model.position.y;
+      model.position.y = baseY + proxy.hips.position.y / this.unit;
+      // Volgorde: eerst de rug (de armen hangen eraan), dan armen en benen, dan ellebogen en knieën
+      for (const key of ['spine', 'legL', 'legR', 'armL', 'armR', 'kneeL', 'kneeR', 'elbowL', 'elbowR']) {
+        if (!bones[key]) continue;
         const p = key === 'spine' ? proxy.hips : proxy[key];
         tmpQ.setFromEuler(tmpE.copy(p.rotation));
+        // Een onderbeen/onderarm draait mee met het bovenbeen/de bovenarm, plus zijn eigen buiging
+        if (parentOf[key]) tmpQ.premultiply(Q().setFromEuler(tmpE.copy(proxy[parentOf[key]].rotation)));
         setCharRotation(bones[key], tmpQ.clone().multiply(down[key]).multiply(rest[key]));
       }
-      // Hand-frame: draait mee met de arm (zoals bij de ridder) plus de pols
+      // Hand-frame: draait mee met de arm (zoals bij de ridder) plus elleboog en pols
       const armQ = Q().setFromEuler(tmpE.copy(proxy.armR.rotation));
+      if (bones.elbowR) armQ.multiply(Q().setFromEuler(tmpE.set(proxy.elbowR.rotation.x, 0, 0)));
       const wristQ = Q().setFromEuler(tmpE.set(proxy.handR.rotation.x, 0, 0));
       const want = armQ.multiply(wristQ);
       handFrame.quaternion.copy(charQ(bones.hand).invert().multiply(want));

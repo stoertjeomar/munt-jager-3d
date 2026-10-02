@@ -7,19 +7,21 @@ import * as THREE from 'three';
 // Alle armen en benen hangen in rust recht naar beneden (-Y), de voorkant is +Z.
 // Hoeken zijn in radialen: 1.57 is een kwart slag.
 
-// Houding van de rechterarm (met het wapen) in rust: een beetje naar voren,
-// en de pols iets naar achteren gekanteld zodat het wapen schuin omhoog wijst
-const READY_ARM = { x: -0.35, z: 0, wrist: -0.55 };
+// Houding van de rechterarm (met het wapen) in rust: een beetje naar voren, elleboog licht gebogen,
+// en de pols zo gekanteld dat het wapen schuin omhoog wijst
+const READY_ARM = { x: -0.35, z: 0, elbow: -0.45, wrist: -0.1 };
 
-// De slag: [moment (0 → 1), arm.x, arm.z, pols, bovenlijf draaien, bovenlijf voorover]
+// De slag: [moment (0 → 1), arm.x, arm.z, pols, bovenlijf draaien, bovenlijf voorover, elleboog, uitvalspas]
 // Een horizontale slag van rechts naar links: eerst de arm (met het wapen) opzij naar rechts
-// uithalen, dan in een grote boog vóór je langs naar links zwaaien.
+// uithalen met gebogen elleboog, dan met een stap naar voren in een grote boog vóór je langs naar links zwaaien,
+// en even uitzwaaien voordat je weer klaar staat.
 // (arm.x = -1.4 betekent: arm bijna horizontaal; arm.z bepaalt dan de richting: - is rechts, + is links)
 const ATTACK_KEYS = [
-  [0.0, READY_ARM.x, READY_ARM.z, READY_ARM.wrist, 0, 0],
-  [0.3, -1.35, -1.55, 1.15, -0.55, 0], // uithalen naar rechts
-  [0.68, -1.35, 1.15, 1.3, 0.55, 0.1], // zwaai naar links: raak!
-  [1.0, READY_ARM.x, READY_ARM.z, READY_ARM.wrist, 0, 0], // terug
+  [0.0, READY_ARM.x, READY_ARM.z, READY_ARM.wrist, 0, 0, READY_ARM.elbow, 0],
+  [0.3, -1.35, -1.55, 1.15, -0.6, -0.05, -0.75, 0.25], // uithalen naar rechts, gewicht naar achteren
+  [0.62, -1.35, 1.0, 1.3, 0.5, 0.14, -0.05, 1], // zwaai naar links met gestrekte arm: raak!
+  [0.82, -1.15, 1.3, 1.2, 0.62, 0.12, -0.35, 0.9], // uitzwaaien
+  [1.0, READY_ARM.x, READY_ARM.z, READY_ARM.wrist, 0, 0, READY_ARM.elbow, 0], // terug
 ];
 
 /** Zoek de waarden tussen twee sleutelmomenten (soepel overvloeien). */
@@ -39,8 +41,11 @@ function sampleKeys(keys, t) {
 export class CharacterAnimator {
   constructor(rig) {
     this.rig = rig;
+    // Knieën en ellebogen zijn er niet bij elk poppetje: dan draaien we "lucht"
+    for (const key of ['kneeL', 'kneeR', 'elbowL', 'elbowR']) rig[key] ??= new THREE.Object3D();
     this.walkPhase = 0;
     this.walkAmount = 0; // 0 = stilstaan, 1 = volop lopen (vloeit soepel over)
+    this.runAmount = 0; // 0 = lopen, 1 = rennen
     this.airAmount = 0; // 0 = op de grond, 1 = in de lucht
     this.time = 0;
     this.baseHipsY = rig.hips.position.y;
@@ -48,72 +53,99 @@ export class CharacterAnimator {
 
   /**
    * @param {number} dt
-   * @param {object} s  { moving, onGround, attack (0..1 of null), pickup (0..1 of null) }
+   * @param {object} s  { moving, run, onGround, attack (0..1 of null), pickup (0..1 of null), ... }
    */
   update(dt, s) {
-    const { hips, armL, armR, legL, legR, handR } = this.rig;
+    const { hips, armL, armR, legL, legR, handR, kneeL, kneeR, elbowL, elbowR } = this.rig;
     this.time += dt;
     const blend = (current, target, speed) => current + (target - current) * Math.min(1, speed * dt);
     this.walkAmount = blend(this.walkAmount, s.moving && s.onGround ? 1 : 0, 10);
+    this.runAmount = blend(this.runAmount, s.run && s.moving ? 1 : 0, 6);
     this.airAmount = blend(this.airAmount, s.onGround ? 0 : 1, 12);
-    if (s.moving) this.walkPhase += dt * 10;
+    const run = this.runAmount;
+    if (s.moving) this.walkPhase += dt * (9.5 + 4 * run); // rennen = snellere passen
 
     const w = this.walkAmount;
     const air = this.airAmount;
     const swing = Math.sin(this.walkPhase);
+    const swingV = Math.cos(this.walkPhase); // < 0: linkerbeen gaat naar voren
+    const stride = 0.55 + 0.35 * run; // grotere passen tijdens rennen
+    const unit = this.rig.unit;
 
-    // ---------- Benen ----------
-    legL.rotation.x = swing * 0.55 * w + (-0.6 * air);
-    legR.rotation.x = -swing * 0.55 * w + 0.35 * air;
+    // ---------- Benen: heup zwaait, knie buigt als het been naar voren komt ----------
+    legL.rotation.x = swing * stride * w + -0.6 * air;
+    legR.rotation.x = -swing * stride * w + 0.35 * air;
+    const kneeBend = 0.5 + 0.7 * run;
+    kneeL.rotation.x = (0.08 + kneeBend * Math.max(0, -swingV)) * w + 1.0 * air;
+    kneeR.rotation.x = (0.08 + kneeBend * Math.max(0, swingV)) * w + 0.5 * air;
 
-    // ---------- Bovenlijf: wiegen tijdens lopen, ademen tijdens stilstaan ----------
+    // ---------- Bovenlijf: wiegen en veren tijdens lopen, ademen tijdens stilstaan ----------
     const breathe = Math.sin(this.time * 2.2) * 0.012 * (1 - w);
-    hips.position.y = this.baseHipsY + Math.abs(Math.cos(this.walkPhase)) * 0.04 * w * this.rig.unit + breathe * this.rig.unit;
-    hips.rotation.y = swing * 0.1 * w;
-    hips.rotation.x = 0.06 * w; // een beetje voorover tijdens lopen
-    hips.rotation.z = 0;
+    hips.position.y = this.baseHipsY + (Math.abs(swingV) * (0.035 + 0.05 * run) - 0.03 * run) * w * unit + breathe * unit;
+    hips.rotation.y = swing * (0.1 + 0.08 * run) * w;
+    hips.rotation.x = (0.06 + 0.2 * run) * w; // voorover leunen, vooral tijdens rennen
+    hips.rotation.z = swing * 0.03 * w;
 
-    // ---------- Linkerarm: zwaait tegengesteld aan het linkerbeen ----------
-    armL.rotation.x = -swing * 0.6 * w - 0.5 * air + Math.sin(this.time * 2.2) * 0.03;
+    // ---------- Linkerarm: zwaait tegengesteld aan het linkerbeen, pompt tijdens rennen ----------
+    armL.rotation.x = -swing * (0.55 + 0.35 * run) * w - 0.5 * air + Math.sin(this.time * 2.2) * 0.03;
     armL.rotation.z = 0.08 + 0.7 * air; // armen uit elkaar tijdens een sprong
+    elbowL.rotation.x = -(0.2 + 0.25 * w + 1.0 * run * w) - 0.3 * air;
 
     // ---------- Rechterarm: houdt het wapen klaar ----------
-    armR.rotation.x = READY_ARM.x + swing * 0.15 * w - 0.4 * air;
+    armR.rotation.x = READY_ARM.x + swing * (0.15 + 0.25 * run) * w - 0.4 * air - 0.2 * run;
     armR.rotation.z = READY_ARM.z - 0.4 * air;
-    handR.rotation.x = READY_ARM.wrist;
+    elbowR.rotation.x = READY_ARM.elbow - 0.35 * run * w;
+    handR.rotation.x = READY_ARM.wrist - 0.5 * run * w; // tijdens rennen wijst het wapen naar achteren
     if (s.ranged) {
       // Geweer of boog in rust: loop schuin naar voren en omlaag
       armR.rotation.x = -0.25 + swing * 0.1 * w - 0.4 * air;
-      handR.rotation.x = 1.25;
+      elbowR.rotation.x = -0.25;
+      handR.rotation.x = 1.25 + 0.25;
     }
 
     // ---------- Slaan ----------
     if (s.attack !== null) {
-      const [, ax, az, wrist, twist, lean] = sampleKeys(ATTACK_KEYS, s.attack);
+      const [, ax, az, wrist, twist, lean, elbow, lunge] = sampleKeys(ATTACK_KEYS, s.attack);
       armR.rotation.x = ax;
       armR.rotation.z = az;
+      elbowR.rotation.x = elbow;
       handR.rotation.x = wrist;
       hips.rotation.y += twist;
       hips.rotation.x += lean;
-      armL.rotation.x = THREE.MathUtils.lerp(armL.rotation.x, -0.5, 0.6); // andere arm naar voren voor balans
+      // Andere arm: eerst naar voren (mikken), dan naar achteren voor balans
+      armL.rotation.x = THREE.MathUtils.lerp(armL.rotation.x, -0.6 + 0.9 * lunge, 0.7);
+      armL.rotation.z = THREE.MathUtils.lerp(armL.rotation.z, 0.35 * lunge, 0.7);
+      elbowL.rotation.x = -0.6;
+      // Uitvalspas: linkervoet naar voren, rechts naar achteren, door de knieën
+      const l = lunge * (1 - w * 0.5);
+      legL.rotation.x += -0.45 * l;
+      kneeL.rotation.x += 0.45 * l;
+      legR.rotation.x += 0.3 * l;
+      kneeR.rotation.x += 0.2 * l;
+      hips.position.y -= 0.06 * l * unit;
     }
 
-    // ---------- Oppakken: bukken en met de rechterhand naar de grond reiken ----------
+    // ---------- Oppakken: door de knieën en met de rechterhand naar de grond reiken ----------
     if (s.pickup !== null) {
       const reach = Math.sin(s.pickup * Math.PI); // 0 → 1 → 0
-      hips.rotation.x += 0.75 * reach;
+      hips.rotation.x += 0.6 * reach;
+      hips.position.y -= 0.3 * reach * unit;
       armR.rotation.x = THREE.MathUtils.lerp(armR.rotation.x, -0.9, reach);
       armR.rotation.z = THREE.MathUtils.lerp(armR.rotation.z, 0.15, reach);
+      elbowR.rotation.x = THREE.MathUtils.lerp(elbowR.rotation.x, -0.1, reach);
       handR.rotation.x = THREE.MathUtils.lerp(handR.rotation.x, 0.3, reach);
-      legL.rotation.x += -0.35 * reach; // door de knieën (ongeveer)
-      legR.rotation.x += 0.25 * reach;
+      legL.rotation.x += -0.8 * reach;
+      kneeL.rotation.x += 1.2 * reach;
+      legR.rotation.x += -0.3 * reach;
+      kneeR.rotation.x += 0.9 * reach;
     }
 
     // ---------- Flesje drinken: linkerhand naar de mond ----------
     if (s.drink) {
       const lift = Math.sin(Math.min(1, s.drink * 1.4) * Math.PI);
-      armL.rotation.x = THREE.MathUtils.lerp(armL.rotation.x, -2.4, lift);
-      armL.rotation.z = THREE.MathUtils.lerp(armL.rotation.z, -0.5, lift);
+      armL.rotation.x = THREE.MathUtils.lerp(armL.rotation.x, -1.3, lift);
+      armL.rotation.z = THREE.MathUtils.lerp(armL.rotation.z, -0.35, lift);
+      elbowL.rotation.x = THREE.MathUtils.lerp(elbowL.rotation.x, -2.1, lift);
       hips.rotation.x -= 0.15 * lift; // hoofd een beetje naar achteren
     }
 
@@ -121,16 +153,21 @@ export class CharacterAnimator {
     if (s.spin) {
       armR.rotation.x = -1.45;
       armR.rotation.z = -1.4;
+      elbowR.rotation.x = 0;
       handR.rotation.x = 1.4;
       armL.rotation.z = 1.2;
+      kneeL.rotation.x = kneeR.rotation.x = 0.4;
     }
 
     // ---------- Rollen / dashen / grondslag: ineengedoken ----------
     if (s.tuck) {
       legL.rotation.x = -1.3;
       legR.rotation.x = -1.1;
+      kneeL.rotation.x = 1.9;
+      kneeR.rotation.x = 1.8;
       armL.rotation.x = -1;
       armR.rotation.x = -0.8;
+      elbowL.rotation.x = -1.2;
       hips.rotation.x = 0.5;
     }
 
@@ -139,11 +176,13 @@ export class CharacterAnimator {
       const pitch = s.aim.pitch;
       armR.rotation.x = -Math.PI / 2 - pitch;
       armR.rotation.z = 0.05;
+      elbowR.rotation.x = 0;
       handR.rotation.x = Math.PI / 2 - s.aim.recoil * 0.35; // terugslag: loop schiet even omhoog
       if (s.aim.twoHanded) {
         // tweede hand ondersteunt het geweer
         armL.rotation.x = -Math.PI / 2 - pitch + 0.15;
         armL.rotation.z = -0.55;
+        elbowL.rotation.x = -0.3;
       }
       hips.rotation.y -= 0.15;
     }
@@ -151,13 +190,25 @@ export class CharacterAnimator {
     // ---------- Rusten bij een Plek van Genade: op één knie ----------
     if (s.rest) {
       legL.rotation.x = -1.5;
-      legR.rotation.x = 0.9;
-      hips.position.y = this.baseHipsY - 0.35 * this.rig.unit;
-      hips.rotation.x = 0.25;
+      kneeL.rotation.x = 1.5;
+      legR.rotation.x = 0.2;
+      kneeR.rotation.x = 1.6;
+      hips.position.y = this.baseHipsY - 0.45 * unit;
+      hips.rotation.x = 0.2;
       armR.rotation.x = -0.4;
+      elbowR.rotation.x = 0;
       handR.rotation.x = 1.5; // zwaard met de punt in de grond
       armL.rotation.x = -0.6;
       armL.rotation.z = 0.2;
+      elbowL.rotation.x = -0.6;
+    }
+
+    // ---------- NPC's: zwaaien naar de speler ----------
+    if (s.wave) {
+      armR.rotation.x = -0.3;
+      armR.rotation.z = -2.6;
+      elbowR.rotation.x = -0.2;
+      armR.rotation.x += Math.sin(this.time * 9) * 0.25;
     }
   }
 }

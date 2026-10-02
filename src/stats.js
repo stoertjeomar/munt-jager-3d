@@ -1,7 +1,7 @@
 // Alles wat je verdient en bewaart: level, eigenschappen, munten, uitrusting, krachten.
 // Wordt opgeslagen in de browser (localStorage), zodat je later verder kunt spelen.
 
-const SAVE_KEY = 'munt-jager-3d-save-v2';
+import { SAVE_KEY } from './levels.js';
 
 // Eigenschappen die je met munten kunt verhogen bij een Plek van Genade
 export const ATTRIBUTES = {
@@ -46,17 +46,21 @@ function freshSave() {
     str: 5,
     end: 5,
     runes: 0, // munten
-    character: 'ridder',
+    character: 'eve', // alleen Eve en Soldaat zijn speelbaar
+    currentLevel: 0, // welk level speel je nu (0 = level 1)
+    unlockedLevel: 0, // tot en met dit level mag je kiezen
+    quests: {}, // zij-quests: { id: { state: 'actief' | 'klaar' | 'beloond', count } }
+    questItems: [], // opgepakte quest-voorwerpen (sterren, batterijen)
     weapon: 'shortsword',
     helmet: 'geen',
     inventory: [{ kind: 'weapon', key: 'shortsword' }, { kind: 'helmet', key: 'geen' }],
     flasksMax: 3,
-    discovered: ['weide'], // ontdekte Plekken van Genade
-    lastGrace: 'weide', // hier kom je terug als je doodgaat
+    discovered: [], // ontdekte Plekken van Genade
+    lastGrace: null, // hier kom je terug als je doodgaat (null = begin van het level)
     bosses: [], // verslagen bosses
     chests: [], // geopende kisten
     diamonds: [], // gevonden diamanten
-    lostRunes: null, // { x, y, z, amount } munten die je liet vallen toen je doodging
+    lostRunes: null, // { level, x, y, z, amount } munten die je liet vallen toen je doodging
     victory: false,
   };
 }

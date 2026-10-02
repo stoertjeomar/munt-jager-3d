@@ -1,8 +1,8 @@
 # Munt Jager 3D
 
-Een **open-wereld actie-RPG** in de browser, in de stijl van Elden Ring, gemaakt met **JavaScript** en **[Three.js](https://threejs.org/)**.
-Kies je held, versla vijanden voor munten, word sterker bij de Plekken van Genade, vind wapens en krachten,
-en versla de vier bosses.
+Een **actie-RPG met levels** in de browser, in de stijl van Elden Ring, gemaakt met **JavaScript** en **[Three.js](https://threejs.org/)**.
+Kies je held, volg het pad door 4 levels, versla vijanden voor munten, help de dorpelingen met zij-quests,
+word sterker bij de Plekken van Genade en versla aan het eind van elk level de boss.
 
 ![Screenshot van Munt Jager 3D](docs/screenshot.png)
 
@@ -39,7 +39,7 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 | Klik / F | Slaan of schieten (F in de lucht = grondslag) |
 | Q | Vastzetten op een vijand (lock-on) |
 | R | Flesje drinken (leven terug) |
-| E | Rusten bij een Plek van Genade / kist openen |
+| E | Praten met een NPC / rusten bij een Plek van Genade / kist openen |
 | C | Dash |
 | V | Wervelslag |
 | X | Vuurzwaard |
@@ -49,10 +49,19 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 
 ## Wat zit erin
 
-- **Kies je held**: Ridder, Eve, Soldaat, Mila, Robot of Strohoed — allemaal met dezelfde animaties
-  (lopen, slaan, rollen, drinken, richten), ook de Mixamo-personages met een echt skelet
-- **Open wereld** van 240 × 240 meter: Groene Weide, het dorp Muntdorp, het Spookwoud en het Rotshoogland,
-  met paden, ruïnes, bomen, dieren, wolken, een minimap en een **dag-en-nachtritme** met sterren
+- **4 levels**, elk een pad van het begin naar de boss-arena, met halverwege een checkpoint:
+  1. **Groene Weide** met het dorp Muntdorp → boss **Budget Mario**
+  2. **Ruïnevallei** met een parkour-ruïne → boss **Koning Slijm**
+  3. **Spookwoud** (donker en mistig) → boss **De Gevallen Ridder**
+  4. **Rotshoogland** (de finale) → boss **Steenreus Gorath**
+
+  Versla de boss → *LEVEL VOLTOOID* → door naar het volgende level. Op het startscherm kies je elk level dat je al hebt vrijgespeeld.
+- **Kies je held**: Eve of Soldaat (Mixamo-personages met een echt skelet: knieën, ellebogen, rennen, uitvalspas bij het slaan)
+- **NPC's met zij-quests**: Mila, Strohoed, Robot B-0P en Sir Roestbout wonen in de levels. Praat met ze (E) als er een **!** boven
+  hun hoofd staat, doe de quest (vijanden verslaan of sterren/batterijen zoeken) en haal je beloning op bij het **?**
+- **Huizen waar je in kunt**: loop door de deur naar binnen — met meubels, een haardvuur en het dak verdwijnt zodat je binnen kunt kijken
+- Lantaarns langs het pad, een bos rond elk level, minimap met het pad, **dag-en-nachtritme** met sterren en een zachte **gloed** (bloom)
+- Vijanden (ook spoken) lopen niet meer door muren, bomen of stenen heen
 - **Elden Ring-stijl**: munten verdienen, levelen bij Plekken van Genade (Vitaliteit, Kracht, Uithouding),
   rusten brengt vijanden terug, doodgaan = je munten blijven liggen waar je viel
 - **Gevechten**: leven en stamina, rollen met onkwetsbaarheid, lock-on, flesjes, zwaard-windje,
@@ -63,7 +72,7 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 - **Vijanden**: slijmpjes, slijmballen, spoken, rotsgolems, zombies, Spierbonken en Mecha-Wachters
 - **4 bosses** met een mistmuur, boss-balk en een tweede fase: Koning Slijm, De Gevallen Ridder,
   Steenreus Gorath en Budget Mario
-- 12 verstopte **diamanten**, hartjes, munten die naar je toe vliegen
+- 3 verstopte **diamanten** per level, hartjes, munten die naar je toe vliegen
 - Geluidseffecten en **opslaan** in de browser (verder spelen waar je was)
 
 ## Projectstructuur
@@ -79,7 +88,9 @@ munt-jager-3d/
 ├── images/           → portretten voor het startscherm
 └── src/
     ├── main.js       → start alles op, game loop, gevechten, rusten, doodgaan
-    ├── world.js      → de open wereld: grond, paden, dorp, ruïnes, arena's, dag en nacht
+    ├── levels.js     → de 4 levels: pad, vijanden, kisten, NPC's, huizen (pas hier je levels aan!)
+    ├── world.js      → bouwt het level: grond, pad, huizen, ruïnes, natuur, arena, dag en nacht
+    ├── npcs.js       → NPC's en hun zij-quests
     ├── decor.js      → planten, stenen, wolken, vlaggen en dieren
     ├── player.js     → speler: bewegen, rollen, krachten, flesjes, personages
     ├── animator.js   → laat het poppetje bewegen (lopen, slaan, richten, drinken...)
@@ -99,11 +110,12 @@ munt-jager-3d/
 
 ## Zelf aanpassen
 
-- **Vijanden** → `ENEMY_TYPES` en `SPAWNS` bovenaan `src/enemies.js`
+- **Levels** → `LEVELS` in `src/levels.js` (welke vijanden, kisten, NPC's, huizen en welke boss). Test een level met `?level=3` achter de link
+- **Quests** → `QUESTS` bovenaan `src/npcs.js`
+- **Vijanden** → `ENEMY_TYPES` bovenaan `src/enemies.js`
 - **Wapens** → `WEAPONS` in `src/weapons.js` · **Helmen** → `HELMETS` in `src/gear.js`
 - **Krachten en levelen** → `POWERS` en `levelCost` in `src/stats.js`
-- **Wereld** → `GRACES`, `ARENAS`, `CHESTS` en `HOUSES` bovenaan `src/world.js`
-- **Personages** → `CHARACTERS` bovenaan `src/player.js`
+- **Personages** → `CHARACTERS` en `PLAYABLE` bovenaan `src/player.js`
 - **Opnieuw beginnen** → uitrusting (I) → *Nieuw spel beginnen*
 
 ## Credits

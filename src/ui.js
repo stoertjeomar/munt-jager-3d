@@ -1,7 +1,8 @@
 import { ATTRIBUTES, POWERS, levelCost } from './stats.js';
 import { WEAPONS } from './weapons.js';
 import { HELMETS, itemInfo, itemColor } from './gear.js';
-import { WORLD_HALF, GRACES, ARENAS, regionAt } from './world.js';
+import { BOUNDS, GRACES, ARENAS } from './world.js';
+import { LEVEL, LEVELS, LEVEL_INDEX } from './levels.js';
 
 // Alles wat je op het scherm ziet (behalve de 3D-wereld): balken, munten, menu's, banners en de minimap.
 
@@ -22,7 +23,11 @@ export class UI {
       menu: $('menu'), menuTitle: $('menu-title'), menuBody: $('menu-body'),
       lockHint: $('lock-hint'),
       minimap: $('minimap'),
+      quests: $('quests'),
+      dialog: $('dialog'), dialogName: $('dialog-name'), dialogText: $('dialog-text'),
     };
+    this.questsHtml = '';
+    this.markers = [];
     this.hpLag = 1;
     this.bossLag = 1;
     this.menuOpen = null;
@@ -131,15 +136,55 @@ export class UI {
   }
 
   /** Laat de naam van het gebied zien als je een nieuw gebied binnenloopt. */
-  checkRegion(pos, names) {
-    const region = regionAt(pos.x, pos.z);
-    if (region !== this.currentRegion) {
-      if (this.currentRegion !== null) {
-        this.el.region.textContent = names[region];
-        this.regionTimer = 4;
-      }
-      this.currentRegion = region;
+  /** Laat de naam van een plek zien (bijv. de naam van het level aan het begin). */
+  showRegion(name) {
+    this.el.region.textContent = name;
+    this.regionTimer = 4;
+  }
+
+  // ---------- Quests en gesprekken ----------
+
+  /** Lijstje met je quests (rechts onder de minimap). */
+  setQuests(list) {
+    const html = list.map((q) => `<div class="quest ${q.done ? 'done' : ''}"><b>${q.done ? '✔' : '◆'} ${q.title}</b><small>${q.text}</small></div>`).join('');
+    if (html === this.questsHtml) return;
+    this.questsHtml = html;
+    this.el.quests.innerHTML = html;
+  }
+
+  /** Een gesprek met een NPC: tekstwolkje onderin. E, Spatie of klikken = verder. */
+  openDialog(name, lines, onDone) {
+    this.menuOpen = 'dialog';
+    this.dialog = { lines, index: 0, onDone };
+    this.el.dialog.classList.remove('hidden');
+    this.el.dialogName.textContent = name;
+    this.el.dialogText.innerHTML = lines[0];
+  }
+
+  advanceDialog() {
+    const d = this.dialog;
+    if (!d) return;
+    d.index++;
+    if (d.index < d.lines.length) {
+      this.el.dialogText.innerHTML = d.lines[d.index];
+      return;
     }
+    this.dialog = null;
+    this.menuOpen = null;
+    this.el.dialog.classList.add('hidden');
+    d.onDone?.();
+  }
+
+  /** Scherm aan het eind van een level. buttons = [[tekst, functie], ...] */
+  openLevelComplete(title, html, buttons) {
+    this.menuOpen = 'level';
+    this.el.menu.classList.remove('hidden');
+    this.el.menuTitle.textContent = title;
+    this.el.menuBody.innerHTML = `<div class="level-done">${html}</div>` + buttons.map(([text], i) => `<button data-i="${i}">${text}</button>`).join('');
+    this.el.menuBody.onclick = (e) => {
+      const b = e.target.closest('button');
+      if (b) buttons[Number(b.dataset.i)][1]();
+    };
   }
 
   // ---------- Menu's ----------
@@ -235,7 +280,7 @@ export class UI {
         <span style="color:${itemColor(item)}">${item.kind === 'weapon' ? '⚔' : '⛑'} ${info.name}</span>
         <small>${stat} · ${info.info}</small>${equipped ? '<em>uitgerust</em>' : ''}</button>`;
     };
-    const diamonds = `<p class="menu-info">💎 Diamanten gevonden: <b>${(d.diamonds ?? []).length} / 12</b> · Kisten geopend: <b>${d.chests.length}</b></p>`;
+    const diamonds = `<p class="menu-info">💎 Diamanten gevonden: <b>${(d.diamonds ?? []).length} / ${LEVELS.reduce((n, l) => n + l.diamonds.length, 0)}</b> · Kisten geopend: <b>${d.chests.length}</b></p>`;
     return diamonds + `<h3>Wapens</h3>${d.inventory.filter((i) => i.kind === 'weapon').map(row).join('')}
       <h3>Helmen</h3>${d.inventory.filter((i) => i.kind === 'helmet').map(row).join('')}`;
   }
@@ -266,25 +311,39 @@ export class UI {
     ctx.beginPath();
     ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
     ctx.clip();
-    // Gebieden als gekleurde vlakjes
-    const step = 6;
-    const colors = { weide: '#4f8f4e', woud: '#2c4f2c', hoogland: '#7c776a' };
-    for (let x = px - view / 2 - step; x < px + view / 2 + step; x += step) {
-      for (let z = pz - view / 2 - step; z < pz + view / 2 + step; z += step) {
-        const gx = Math.floor(x / step) * step;
-        const gz = Math.floor(z / step) * step;
-        ctx.fillStyle = Math.abs(gx) > WORLD_HALF - 6 || Math.abs(gz) > WORLD_HALF - 6 ? '#555' : colors[regionAt(gx, gz)];
-        const [mx, my] = toMap(gx, gz);
-        ctx.fillRect(mx, my, step * scale + 1, step * scale + 1);
-      }
-    }
-    // Arena's (doodshoofd) en graces (gouden punt)
     ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    // Grond, het pad en de rand van het level
+    const colors = { weide: '#4f8f4e', woud: '#2c4f2c', hoogland: '#7c776a' };
+    ctx.fillStyle = '#2b3326';
+    ctx.fillRect(0, 0, size, size);
+    const [bx, by] = toMap(-BOUNDS.x, -BOUNDS.z);
+    ctx.fillStyle = colors[LEVEL.theme];
+    ctx.fillRect(bx, by, BOUNDS.x * 2 * scale, BOUNDS.z * 2 * scale);
+    ctx.strokeStyle = '#c8b58a';
+    ctx.lineWidth = 3.5 * scale;
+    ctx.lineJoin = ctx.lineCap = 'round';
+    ctx.beginPath();
+    LEVEL.path.forEach(([x, z], i) => (i ? ctx.lineTo(...toMap(x, z)) : ctx.moveTo(...toMap(x, z))));
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    // Huizen als bruine blokjes
+    ctx.fillStyle = '#8a5a3a';
+    for (const [hx, hz, w, d] of LEVEL.houses ?? []) {
+      const [mx, my] = toMap(hx - w / 2, hz - d / 2);
+      ctx.fillRect(mx, my, w * scale, d * scale);
+    }
+    // NPC's en quest-voorwerpen
+    for (const n of this.markers ?? []) {
+      const [mx, my] = toMap(n.x, n.z);
+      ctx.fillStyle = n.color;
+      ctx.fillText(n.icon, mx, my);
+    }
+    // Arena's (doodshoofd) en graces (gouden punt)
     for (const a of ARENAS) {
       const [mx, my] = toMap(a.center.x, a.center.z);
-      ctx.fillStyle = this.stats.data.bosses.includes(a.id) ? 'rgba(255,255,255,0.4)' : '#ff5a5a';
+      ctx.fillStyle = '#ff5a5a';
       ctx.fillText('☠', mx, my);
     }
     for (const g of GRACES) {
@@ -296,7 +355,7 @@ export class UI {
       ctx.fill();
     }
     const lost = this.stats.data.lostRunes;
-    if (lost) {
+    if (lost && lost.level === LEVEL_INDEX) {
       const [mx, my] = toMap(lost.x, lost.z);
       ctx.fillStyle = '#8dffb0';
       ctx.beginPath();
