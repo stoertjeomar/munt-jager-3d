@@ -254,7 +254,7 @@ function showLevelComplete(rewards, leveledUp = false) {
   if (next) buttons.push([`▶ Naar ${next.name}`, () => goToLevel(LEVEL_INDEX + 1)]);
   buttons.push(['Nog even rondlopen', () => {
     ui.closeMenu();
-    renderer.domElement.requestPointerLock();
+    cameraRig.lock();
   }]);
   ui.openLevelComplete(last ? 'DE WERELD IS GERED' : 'LEVEL VOLTOOID', html, buttons);
 }
@@ -421,7 +421,7 @@ function rest(grace) {
     leave: () => {
       player.resting = false;
       ui.closeMenu();
-      renderer.domElement.requestPointerLock();
+      cameraRig.lock();
     },
     travel: (id) => {
       stats.data.lastGrace = id;
@@ -430,7 +430,7 @@ function rest(grace) {
       ui.closeMenu();
       player.respawnAt(graceSpawn(id));
       cameraRig.snapTo(player.position);
-      renderer.domElement.requestPointerLock();
+      cameraRig.lock();
       ui.toast(`Gereisd naar <b>${sites.grace(id).name}</b>`);
     },
     equip,
@@ -464,7 +464,7 @@ function openChest(chest) {
 function toggleInventory() {
   if (ui.menuOpen === 'inventory') {
     ui.closeMenu();
-    renderer.domElement.requestPointerLock();
+    cameraRig.lock();
     return;
   }
   if (ui.menuOpen) return;
@@ -472,7 +472,7 @@ function toggleInventory() {
   ui.openInventory({
     close: () => {
       ui.closeMenu();
-      renderer.domElement.requestPointerLock();
+      cameraRig.lock();
     },
     equip,
     wipe: () => {
@@ -568,7 +568,7 @@ levelSelectEl.addEventListener('click', (e) => {
 startBtn.addEventListener('click', () => {
   unlockAudio();
   gameStarted = true;
-  renderer.domElement.requestPointerLock();
+  cameraRig.lock();
 });
 
 document.addEventListener('pointerlockchange', () => {
@@ -670,19 +670,25 @@ function handlePlayerEvents() {
 
 // ---------- Schieten ----------
 
-function shoot() {
-  const w = player.sword.weapon;
-  // Waar mik je op? Je vastgezette doel, of anders het midden van het scherm
-  let aimPoint;
-  if (state.lockTarget) aimPoint = state.lockTarget.center;
-  else {
-    const dir = new THREE.Vector3();
-    camera.getWorldDirection(dir);
-    aimPoint = camera.position.clone().addScaledVector(dir, 60);
-  }
+/** Waar mik je op? Je vastgezette doel, of anders het midden van het scherm (ook omhoog!). */
+function getAimPoint() {
+  if (state.lockTarget) return state.lockTarget.center.clone();
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  return camera.position.clone().addScaledVector(dir, 60);
+}
+
+/** Draai de speler (en zijn armen) naar het punt waar je op mikt. */
+function faceAim(aimPoint) {
   const flat = aimPoint.clone().sub(player.position).setY(0);
   player.mesh.rotation.y = Math.atan2(flat.x, flat.z);
-  player.aimPitch = THREE.MathUtils.clamp(Math.atan2(aimPoint.y - (player.position.y + 1.3), flat.length()), -0.8, 0.8);
+  player.aimPitch = THREE.MathUtils.clamp(Math.atan2(aimPoint.y - (player.position.y + 1.3), flat.length()), -0.8, 1.15);
+}
+
+function shoot() {
+  const w = player.sword.weapon;
+  const aimPoint = getAimPoint();
+  faceAim(aimPoint);
 
   const facing = player.facing;
   const right = new THREE.Vector3(-facing.z, 0, facing.x); // rechterhand-kant van het personage
@@ -798,6 +804,8 @@ function gameLoop() {
       jumpPressed: canAct && input.wasPressed('Space'),
       faceTarget,
     }, world.colliders, world.bounds);
+    // Richten met een pistool of geweer: je armen volgen de camera, ook als je omhoog kijkt
+    if (canAct && player.sword.ranged && (player.aiming || player.aimTimer > 0) && player.rollTimer <= 0 && player.dashTimer <= 0) faceAim(getAimPoint());
     if (player.jumped) play('jump');
     handlePlayerEvents();
     swordHits();
@@ -877,6 +885,7 @@ function gameLoop() {
     facing: player.mesh.rotation.y,
     moving: player.moving && !paused,
     lockTarget: state.lockTarget?.center ?? null,
+    aiming: !!player.sword.ranged && !paused,
     colliders: world.colliders,
     maxDistance: world.insideHouse(player.position) ? 2.8 : null,
   });
