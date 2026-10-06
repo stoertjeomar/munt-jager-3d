@@ -11,23 +11,76 @@
   <script type="importmap">
     {
       "imports": {
-        "three": "./lib/three.module.js"
+        "three": "./lib/three.module.js",
+        "three/addons/": "./lib/addons/"
       }
     }
   </script>
 </head>
 <body>
-  <div id="hud">
-    <div id="score">Munten: 0 / 0</div>
-    <div id="timer">Tijd: 0.0s</div>
+  <!-- Levens, stamina en level (linksboven) -->
+  <div id="bars">
+    <div id="level">Level 1</div>
+    <div id="hp-bar" class="bar"><div id="hp-lag" class="lag"></div><div id="hp-fill" class="fill"></div><span id="hp-text"></span></div>
+    <div id="st-bar" class="bar thin"><div id="st-fill" class="fill"></div></div>
   </div>
 
-  <div id="help">
-    <b>WASD / pijltjes</b> lopen &nbsp;·&nbsp; <b>Spatie</b> springen &nbsp;·&nbsp;
-    <b>Muis slepen</b> camera draaien &nbsp;·&nbsp; <b>Scrollen</b> zoomen &nbsp;·&nbsp; <b>R</b> opnieuw
+  <!-- Minimap (rechtsboven) -->
+  <canvas id="minimap" width="170" height="170"></canvas>
+
+  <!-- Uitrusting en krachten (linksonder) -->
+  <div id="equip">
+    <div id="flasks"></div>
+    <div id="equip-weapon"></div>
+    <div id="equip-helmet"></div>
+    <div id="powers"></div>
   </div>
 
-  <div id="message" class="hidden"></div>
+  <!-- Munten (rechtsonder) -->
+  <div id="runes-box"><span id="runes-gain"></span><span class="coin">●</span><span id="runes">0</span></div>
+
+  <!-- Boss-balk (onderaan) -->
+  <div id="boss" class="hidden">
+    <div id="boss-name"></div>
+    <div class="bar boss-bar"><div id="boss-lag" class="lag"></div><div id="boss-fill" class="fill"></div></div>
+  </div>
+
+  <!-- Quests (onder de minimap) -->
+  <div id="quests"></div>
+
+  <!-- Gesprek met een NPC -->
+  <div id="dialog" class="hidden">
+    <div id="dialog-name"></div>
+    <div id="dialog-text"></div>
+    <div id="dialog-hint"><b>E</b> verder</div>
+  </div>
+
+  <div id="crosshair" class="hidden"></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="toast" class="hidden"></div>
+  <div id="region"></div>
+  <div id="banner" class="hidden"><div id="banner-text"></div><div id="banner-sub"></div></div>
+
+  <div id="menu" class="hidden">
+    <div id="menu-panel">
+      <h2 id="menu-title"></h2>
+      <div id="menu-body"></div>
+    </div>
+  </div>
+
+  <div id="lock-hint">
+    <h1>MUNT JAGER</h1>
+    <p id="pick-title">Kies je held</p>
+    <div id="char-select"></div>
+    <p id="level-title">Kies een level</p>
+    <div id="level-select"></div>
+    <button id="start-btn">Spelen</button>
+    <div class="controls">
+      <b>WASD</b> lopen · <b>Shift</b> tik = rollen, houd = sprinten · <b>Spatie</b> springen<br />
+      <b>Klik / F</b> slaan · <b>Q</b> vastzetten op vijand · <b>R</b> flesje drinken · <b>E</b> praten / rusten / openen<br />
+      <b>C</b> dash · <b>V</b> wervelslag · <b>X</b> vuurzwaard · <b>I</b> uitrusting · <b>M</b> geluid · <b>Esc</b> muis vrij
+    </div>
+  </div>
 
   <script type="module" src="src/main.js"></script>
 </body>
