@@ -123,12 +123,6 @@ export class CharacterAnimator {
     armR.rotation.z = READY_ARM.z - 0.4 * air;
     elbowR.rotation.x = READY_ARM.elbow - 0.35 * run * w;
     handR.rotation.x = READY_ARM.wrist - 0.5 * run * w; // tijdens rennen wijst het wapen naar achteren
-    if (s.ranged) {
-      // Geweer of boog in rust: loop schuin naar voren en omlaag
-      armR.rotation.x = -0.25 + swing * 0.1 * w - 0.4 * air;
-      elbowR.rotation.x = -0.25;
-      handR.rotation.x = 1.25 + 0.25;
-    }
 
     // ---------- Slaan ----------
     if (s.attack !== null) {
@@ -196,38 +190,6 @@ export class CharacterAnimator {
       armR.rotation.x = -0.8;
       elbowL.rotation.x = -1.2;
       hips.rotation.x = 0.5;
-    }
-
-    // ---------- Richten met een afstandswapen ----------
-    if (s.aim && !s.tuck && !s.rest) {
-      const pitch = s.aim.pitch;
-      armR.rotation.x = -Math.PI / 2 - pitch;
-      armR.rotation.z = 0.05;
-      elbowR.rotation.x = 0;
-      handR.rotation.x = Math.PI / 2 - s.aim.recoil * 0.35; // terugslag: loop schiet even omhoog
-      if (s.aim.twoHanded) {
-        // tweede hand ondersteunt het geweer
-        armL.rotation.x = -Math.PI / 2 - pitch + 0.15;
-        armL.rotation.z = -0.55;
-        elbowL.rotation.x = -0.3;
-      }
-      hips.rotation.y -= 0.15;
-    }
-
-    // ---------- Rusten bij een Plek van Genade: op één knie ----------
-    if (s.rest) {
-      legL.rotation.x = -1.5;
-      kneeL.rotation.x = 1.5;
-      legR.rotation.x = 0.2;
-      kneeR.rotation.x = 1.6;
-      hips.position.y = this.baseHipsY - 0.45 * unit;
-      hips.rotation.x = 0.2;
-      armR.rotation.x = -0.4;
-      elbowR.rotation.x = 0;
-      handR.rotation.x = 1.5; // zwaard met de punt in de grond
-      armL.rotation.x = -0.6;
-      armL.rotation.z = 0.2;
-      elbowL.rotation.x = -0.6;
     }
 
     // ---------- NPC's: zwaaien naar de speler ----------

@@ -135,7 +135,7 @@ export class Player {
 
   /** Bezig met iets waardoor je niet kunt slaan of rollen? */
   get isBusy() {
-    return this.pickupTimer > 0 || this.rollTimer > 0 || this.dashTimer > 0 || this.drinkTimer > 0 || this.spinTimer > 0 || this.slamming || this.resting;
+    return this.pickupTimer > 0 || this.rollTimer > 0 || this.dashTimer > 0 || this.drinkTimer > 0 || this.spinTimer > 0 || this.slamming;
   }
 
   /** Kan nu geen schade krijgen? (rollen, dashen, net geraakt) */
@@ -145,7 +145,7 @@ export class Player {
     return rolling || this.dashTimer > 0 || this.invulnerable > 0;
   }
 
-  /** Volledig herstellen en neerzetten op een plek (bijv. bij een Plek van Genade). */
+  /** Volledig herstellen en neerzetten op een plek (bijv. bij een checkpoint). */
   respawnAt(position) {
     this.spawnPoint.copy(position);
     this.reset();
@@ -159,12 +159,9 @@ export class Player {
     this.invulnerable = 0;
     this.pickupTimer = this.rollTimer = this.dashTimer = this.drinkTimer = this.spinTimer = 0;
     this.dashCooldown = this.spinCooldown = this.fireCooldown = this.fireTimer = 0;
-    this.shootCooldown = this.aimTimer = this.recoil = 0;
-    this.aimPitch = 0;
     this.slamming = false;
     this.airJumps = 0;
     this.airDashes = 0;
-    this.resting = false;
     this.onGrab = null;
     this.events = []; // bijv. 'roll', 'dash', 'spinHit', 'slamLand', 'heal' — main.js reageert daarop
     this.mesh.visible = true;
@@ -283,17 +280,8 @@ export class Player {
     return true;
   }
 
-  /** Slaan met je wapen (of schieten met een afstandswapen). */
+  /** Slaan met je wapen. */
   tryAttack() {
-    if (this.sword.ranged) {
-      if (this.isBusy || this.shootCooldown > 0) return false;
-      if (!this.useStamina(this.sword.stamina)) return false;
-      this.shootCooldown = this.sword.weapon.fireRate;
-      this.aimTimer = 0.6; // nog even in richthouding blijven
-      this.recoil = 1;
-      this.events.push('shoot');
-      return true;
-    }
     if (this.isBusy || this.sword.attackProgress !== null) return false;
     if (!this.useStamina(this.sword.stamina)) return false;
     return this.sword.swing();
@@ -310,7 +298,7 @@ export class Player {
   }
 
   tryDash(direction) {
-    if (!this.stats.hasPower('dash') || this.dashCooldown > 0 || this.pickupTimer > 0 || this.drinkTimer > 0 || this.resting) return false;
+    if (!this.stats.hasPower('dash') || this.dashCooldown > 0 || this.pickupTimer > 0 || this.drinkTimer > 0) return false;
     if (!this.onGround && this.airDashes > 0) return false;
     if (!this.useStamina(POWERS.dash.stamina)) return false;
     this.dashTimer = DASH.time;
@@ -406,8 +394,7 @@ export class Player {
     if (hasMove) move.normalize();
 
     // Timers
-    for (const key of ['invulnerable', 'dashCooldown', 'spinCooldown', 'fireCooldown', 'fireTimer', 'shootCooldown', 'aimTimer']) this[key] = Math.max(0, this[key] - dt);
-    this.recoil = Math.max(0, this.recoil - dt * 6);
+    for (const key of ['invulnerable', 'dashCooldown', 'spinCooldown', 'fireCooldown', 'fireTimer']) this[key] = Math.max(0, this[key] - dt);
     this.sword.update(dt);
 
     // Stamina komt vanzelf terug (niet tijdens sprinten of acties)
@@ -427,7 +414,6 @@ export class Player {
     let speed = SPEED * this.stats.speedMultiplier * (sprinting ? SPRINT : 1);
     if (this.sword.attackProgress !== null) speed *= 0.35; // langzamer tijdens een slag
     if (this.drinkTimer > 0 || this.pickupTimer > 0) speed *= 0.3;
-    if (this.resting) speed = 0;
     let horizontal = move.clone().multiplyScalar(speed);
 
     if (this.rollTimer > 0) {
@@ -440,7 +426,7 @@ export class Player {
       this.dashTimer -= dt;
       horizontal = this.dashDir.clone().multiplyScalar(DASH.speed);
       this.velocity.y = 0; // dash gaat recht vooruit, ook in de lucht
-    } else if (hasMove && !this.resting && this.spinTimer <= 0) {
+    } else if (hasMove && this.spinTimer <= 0) {
       // Draai de speler soepel in de looprichting (niet als je naar een vijand gelockt bent en slaat)
       const look = controls.faceTarget && this.sword.attackProgress !== null ? controls.faceTarget : move;
       const targetAngle = Math.atan2(look.x, look.z);
@@ -520,7 +506,7 @@ export class Player {
     }
 
     // ---------- Animatie ----------
-    this.moving = hasMove && !this.resting;
+    this.moving = hasMove;
     this.sprinting = sprinting;
     this.updateAnimation(dt);
   }
@@ -551,10 +537,7 @@ export class Player {
         pickup,
         drink,
         spin: this.spinTimer > 0,
-        rest: this.resting,
         tuck: this.rollTimer > 0 || this.dashTimer > 0 || this.slamming,
-        ranged: !!this.sword.ranged,
-        aim: this.sword.ranged && (this.aimTimer > 0 || this.aiming) ? { pitch: this.aimPitch, recoil: this.recoil, twoHanded: this.sword.weaponKey !== 'revolver' } : null,
       });
       this.rig.apply?.(); // Mixamo-skelet bijwerken
       return;

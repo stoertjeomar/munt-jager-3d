@@ -90,10 +90,10 @@ export const QUESTS = {
   'robot-batterijen': {
     title: 'Lege batterij',
     goal: { kind: 'collect', count: 5, item: 'battery', label: 'batterijen' },
-    reward: { runes: 150, items: [{ kind: 'weapon', key: 'shotgun' }] },
-    offer: ['BIEP. BOEP. Batterij... bijna... leeg...', 'Ik heb mijn <b>5 reserve-batterijen</b> verloren in de ruïnes.', 'Breng ze terug en je krijgt mijn <b>Hagelgeweer</b>. BIEP.'],
+    reward: { runes: 150, items: [{ kind: 'weapon', key: 'hamer' }] },
+    offer: ['BIEP. BOEP. Batterij... bijna... leeg...', 'Ik heb mijn <b>5 reserve-batterijen</b> verloren in de ruïnes.', 'Breng ze terug en je krijgt mijn <b>Strijdhamer</b>. BIEP.'],
     busy: 'Energie: 3 procent. Zoek... de groene... lampjes...',
-    done: ['BATTERIJ VOL! Ik voel me als nieuw!', 'Alsjeblieft: mijn Hagelgeweer. Veel hagel, veel plezier. BOEP!'],
+    done: ['BATTERIJ VOL! Ik voel me als nieuw!', 'Alsjeblieft: mijn Strijdhamer. Eén klap en ze vliegen weg. BOEP!'],
     after: 'Systeemcontrole: alles in orde. Bedankt, vriend.',
   },
   'ridder-zombies': {
@@ -103,7 +103,7 @@ export const QUESTS = {
     offer: ['Halt, reiziger. Ik ben Sir Roestbout, de laatste wachter van dit woud.', 'De doden zijn opgestaan. Mijn oude harnas is te roestig om ze te stoppen.', 'Versla <b>6 zombies</b>, en ik geef je mijn laatste <b>helende flesje</b>.'],
     busy: 'Hoor je dat gekreun? Er lopen er nog genoeg rond.',
     done: ['Het woud is weer een beetje stiller. Je bent dapper.', 'Neem dit flesje. En pas op voor mijn oude meester, De Gevallen Ridder...'],
-    after: 'Ga. Het licht van de Genade zal je beschermen.',
+    after: 'Ga, dappere jager. Het woud rekent op je.',
   },
   'mila-mecha': {
     title: 'Metalen reuzen',
@@ -297,8 +297,8 @@ export class NPCs {
     this.scene = scene;
     this.stats = stats;
     this.list = LEVEL.npcs.map((def) => new NPC(scene, def, colliders));
-    // De koopman met zijn kraampje, vlak bij de eerste Plek van Genade
-    const [, , gx, gz] = LEVEL.graces[0];
+    // De koopman met zijn kraampje, vlak bij het begin van het level
+    const [, , gx, gz] = LEVEL.checkpoints[0];
     this.list.push(new NPC(scene, ['koopman', gx + 3.6, gz - 3], colliders));
     const stall = buildStall();
     stall.position.set(gx + 3.6 + 1.9, 0, gz - 3);

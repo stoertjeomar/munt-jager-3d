@@ -8,7 +8,6 @@ const MAX_MOUSE_JUMP = 250; // grotere sprongen in één muisbeweging zijn een b
 const PITCH_MIN = -0.95; // zo ver kun je omhoog kijken (negatief = camera onder je hoofd, kijkt omhoog)
 const PITCH_MAX = 1.3; // zo ver kun je van bovenaf kijken
 const ORBIT_MIN = -0.08; // lager dan dit gaat de camera niet (anders zakt hij door de grond); daarna kantelt hij alleen nog omhoog
-const SHOULDER = 0.75; // met een afstandswapen schuift de camera over je rechterschouder, zodat je het vizier ziet
 
 export class CameraRig {
   constructor(camera, domElement) {
@@ -23,7 +22,6 @@ export class CameraRig {
     this.lookUp = 0;
     this.mouseIdle = 0; // hoe lang de muis al stil is (dan draait de camera vanzelf achter je)
 
-    this.shoulder = 0;
 
     domElement.addEventListener('pointerdown', () => {
       if (!this.locked) this.lock();
@@ -75,7 +73,7 @@ export class CameraRig {
   }
 
   /**
-   * @param {object} [follow]  { facing: kijkhoek van de speler, moving, lockTarget: Vector3, aiming: afstandswapen in je hand }
+   * @param {object} [follow]  { facing: kijkhoek van de speler, moving, lockTarget: Vector3 }
    */
   update(dt, followPosition, follow = {}) {
     this.mouseIdle += dt;
@@ -93,7 +91,7 @@ export class CameraRig {
       const goalPitch = THREE.MathUtils.clamp(0.35 - above * 0.05, 0.05, 0.6);
       this.pitch += (goalPitch - this.pitch) * Math.min(1, 3 * dt);
       this.lookUp = THREE.MathUtils.clamp(above * 0.45, 0, 4);
-    } else if (follow.moving && !follow.aiming && this.mouseIdle > 1.2) {
+    } else if (follow.moving && this.mouseIdle > 1.2) {
       // Muis stil en je loopt (ongeveer) van de camera af: de camera draait rustig achter je hoofd aan.
       // Loop je opzij of naar de camera toe, dan niet: anders blijft de camera rondtollen.
       const behind = follow.facing + Math.PI;
@@ -109,9 +107,8 @@ export class CameraRig {
       this.yaw += diff * Math.min(1, speed * dt);
     }
 
-    // Soepel achter de speler aan bewegen (met een afstandswapen: over je rechterschouder)
-    this.shoulder += ((follow.aiming ? SHOULDER : 0) - this.shoulder) * Math.min(1, 8 * dt);
-    const goal = followPosition.clone().add(new THREE.Vector3(0, 1.2, 0)).addScaledVector(this.right, this.shoulder);
+    // Soepel achter de speler aan bewegen
+    const goal = followPosition.clone().add(new THREE.Vector3(0, 1.2, 0));
     this.target.lerp(goal, 1 - Math.exp(-10 * dt));
 
     // Omhoog kijken: de camera zakt tot vlak boven de grond en kantelt daarna verder omhoog

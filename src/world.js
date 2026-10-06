@@ -2,15 +2,15 @@ import * as THREE from 'three';
 import { LEVEL } from './levels.js';
 
 // De wereld van het huidige level: grond, pad, huizen (waar je in kunt!), ruïnes, natuur,
-// de boss-arena, de Plekken van Genade en de kisten. Wat er in elk level staat, staat in levels.js.
+// de boss-arena, de checkpoints en de kisten. Wat er in elk level staat, staat in levels.js.
 
 export const BOUNDS = LEVEL.half; // het level loopt van -BOUNDS.x tot BOUNDS.x (en z)
 export const WALKABLE = { x: BOUNDS.x - 1.5, z: BOUNDS.z - 1.5 }; // verder kun je niet lopen
 
 const v3 = (x, z, y = 0) => new THREE.Vector3(x, y, z);
 
-// Plekken van Genade: de eerste is het begin van het level, de tweede het checkpoint
-export const GRACES = LEVEL.graces.map(([id, name, x, z]) => ({ id, name, position: v3(x, z) }));
+// Checkpoints: de eerste is het begin van het level, de tweede een vlag halverwege
+export const CHECKPOINTS = LEVEL.checkpoints.map(([id, name, x, z]) => ({ id, name, position: v3(x, z) }));
 
 // De boss-arena staat altijd aan het eind (noorden) van het level
 export const ARENAS = [{ id: LEVEL.boss, center: v3(0, -78), radius: 18 }];
@@ -131,14 +131,14 @@ function inHouse(x, z, margin = 0) {
   return (LEVEL.houses ?? []).some(([hx, hz, w, d]) => Math.abs(x - hx) < Math.max(w, d) / 2 + 1.5 + margin && Math.abs(z - hz) < Math.max(w, d) / 2 + 1.5 + margin);
 }
 
-/** Is hier ruimte voor een boom of steen? (niet op het pad, in de arena, bij genade-plekken, kisten, huizen...) */
+/** Is hier ruimte voor een boom of steen? (niet op het pad, in de arena, bij checkpoints, kisten, huizen...) */
 export function isFree(x, z, margin = 0) {
   if (Math.abs(x) > WALKABLE.x - 1 || Math.abs(z) > WALKABLE.z - 1) return false;
   if (distToPath(x, z) < 4 + margin) return false;
   if (VILLAGE_CENTER && Math.hypot(x - VILLAGE_CENTER.x, z - VILLAGE_CENTER.z) < 18) return false;
   if (inHouse(x, z, margin)) return false;
   for (const a of ARENAS) if (Math.hypot(x - a.center.x, z - a.center.z) < a.radius + 5) return false;
-  for (const g of GRACES) if (Math.hypot(x - g.position.x, z - g.position.z) < 8) return false;
+  for (const c of CHECKPOINTS) if (Math.hypot(x - c.position.x, z - c.position.z) < 8) return false;
   for (const c of CHESTS) if (Math.hypot(x - c.position.x, z - c.position.z) < 4) return false;
   for (const [nx, nz] of (LEVEL.npcs ?? []).map((n) => [n[1], n[2]])) if (Math.hypot(x - nx, z - nz) < 4) return false;
   for (const spots of Object.values(LEVEL.questItems ?? {})) for (const [qx, qz] of spots) if (Math.hypot(x - qx, z - qz) < 3) return false;

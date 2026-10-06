@@ -68,7 +68,7 @@ export function levelSpawns(level, seed = 7) {
   };
   const list = level.spawns.flatMap(([kind, n]) => Array.from({ length: n }, () => kind));
   list.sort((a, b) => ENEMY_TYPES[a].hp - ENEMY_TYPES[b].hp);
-  const safe = level.graces.map(([, , x, z]) => [x, z]);
+  const safe = level.checkpoints.map(([, , x, z]) => [x, z]);
   if (level.village) safe.push(level.village.center);
   return list.map((kind, i) => {
     for (let tries = 0; ; tries++) {
@@ -497,7 +497,7 @@ class Enemy {
     const distToPlayer = flatToPlayer.length();
     const distFromHome = this.position.clone().setY(0).distanceTo(this.home);
     const reachable = type.flies || playerPos.y < this.position.y + 2.5; // niet achter je aan als je hoog op een blok staat
-    this.chasing = ctx.player.alive && !ctx.player.resting && distToPlayer < type.sight && distFromHome < LEASH && reachable;
+    this.chasing = ctx.player.alive && distToPlayer < type.sight && distFromHome < LEASH && reachable;
 
     // ---------- Eigen aanvallen van de nieuwe vijanden ----------
     if (this.typeKey === 'zombie' || this.typeKey === 'spierbonk' || this.typeKey === 'mecha') {
@@ -762,7 +762,7 @@ class Enemy {
         }
         if (this.stateTimer <= 0) {
           const lead = ctx.player.velocity.clone().setY(0).multiplyScalar(dist / 22);
-          ctx.projectiles.spawn({ from: gun, dir: target.add(lead).sub(gun), speed: 22, damage: this.type.damage, owner: 'enemy', kind: 'energy', radius: 0.5 });
+          ctx.projectiles.spawn({ from: gun, dir: target.add(lead).sub(gun), speed: 22, damage: this.type.damage, kind: 'energy', radius: 0.5 });
           play('laser');
           this.shotsLeft--;
           if (this.shotsLeft > 0) this.stateTimer = 0.3;

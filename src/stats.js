@@ -4,7 +4,8 @@
 // Levelen gaat vanzelf: hoe meer vijanden je verslaat, hoe hoger je level.
 // Elk level maakt je sterker (meer leven, stamina en schade) en sommige levels spelen iets nieuws vrij.
 
-import { SAVE_KEY } from './levels.js';
+import { SAVE_KEY, LEVELS } from './levels.js';
+import { WEAPONS } from './weapons.js';
 
 // Zoveel sterker word je per level
 const PER_LEVEL = { health: 12, stamina: 6, damage: 0.08 };
@@ -77,8 +78,7 @@ function freshSave() {
     helmet: 'geen',
     inventory: [{ kind: 'weapon', key: 'shortsword' }, { kind: 'helmet', key: 'geen' }],
     flasksMax: 3,
-    discovered: [], // ontdekte Plekken van Genade
-    lastGrace: null, // hier kom je terug als je doodgaat (null = begin van het level)
+    checkpoint: null, // hier kom je terug als je doodgaat (null = begin van het level)
     bosses: [], // verslagen bosses
     chests: [], // geopende kisten
     diamonds: [], // gevonden diamanten
@@ -197,9 +197,26 @@ export class Stats {
         this.data.runes += this.data.lostRunes.amount ?? 0;
         delete this.data.lostRunes;
       }
+      this.removeOldWeapons();
     } catch {
       // geen of kapotte save: nieuw spel
     }
+  }
+
+  /**
+   * Schietwapens bestaan niet meer. Uit je inventaris halen, en wat je uit een kist of van de robot kreeg,
+   * wordt het nieuwe slagwapen dat daar nu ligt.
+   */
+  removeOldWeapons() {
+    const d = this.data;
+    d.inventory = d.inventory.filter((i) => i.kind !== 'weapon' || WEAPONS[i.key]);
+    if (!WEAPONS[d.weapon]) d.weapon = 'shortsword';
+    for (const level of LEVELS) {
+      for (const [id, , , , item] of level.chests) if (item.kind === 'weapon' && d.chests.includes(id)) this.addItem(item);
+    }
+    if (d.quests['robot-batterijen']?.state === 'beloond') this.addItem({ kind: 'weapon', key: 'hamer' });
+    delete d.discovered;
+    delete d.lastGrace;
   }
 
   /** Helemaal opnieuw beginnen. */

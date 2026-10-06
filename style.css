@@ -204,30 +204,6 @@ canvas {
   background: linear-gradient(#b0202a, #6a0f15);
 }
 
-/* ---------- Vizier (bij afstandswapens) ---------- */
-#crosshair {
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  width: 22px;
-  height: 22px;
-  margin: -11px 0 0 -11px;
-  border: 2px solid rgba(255, 255, 255, 0.85);
-  border-radius: 50%;
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
-  pointer-events: none;
-}
-
-#crosshair::after {
-  content: '';
-  position: absolute;
-  left: 8px;
-  top: 8px;
-  width: 2px;
-  height: 2px;
-  background: #fff;
-}
-
 /* ---------- Teksten in beeld ---------- */
 #prompt {
   position: fixed;

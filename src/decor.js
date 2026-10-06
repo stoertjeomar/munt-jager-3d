@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { loadGLB } from './assets.js';
-import { isFree, seededRandom, GRACES, BOUNDS, addWind } from './world.js';
+import { isFree, seededRandom, BOUNDS, addWind } from './world.js';
 import { LEVEL, LEVEL_INDEX } from './levels.js';
 
 // Extra aankleding van de wereld met modellen uit de KayKit- en Kenney-pakketten:
-// planten, stenen, grasplukjes, wolken, vlaggen bij de Plekken van Genade en rondscharrelende dieren.
+// planten, stenen, grasplukjes, wolken en rondscharrelende dieren.
 
 /**
  * Zet heel veel kopieën van een model neer met InstancedMesh (één tekenopdracht per onderdeel = snel).
@@ -158,13 +158,13 @@ export class Decor {
   async load() {
     const scene = this.scene;
     const rand = seededRandom(99 + LEVEL_INDEX * 31);
-    const [grass, grassSmall, plantA, plantB, rocksA, rocksB, rocksDesA, rocksDesB, detail, cloud, flag, duck, dog, bear] = await Promise.all(
+    const [grass, grassSmall, plantA, plantB, rocksA, rocksB, rocksDesA, rocksDesB, detail, cloud, duck, dog, bear] = await Promise.all(
       [
         'models/kenney/grass.glb', 'models/kenney/grass-small.glb',
         'models/kaykit/plantA_forest.glb', 'models/kaykit/plantB_forest.glb',
         'models/kaykit/rocksA_forest.glb', 'models/kaykit/rocksB_forest.glb',
         'models/kaykit/rocksA_desert.glb', 'models/kaykit/rocksB_desert.glb',
-        'models/kaykit/detail_forest.glb', 'models/kenney/cloud.glb', 'models/kaykit/flag_teamYellow.glb',
+        'models/kaykit/detail_forest.glb', 'models/kenney/cloud.glb',
         'models/kaykit/character_duck.glb', 'models/kaykit/character_dog.glb', 'models/kaykit/character_bear.glb',
       ].map((url) => loadGLB(url).catch(() => null))
     );
@@ -179,17 +179,6 @@ export class Decor {
     if (rocksB) scatter(scene, rocksB, spots(rand, 25, { regions: green, scaleMin: 0.8, scaleMax: 1.5 }), { shadows: true });
     if (rocksDesA) scatter(scene, rocksDesA, spots(rand, 50, { regions: ['hoogland'], scaleMin: 1, scaleMax: 2 }), { shadows: true });
     if (rocksDesB) scatter(scene, rocksDesB, spots(rand, 50, { regions: ['hoogland'], scaleMin: 1, scaleMax: 2 }), { shadows: true });
-
-    // Vlaggen bij elke Plek van Genade
-    if (flag) {
-      for (const g of GRACES) {
-        const f = flag.scene.clone();
-        f.scale.setScalar(1.6);
-        f.position.copy(g.position).add(new THREE.Vector3(1.8, 0, -1.2));
-        f.traverse((c) => (c.castShadow = !!c.isMesh));
-        scene.add(f);
-      }
-    }
 
     // Wolken die langzaam voorbij drijven
     if (cloud) {

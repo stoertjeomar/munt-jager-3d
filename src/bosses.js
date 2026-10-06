@@ -798,7 +798,7 @@ class StoneGiant extends Boss {
 
 // ======================================================================
 // Boss 4: Budget Mario — vliegt als Superman, duikt op je af, stampt op de grond en gooit vuurballen.
-// Met een zwaard raak je hem alleen als hij op de grond is; met een geweer of boog ook in de lucht!
+// Met een zwaard raak je hem alleen als hij op de grond is.
 // ======================================================================
 const MARIO_LENGTH = 3.6;
 const FLY_HEIGHT = 5;
@@ -993,7 +993,7 @@ class FlyingMario extends Boss {
           const dir = to.sub(from);
           const flat = Math.hypot(dir.x, dir.z);
           dir.y = flat * 0.35; // een boogje
-          ctx.projectiles.spawn({ from, dir, speed: Math.min(16, 6 + flat * 0.6), damage: 14, owner: 'enemy', kind: 'fire', gravity: 9, bounces: 2, radius: 0.4 });
+          ctx.projectiles.spawn({ from, dir, speed: Math.min(16, 6 + flat * 0.6), damage: 14, kind: 'fire', gravity: 9, bounces: 2, radius: 0.4 });
           play('swing');
           this.shotsLeft--;
           this.timer = 0.35;

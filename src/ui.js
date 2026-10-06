@@ -1,7 +1,7 @@
 import { POWERS, PERKS, SHOP_ITEMS } from './stats.js';
 import { WEAPONS } from './weapons.js';
 import { HELMETS, itemInfo, itemColor } from './gear.js';
-import { BOUNDS, GRACES, ARENAS } from './world.js';
+import { BOUNDS, CHECKPOINTS, ARENAS } from './world.js';
 import { LEVEL, LEVELS, LEVEL_INDEX } from './levels.js';
 
 // Alles wat je op het scherm ziet (behalve de 3D-wereld): balken, munten, menu's, banners en de minimap.
@@ -122,7 +122,7 @@ export class UI {
     if (text) this.el.prompt.innerHTML = text;
   }
 
-  /** Grote tekst in het midden, Elden Ring-stijl. kind: 'gold' | 'death' | 'power' */
+  /** Grote tekst in het midden. kind: 'gold' | 'death' | 'power' */
   banner(text, sub = '', kind = 'gold', duration = 3.5) {
     this.el.banner.className = `banner-${kind}`;
     this.el.bannerText.textContent = text;
@@ -195,44 +195,6 @@ export class UI {
     this.el.menu.classList.add('hidden');
   }
 
-  /** Menu bij een Plek van Genade: reizen, uitrusting, verlaten. */
-  openGraceMenu(grace, actions) {
-    this.menuOpen = 'grace';
-    this.el.menu.classList.remove('hidden');
-    this.el.menuTitle.textContent = grace.name;
-    const render = (tab = 'main') => {
-      if (tab === 'main') {
-        this.el.menuBody.innerHTML = `
-          <button data-act="travel">🗺 Reizen</button>
-          <button data-act="inventory">🎒 Uitrusting</button>
-          <button data-act="powers">✨ Level & krachten</button>
-          <button data-act="leave">Verder gaan</button>`;
-      } else if (tab === 'travel') {
-        this.el.menuBody.innerHTML =
-          GRACES.filter((g) => this.stats.data.discovered.includes(g.id))
-            .map((g) => `<button data-travel="${g.id}" ${g.id === grace.id ? 'disabled' : ''}>${g.name}</button>`)
-            .join('') + `<button data-act="back">← Terug</button>`;
-      } else if (tab === 'inventory') {
-        this.el.menuBody.innerHTML = this.inventoryHtml() + `<button data-act="back">← Terug</button>`;
-      } else if (tab === 'powers') {
-        this.el.menuBody.innerHTML = this.powersHtml() + `<button data-act="back">← Terug</button>`;
-      }
-    };
-    render();
-    this.el.menuBody.onclick = (e) => {
-      const b = e.target.closest('button');
-      if (!b || b.disabled) return;
-      if (b.dataset.act === 'leave') actions.leave();
-      else if (b.dataset.act === 'back') render('main');
-      else if (b.dataset.act) render(b.dataset.act);
-      else if (b.dataset.travel) actions.travel(b.dataset.travel);
-      else if (b.dataset.equip) {
-        actions.equip(JSON.parse(b.dataset.equip));
-        render('inventory');
-      }
-    };
-  }
-
   /** De winkel van de koopman: munten uitgeven. actions = { buy(key), close() } */
   openShop(name, actions) {
     this.menuOpen = 'shop';
@@ -264,7 +226,7 @@ export class UI {
     };
   }
 
-  /** Uitrusting (I of Tab), ook buiten een Genade-plek. */
+  /** Uitrusting (I of Tab): wapens, helmen, je level en krachten. */
   openInventory(actions) {
     this.menuOpen = 'inventory';
     this.el.menu.classList.remove('hidden');
@@ -292,7 +254,7 @@ export class UI {
     const row = (item) => {
       const info = itemInfo(item);
       const equipped = (item.kind === 'weapon' && d.weapon === item.key) || (item.kind === 'helmet' && d.helmet === item.key);
-      const stat = item.kind === 'weapon' ? `${info.damage}${info.pellets ? ` × ${info.pellets}` : ''} schade${info.ranged ? ' · afstand' : ''}` : `${Math.round(info.defense * 100)}% bescherming`;
+      const stat = item.kind === 'weapon' ? `${info.damage} schade` : `${Math.round(info.defense * 100)}% bescherming`;
       return `<button data-equip='${JSON.stringify(item)}' class="item ${equipped ? 'equipped' : ''}">
         <span style="color:${itemColor(item)}">${item.kind === 'weapon' ? '⚔' : '⛑'} ${info.name}</span>
         <small>${stat} · ${info.info}</small>${equipped ? '<em>uitgerust</em>' : ''}</button>`;
@@ -366,20 +328,19 @@ export class UI {
       ctx.fillStyle = n.color;
       ctx.fillText(n.icon, mx, my);
     }
-    // Arena's (doodshoofd) en graces (gouden punt)
+    // Arena's (doodshoofd)
     for (const a of ARENAS) {
       const [mx, my] = toMap(a.center.x, a.center.z);
       ctx.fillStyle = '#ff5a5a';
       ctx.fillText('☠', mx, my);
     }
-    for (const g of GRACES) {
-      if (!this.stats.data.discovered.includes(g.id)) continue;
-      const [mx, my] = toMap(g.position.x, g.position.z);
-      ctx.fillStyle = '#ffd76a';
-      ctx.beginPath();
-      ctx.arc(mx, my, 3.5 + Math.sin(time * 3), 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // Checkpoints: een vlaggetje (goud als je er al was)
+    const reached = CHECKPOINTS.findIndex((c) => c.id === this.stats.data.checkpoint);
+    CHECKPOINTS.forEach((c, i) => {
+      const [mx, my] = toMap(c.position.x, c.position.z);
+      ctx.fillStyle = i <= reached ? '#ffd76a' : '#e8e8e8';
+      ctx.fillText('⚑', mx, my);
+    });
     ctx.restore();
 
     // De speler: pijltje in kijkrichting
