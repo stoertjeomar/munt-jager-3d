@@ -155,7 +155,7 @@ export class Player {
     this.health = this.maxHealth;
     this.stamina = this.maxStamina;
     this.staminaDelay = 0;
-    this.flasks = this.stats.data.flasksMax;
+    this.flasks = this.stats.flasksMax;
     this.invulnerable = 0;
     this.pickupTimer = this.rollTimer = this.dashTimer = this.drinkTimer = this.spinTimer = 0;
     this.dashCooldown = this.spinCooldown = this.fireCooldown = this.fireTimer = 0;
@@ -193,10 +193,10 @@ export class Player {
   }
 
   get defense() {
-    return HELMETS[this.helmetKey]?.defense ?? 0;
+    return Math.min(0.75, (HELMETS[this.helmetKey]?.defense ?? 0) + this.stats.defenseBonus);
   }
 
-  /** Schade die jouw wapen nu doet (met Kracht en Vuurzwaard). */
+  /** Schade die jouw wapen nu doet (met je level en Vuurzwaard). */
   get attackDamage() {
     const fire = this.fireTimer > 0 ? 1.5 : 1;
     return Math.round(this.sword.damage * this.stats.damageMultiplier * fire);
@@ -424,7 +424,7 @@ export class Player {
     this.mesh.visible = this.invulnerable <= 0 || this.rollTimer > 0 || Math.floor(this.invulnerable * 14) % 2 === 0;
 
     // ---------- Snelheid bepalen ----------
-    let speed = SPEED * (sprinting ? SPRINT : 1);
+    let speed = SPEED * this.stats.speedMultiplier * (sprinting ? SPRINT : 1);
     if (this.sword.attackProgress !== null) speed *= 0.35; // langzamer tijdens een slag
     if (this.drinkTimer > 0 || this.pickupTimer > 0) speed *= 0.3;
     if (this.resting) speed = 0;
@@ -514,7 +514,7 @@ export class Player {
       this.drinkTimer -= dt;
       if (!this.healed && DRINK.time - this.drinkTimer >= DRINK.healAt) {
         this.healed = true;
-        this.health = Math.min(this.maxHealth, this.health + Math.round(this.maxHealth * DRINK.heal));
+        this.health = Math.min(this.maxHealth, this.health + Math.round(this.maxHealth * (DRINK.heal + this.stats.healBonus)));
         this.events.push('heal');
       }
     }

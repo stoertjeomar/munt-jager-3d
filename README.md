@@ -2,7 +2,7 @@
 
 Een **actie-RPG met levels** in de browser, in de stijl van Elden Ring, gemaakt met **JavaScript** en **[Three.js](https://threejs.org/)**.
 Kies je held, volg het pad door 4 levels, versla vijanden voor munten, help de dorpelingen met zij-quests,
-word sterker bij de Plekken van Genade en versla aan het eind van elk level de boss.
+word sterker door vijanden te verslaan en versla aan het eind van elk level de boss.
 
 ![Screenshot van Munt Jager 3D](docs/screenshot.png)
 
@@ -62,8 +62,11 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 - **Huizen waar je in kunt**: loop door de deur naar binnen — met meubels, een haardvuur en het dak verdwijnt zodat je binnen kunt kijken
 - Lantaarns langs het pad, een bos rond elk level, minimap met het pad, **dag-en-nachtritme** met sterren en een zachte **gloed** (bloom)
 - Vijanden (ook spoken) lopen niet meer door muren, bomen of stenen heen
-- **Elden Ring-stijl**: munten verdienen, levelen bij Plekken van Genade (Vitaliteit, Kracht, Uithouding),
-  rusten brengt vijanden terug, doodgaan = je munten blijven liggen waar je viel
+- **Levelen door te vechten**: elke verslagen vijand telt mee (een boss telt voor 10). Elk level geeft meer leven,
+  stamina en schade, en op sommige levels speel je een kracht of bonus vrij (extra flesjes, sneller lopen, minder schade).
+  Je voortgang staat onder je levensbalk en in het menu *Level & krachten*.
+- **Plekken van Genade**: rusten (checkpoint, leven en flesjes vol, vijanden komen terug) en reizen.
+  Doodgaan = je munten blijven liggen waar je viel
 - **Gevechten**: leven en stamina, rollen met onkwetsbaarheid, lock-on, flesjes, zwaard-windje,
   vonken, schade-getallen, camera-schok en hitstop
 - **5 krachten**: Dash, Dubbele sprong, Wervelslag, Grondslag en Vuurzwaard (vrijspelen door te levelen en bosses te verslaan)
@@ -102,7 +105,7 @@ munt-jager-3d/
     ├── enemies.js    → vijanden en hun aanvallen · bosses.js → de vier bosses
     ├── sites.js      → Plekken van Genade, kisten, verloren munten
     ├── pickups.js    → munten, hartjes, diamanten
-    ├── stats.js      → level, eigenschappen, krachten, opslaan
+    ├── stats.js      → level (door vijanden te verslaan), bonussen, krachten, opslaan
     ├── ui.js         → balken, menu's, banners, minimap
     ├── effects.js    → deeltjes, schokgolven, waarschuwingscirkels
     ├── audio.js      → geluiden · camera.js · input.js · assets.js
@@ -114,7 +117,7 @@ munt-jager-3d/
 - **Quests** → `QUESTS` bovenaan `src/npcs.js`
 - **Vijanden** → `ENEMY_TYPES` bovenaan `src/enemies.js`
 - **Wapens** → `WEAPONS` in `src/weapons.js` · **Helmen** → `HELMETS` in `src/gear.js`
-- **Krachten en levelen** → `POWERS` en `levelCost` in `src/stats.js`
+- **Krachten en levelen** → `POWERS`, `PERKS` en `killsNeeded` in `src/stats.js`
 - **Personages** → `CHARACTERS` en `PLAYABLE` bovenaan `src/player.js`
 - **Opnieuw beginnen** → uitrusting (I) → *Nieuw spel beginnen*
 

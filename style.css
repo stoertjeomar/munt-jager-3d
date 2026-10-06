@@ -69,6 +69,17 @@ canvas {
   background: linear-gradient(#5fbf4a, #2f7a24);
 }
 
+/* Hoe ver je bent tot je volgende level (vult zich door vijanden te verslaan) */
+#xp-bar {
+  width: 16vw;
+  height: 5px;
+}
+
+#xp-fill {
+  background: linear-gradient(#ffe08a, #c9932e);
+  transition: width 0.3s;
+}
+
 .bar .lag {
   background: #e8c56a;
 }

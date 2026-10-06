@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { loadGLB } from './assets.js';
 
 // Alle wapens in het spel. Pas de getallen aan om ze sterker of sneller te maken!
-//   damage    = schade per klap (wordt nog groter met je Kracht-level)
+//   damage    = schade per klap (wordt nog groter naarmate je level hoger is)
 //   stamina   = hoeveel uithouding één slag kost
 //   range     = hoe ver het wapen reikt
 //   swingTime = hoe lang een slag duurt (kleiner = sneller slaan)

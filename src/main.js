@@ -13,7 +13,7 @@ import { createEnemies, spawnEnemy } from './enemies.js';
 import { createBosses, BOSS_INFO } from './bosses.js';
 import { Sites } from './sites.js';
 import { Decor } from './decor.js';
-import { Stats, POWERS } from './stats.js';
+import { Stats, POWERS, PERKS, BOSS_KILLS } from './stats.js';
 import { itemInfo } from './gear.js';
 import { Effects } from './effects.js';
 import { SwordTrail } from './trail.js';
@@ -123,6 +123,28 @@ function giveRunes(amount) {
   ui.addRunes(amount);
 }
 
+/**
+ * Vijanden verslagen: telt mee voor je level. Geeft de nieuwe bonussen terug (of null als je niet omhoog ging).
+ * `announce` = meteen een LEVEL-banner laten zien (bij een boss staat het op het LEVEL VOLTOOID-scherm).
+ */
+function giveKills(amount, announce = true) {
+  const before = stats.unlockedPowers();
+  const perksBefore = stats.unlockedPerks();
+  if (!stats.addKills(amount)) return null;
+  // Sterker geworden: meteen weer vol leven en stamina, en de nieuwe flesjes erbij
+  const newPerks = stats.unlockedPerks().filter((k) => !perksBefore.includes(k));
+  player.health = player.maxHealth;
+  player.stamina = player.maxStamina;
+  player.flasks += newPerks.reduce((n, k) => n + (PERKS[k].flasks ?? 0), 0);
+  play('win');
+  effects.burst(player.position.clone().setY(player.position.y + 1.2), 0xffd76a, { count: 40, speed: 5, size: 0.12, life: 1, up: 4 });
+  if (announce) {
+    ui.banner(`LEVEL ${stats.level}`, 'Je bent sterker geworden! Meer leven, stamina en schade.', 'gold', 3.5);
+    announceNewPowers(before, 3.6, newPerks);
+  }
+  return newPerks;
+}
+
 function addSummon(typeKey, x, z) {
   const e = spawnEnemy(scene, typeKey, x, z);
   enemies.push(e);
@@ -173,6 +195,7 @@ function onDefeated(target) {
   const finished = target.typeKey ? npcs.onKill(target.typeKey) : null;
   if (finished) questReady(finished);
   if (!target.summoned) {
+    giveKills(1);
     giveRunes(target.type.runes);
     pickups.coinBurst(target.center, target.type.runes);
     if (Math.random() < 0.2) pickups.dropHeart(target.position);
@@ -189,11 +212,14 @@ const BOSS_REWARDS = {
 };
 
 function onBossDefeated(boss) {
-  const before = stats.unlockedPowers();
   const firstTime = !stats.data.bosses.includes(boss.id);
   play('win');
   effects.shake(0.5);
   ui.banner('VIJAND GEVELD', boss.name, 'gold', 5);
+  const before = stats.unlockedPowers();
+  const levelBefore = stats.level;
+  // Een boss telt als een heleboel verslagen vijanden
+  const newPerks = giveKills(firstTime ? BOSS_KILLS.first : BOSS_KILLS.again, false) ?? [];
   giveRunes(firstTime ? BOSS_INFO[boss.id].runes : Math.round(BOSS_INFO[boss.id].runes / 3));
   pickups.coinBurst(boss.center, 100);
   const rewards = firstTime ? BOSS_REWARDS[boss.id] : [];
@@ -206,13 +232,13 @@ function onBossDefeated(boss) {
   stats.save();
 
   setTimeout(() => {
-    announceNewPowers(before, 0);
-    showLevelComplete(rewards.map((i) => itemInfo(i).name));
+    announceNewPowers(before, 0, newPerks);
+    showLevelComplete(rewards.map((i) => itemInfo(i).name), stats.level > levelBefore);
   }, 4500);
 }
 
 /** "LEVEL VOLTOOID": door naar het volgende level (of het einde van het spel). */
-function showLevelComplete(rewards) {
+function showLevelComplete(rewards, leveledUp = false) {
   const last = LEVEL_INDEX === LEVELS.length - 1;
   if (last) {
     stats.data.victory = true;
@@ -222,6 +248,7 @@ function showLevelComplete(rewards) {
   const next = LEVELS[LEVEL_INDEX + 1];
   const html = `${last ? 'Alle vier de bosses zijn verslagen. <b>Jij bent de echte Munt Jager!</b>' : `Je hebt <b>${LEVEL.name}</b> gehaald!`}
     ${rewards.length ? `<br>Beloning: <b>${rewards.join(', ')}</b>` : ''}
+    ${leveledUp ? `<br>⬆ Je bent nu <b>level ${stats.level}</b>!` : ''}
     ${next ? `<br><br>Volgende: <b>${next.subtitle} — ${next.name}</b>` : ''}`;
   const buttons = [];
   if (next) buttons.push([`▶ Naar ${next.name}`, () => goToLevel(LEVEL_INDEX + 1)]);
@@ -266,13 +293,17 @@ function talkTo(npc) {
   });
 }
 
-/** Laat zien welke krachten je net hebt vrijgespeeld. */
-function announceNewPowers(before, delay = 0) {
+/** Laat zien welke krachten (en level-bonussen) je net hebt vrijgespeeld, één voor één. */
+function announceNewPowers(before, delay = 0, newPerks = []) {
   const fresh = stats.unlockedPowers().filter((k) => !before.includes(k));
-  fresh.forEach((key, i) => {
+  const banners = [
+    ...fresh.map((key) => [`NIEUWE KRACHT: ${POWERS[key].name.toUpperCase()}`, `${POWERS[key].key} — ${POWERS[key].info}`]),
+    ...newPerks.map((key) => [`NIEUWE BONUS: ${PERKS[key].name.toUpperCase()}`, PERKS[key].info]),
+  ];
+  banners.forEach(([text, sub], i) => {
     setTimeout(() => {
       play('pickup');
-      ui.banner(`NIEUWE KRACHT: ${POWERS[key].name.toUpperCase()}`, `${POWERS[key].key} — ${POWERS[key].info}`, 'power', 4.5);
+      ui.banner(text, sub, 'power', 4.5);
     }, (delay + i * 4.8) * 1000);
   });
 }
@@ -401,12 +432,6 @@ function rest(grace) {
       cameraRig.snapTo(player.position);
       renderer.domElement.requestPointerLock();
       ui.toast(`Gereisd naar <b>${sites.grace(id).name}</b>`);
-    },
-    leveled: (before) => {
-      play('pickup');
-      player.health = player.maxHealth;
-      player.stamina = player.maxStamina;
-      announceNewPowers(before);
     },
     equip,
   });
@@ -884,7 +909,7 @@ if (stats.level === 1 && stats.runes === 0 && stats.data.bosses.length === 0) {
   document.addEventListener('pointerlockchange', function intro() {
     if (!cameraRig.locked) return;
     document.removeEventListener('pointerlockchange', intro);
-    setTimeout(() => ui.toast('Volg het pad naar het noorden en versla de boss.<br>Praat met mensen (<b>E</b>) voor zij-quests, en rust bij de gouden <b>Plek van Genade</b> om sterker te worden.', 8), 5000);
+    setTimeout(() => ui.toast('Volg het pad naar het noorden en versla de boss.<br>Praat met mensen (<b>E</b>) voor zij-quests, en versla vijanden om in level te stijgen en sterker te worden.<br>Bij de gouden <b>Plek van Genade</b> kun je rusten.', 8), 5000);
   });
 }
 
