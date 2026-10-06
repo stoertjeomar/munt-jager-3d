@@ -1,9 +1,8 @@
 import * as THREE from 'three';
-import { LEVEL_INDEX } from './levels.js';
 import { createWeaponMesh } from './weapons.js';
 import { createHelmetMesh } from './gear.js';
 
-// Plekken in de wereld waar je iets mee kunt: Plekken van Genade, kisten en je verloren munten.
+// Plekken in de wereld waar je iets mee kunt: Plekken van Genade en kisten.
 
 const INTERACT_RANGE = 2.6;
 
@@ -157,40 +156,6 @@ class Chest {
   }
 }
 
-// ---------- Verloren munten (waar je doodging) ----------
-
-class LostRunes {
-  constructor(scene) {
-    this.group = new THREE.Group();
-    this.orb = new THREE.Mesh(
-      new THREE.SphereGeometry(0.3, 16, 12),
-      new THREE.MeshBasicMaterial({ color: 0x8dffb0, transparent: true, opacity: 0.85, toneMapped: false })
-    );
-    this.orb.position.y = 0.8;
-    this.ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.5, 0.75, 32),
-      new THREE.MeshBasicMaterial({ color: 0x8dffb0, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })
-    );
-    this.ring.rotation.x = -Math.PI / 2;
-    this.ring.position.y = 0.04;
-    this.group.add(this.orb, this.ring);
-    this.group.visible = false;
-    scene.add(this.group);
-  }
-
-  show(data) {
-    this.data = data;
-    this.group.visible = !!data;
-    if (data) this.group.position.set(data.x, data.y, data.z);
-  }
-
-  update(time) {
-    if (!this.group.visible) return;
-    this.orb.position.y = 0.8 + Math.sin(time * 3) * 0.12;
-    this.orb.scale.setScalar(1 + Math.sin(time * 6) * 0.1);
-  }
-}
-
 export class Sites {
   /**
    * @param {THREE.Scene} scene
@@ -201,9 +166,6 @@ export class Sites {
     this.stats = stats;
     this.graces = defs.graces.map((g) => new Grace(scene, g));
     this.chests = defs.chests.map((c) => new Chest(scene, c, stats.data.chests.includes(c.id)));
-    this.lostRunes = new LostRunes(scene);
-    // Verloren munten liggen alleen in het level waar je ze liet vallen
-    this.lostRunes.show(stats.data.lostRunes?.level === LEVEL_INDEX ? stats.data.lostRunes : null);
   }
 
   grace(id) {
@@ -235,20 +197,8 @@ export class Sites {
     return null;
   }
 
-  /** Raakt de speler zijn verloren munten aan? Geeft het bedrag terug (of 0). */
-  touchLostRunes(pos) {
-    const data = this.lostRunes.data;
-    if (!data) return 0;
-    if (Math.hypot(data.x - pos.x, data.z - pos.z) < 1.4 && Math.abs(pos.y - data.y) < 2) {
-      this.lostRunes.show(null);
-      return data.amount;
-    }
-    return 0;
-  }
-
   update(dt, time) {
     for (const g of this.graces) g.update(dt, time, this.stats.data.discovered.includes(g.id));
     for (const c of this.chests) c.update(dt, time);
-    this.lostRunes.update(time);
   }
 }

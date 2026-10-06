@@ -14,7 +14,7 @@ import { createEnemies, spawnEnemy } from './enemies.js';
 import { createBosses, BOSS_INFO } from './bosses.js';
 import { Sites } from './sites.js';
 import { Decor } from './decor.js';
-import { Stats, POWERS, PERKS, BOSS_KILLS } from './stats.js';
+import { Stats, POWERS, PERKS, BOSS_KILLS, SHOP_ITEMS } from './stats.js';
 import { itemInfo } from './gear.js';
 import { Effects } from './effects.js';
 import { SwordTrail } from './trail.js';
@@ -291,8 +291,43 @@ function questReady(quest) {
   ui.toast(`✔ <b>${quest.title}</b> voltooid!<br><small>Ga terug om je beloning te halen.</small>`, 4);
 }
 
+/** De winkel van de koopman openen (na een begroeting). */
+function openShop(npc) {
+  play('pickup');
+  ui.prompt(null);
+  ui.openDialog(npc.name, [npcs.shopGreeting()], () => {
+    document.exitPointerLock?.();
+    ui.openShop(npc.name, {
+      buy: (key) => {
+        if (!stats.buy(key)) return;
+        play('pickup');
+        const item = SHOP_ITEMS[key];
+        if (key === 'soep') {
+          player.health = player.maxHealth;
+          player.stamina = player.maxStamina;
+          player.flasks = stats.flasksMax;
+          play('heal');
+        } else if (key === 'zaadje') player.flasks++;
+        else if (key === 'hart') player.health += 20;
+        effects.burst(player.position.clone().setY(player.position.y + 1.2), 0xffd76a, { count: 20, speed: 3, size: 0.09, life: 0.7, up: 3 });
+        ui.toast(`Gekocht: <b>${item.icon} ${item.name}</b>`, 2.5);
+      },
+      close: closeShop,
+    });
+  });
+}
+
+function closeShop() {
+  ui.closeMenu();
+  cameraRig.lock();
+}
+
 /** Praten met een NPC. */
 function talkTo(npc) {
+  if (npc.shop) {
+    openShop(npc);
+    return;
+  }
   const result = npcs.talk(npc);
   play('pickup');
   ui.prompt(null);
@@ -406,16 +441,7 @@ function onGolemSlam(enemy, radius, damage) {
 function die() {
   state.deathTimer = 4;
   play('lose');
-  ui.banner('JE BENT GESTORVEN', stats.runes > 0 ? 'Je munten liggen nog waar je viel...' : '', 'death', 3.8);
-  // Munten laten vallen; vorige verloren munten zijn nu echt weg
-  if (stats.runes > 0) {
-    stats.data.lostRunes = { level: LEVEL_INDEX, x: player.position.x, y: player.position.y, z: player.position.z, amount: stats.runes };
-    stats.data.runes = 0;
-  } else {
-    stats.data.lostRunes = null;
-  }
-  sites.lostRunes.show(stats.data.lostRunes);
-  stats.save();
+  ui.banner('JE BENT GESTORVEN', 'Je komt terug bij de laatste Plek van Genade.', 'death', 3.8);
 }
 
 function respawnAfterDeath() {
@@ -644,7 +670,7 @@ function handleActions(move) {
   // E: praten, rusten of een kist openen
   const npc = player.isBusy ? null : npcs.nearby(player.position);
   if (npc) {
-    ui.prompt(`<b>E</b> Praat met ${npc.name}`);
+    ui.prompt(npc.shop ? `<b>E</b> Winkelen bij ${npc.name}` : `<b>E</b> Praat met ${npc.name}`);
     if (input.wasPressed('KeyE')) talkTo(npc);
     return;
   }
@@ -797,17 +823,20 @@ function gameLoop() {
   const elapsed = clock.elapsedTime;
 
   const move = readMove();
+  const menuAtStart = ui.menuOpen; // welk menu was er open toen deze frame begon
   // In een gesprek: E, Spatie of klikken = volgende zin
   const inDialog = ui.menuOpen === 'dialog';
   if (inDialog && (input.wasPressed('KeyE') || input.wasPressed('Space') || input.wasPressed('Enter') || state.attackRequested)) {
     state.attackRequested = false;
     ui.advanceDialog();
   }
-  // Uitrusting open: I, Tab of Esc sluit hem weer (andere spelknoppen doen niks zolang er een menu open is).
+  // Uitrusting open: I, Tab of Esc sluit hem weer; de winkel sluit met Esc of E.
   // In die frame doen we verder niks, anders opent dezelfde toetsdruk het menu meteen opnieuw.
-  const closeInventory = ui.menuOpen === 'inventory' && (input.wasPressed('KeyI') || input.wasPressed('Tab') || input.wasPressed('Escape'));
+  const closeInventory = menuAtStart === 'inventory' && (input.wasPressed('KeyI') || input.wasPressed('Tab') || input.wasPressed('Escape'));
+  const closeShopKey = menuAtStart === 'shop' && (input.wasPressed('Escape') || input.wasPressed('KeyE'));
   if (closeInventory) toggleInventory();
-  const canAct = player.alive && !ui.menuOpen && !inDialog && state.deathTimer <= 0 && !paused && !closeInventory;
+  if (closeShopKey) closeShop();
+  const canAct = player.alive && !ui.menuOpen && !inDialog && state.deathTimer <= 0 && !paused && !closeInventory && !closeShopKey;
   crosshairEl.classList.toggle('hidden', !player.sword.ranged || !cameraRig.locked);
   if (canAct) handleActions(move);
   else ui.prompt(null);
@@ -838,14 +867,6 @@ function gameLoop() {
     if (found) {
       play('heal');
       ui.banner('PLEK VAN GENADE GEVONDEN', found.name, 'gold', 3.5);
-    }
-    const recovered = sites.touchLostRunes(player.position);
-    if (recovered) {
-      giveRunes(recovered);
-      stats.data.lostRunes = null;
-      stats.save();
-      play('pickup');
-      ui.toast(`Je munten terug: <b>+${recovered}</b>`);
     }
   } else if (state.deathTimer > 0) {
     state.deathTimer -= realDt;

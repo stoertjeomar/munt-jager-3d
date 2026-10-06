@@ -382,6 +382,10 @@ canvas {
   border-color: #f3d27a;
 }
 
+#menu-body button em.bad {
+  color: #e36a5a;
+}
+
 #menu-body button em {
   float: right;
   margin-top: -32px;

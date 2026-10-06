@@ -1,4 +1,4 @@
-import { POWERS, PERKS } from './stats.js';
+import { POWERS, PERKS, SHOP_ITEMS } from './stats.js';
 import { WEAPONS } from './weapons.js';
 import { HELMETS, itemInfo, itemColor } from './gear.js';
 import { BOUNDS, GRACES, ARENAS } from './world.js';
@@ -233,6 +233,37 @@ export class UI {
     };
   }
 
+  /** De winkel van de koopman: munten uitgeven. actions = { buy(key), close() } */
+  openShop(name, actions) {
+    this.menuOpen = 'shop';
+    this.el.menu.classList.remove('hidden');
+    this.el.menuTitle.textContent = name;
+    const render = () => {
+      const st = this.stats;
+      this.el.menuBody.innerHTML = `<p class="menu-info">● Je hebt <b>${st.runes.toLocaleString('nl-NL')}</b> munten</p>` +
+        Object.entries(SHOP_ITEMS).map(([key, item]) => {
+          const price = st.shopPrice(key);
+          const soldOut = price === null;
+          const count = item.repeat ? '' : ` · gekocht ${st.bought(key)} / ${item.price.length}`;
+          return `<button data-buy="${key}" class="item" ${soldOut || st.runes < price ? 'disabled' : ''}>
+            <span>${item.icon} ${item.name}</span><small>${item.info}${count}</small>
+            <em class="${!soldOut && st.runes < price ? 'bad' : ''}">${soldOut ? 'Uitverkocht' : `● ${price}`}</em></button>`;
+        }).join('') +
+        `<p class="menu-info">Leven ${st.maxHealth} · Schade ×${st.damageMultiplier.toFixed(2)} · Flesjes ${st.flasksMax}</p>
+        <button data-act="close">Tot ziens! (Esc)</button>`;
+    };
+    render();
+    this.el.menuBody.onclick = (e) => {
+      const b = e.target.closest('button');
+      if (!b || b.disabled) return;
+      if (b.dataset.act === 'close') actions.close();
+      else if (b.dataset.buy) {
+        actions.buy(b.dataset.buy);
+        render();
+      }
+    };
+  }
+
   /** Uitrusting (I of Tab), ook buiten een Genade-plek. */
   openInventory(actions) {
     this.menuOpen = 'inventory';
@@ -347,14 +378,6 @@ export class UI {
       ctx.fillStyle = '#ffd76a';
       ctx.beginPath();
       ctx.arc(mx, my, 3.5 + Math.sin(time * 3), 0, Math.PI * 2);
-      ctx.fill();
-    }
-    const lost = this.stats.data.lostRunes;
-    if (lost && lost.level === LEVEL_INDEX) {
-      const [mx, my] = toMap(lost.x, lost.z);
-      ctx.fillStyle = '#8dffb0';
-      ctx.beginPath();
-      ctx.arc(mx, my, 4, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();

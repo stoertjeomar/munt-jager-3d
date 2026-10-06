@@ -48,6 +48,15 @@ export const PERKS = {
   master: { name: 'Meester-jager', level: 12, speed: 0.1, defense: 0.1, info: 'Nog 10% sneller en 10% minder schade.' },
 };
 
+// De winkel van Koopman Kobus (bij het begin van elk level). price = wat het kost; elke volgende keer wordt het duurder.
+// Een item met repeat koop je zo vaak als je wilt (altijd dezelfde prijs).
+export const SHOP_ITEMS = {
+  soep: { name: 'Herstel-soep', icon: '🍲', price: [40], repeat: true, info: 'Meteen al je leven en flesjes terug.' },
+  zaadje: { name: 'Gouden Zaadje', icon: '🧪', price: [200, 450, 800], info: 'Je kunt één flesje meer meenemen.' },
+  hart: { name: 'Hartversterker', icon: '❤', price: [150, 300, 500, 800, 1200], info: '+20 levenspunten.' },
+  slijpen: { name: 'Wapen slijpen', icon: '⚔', price: [150, 300, 500, 800, 1200], info: '+10% schade met al je wapens.' },
+};
+
 /** Hoeveel vijanden je moet verslaan om van `level` naar `level + 1` te gaan. */
 export function killsNeeded(level) {
   return 3 + level * 2;
@@ -73,7 +82,7 @@ function freshSave() {
     bosses: [], // verslagen bosses
     chests: [], // geopende kisten
     diamonds: [], // gevonden diamanten
-    lostRunes: null, // { level, x, y, z, amount } munten die je liet vallen toen je doodging
+    shop: {}, // hoe vaak je iets in de winkel kocht: { zaadje: 1, hart: 2, ... }
     victory: false,
   };
 }
@@ -88,10 +97,10 @@ export class Stats {
   get runes() { return this.data.runes; }
   get xp() { return this.data.xp; }
   get xpNeeded() { return killsNeeded(this.data.level); }
-  get maxHealth() { return 150 + (this.data.level - 1) * PER_LEVEL.health; }
+  get maxHealth() { return 150 + (this.data.level - 1) * PER_LEVEL.health + this.bought('hart') * 20; }
   get maxStamina() { return 100 + (this.data.level - 1) * PER_LEVEL.stamina; }
-  get damageMultiplier() { return 1 + (this.data.level - 1) * PER_LEVEL.damage; }
-  get flasksMax() { return this.data.flasksMax + this.perkBonus('flasks'); }
+  get damageMultiplier() { return 1 + (this.data.level - 1) * PER_LEVEL.damage + this.bought('slijpen') * 0.1; }
+  get flasksMax() { return this.data.flasksMax + this.perkBonus('flasks') + this.bought('zaadje'); }
   get speedMultiplier() { return 1 + this.perkBonus('speed'); }
   get defenseBonus() { return this.perkBonus('defense'); }
   get healBonus() { return this.perkBonus('heal'); }
@@ -112,6 +121,28 @@ export class Stats {
     }
     this.save();
     return gained;
+  }
+
+  /** Hoe vaak heb je dit in de winkel gekocht? */
+  bought(key) {
+    return this.data.shop?.[key] ?? 0;
+  }
+
+  /** Wat kost dit nu? null = uitverkocht. */
+  shopPrice(key) {
+    const item = SHOP_ITEMS[key];
+    if (item.repeat) return item.price[0];
+    return item.price[this.bought(key)] ?? null;
+  }
+
+  /** Iets kopen (als je genoeg munten hebt). Geeft true terug als het lukte. */
+  buy(key) {
+    const price = this.shopPrice(key);
+    if (price === null || this.data.runes < price) return false;
+    this.data.runes -= price;
+    this.data.shop = { ...this.data.shop, [key]: this.bought(key) + 1 };
+    this.save();
+    return true;
   }
 
   hasPerk(key) {
@@ -161,6 +192,11 @@ export class Stats {
     try {
       const saved = JSON.parse(localStorage.getItem(SAVE_KEY));
       if (saved) this.data = { ...freshSave(), ...saved };
+      // Oude save met munten die nog ergens op de grond lagen? Die krijg je gewoon terug.
+      if (this.data.lostRunes) {
+        this.data.runes += this.data.lostRunes.amount ?? 0;
+        delete this.data.lostRunes;
+      }
     } catch {
       // geen of kapotte save: nieuw spel
     }

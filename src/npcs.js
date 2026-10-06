@@ -10,13 +10,59 @@ import { LEVEL } from './levels.js';
 
 // NPC's: personages die in de wereld wonen. Praat met ze (E) en ze geven je een zij-quest.
 // Welke NPC waar staat, staat per level in levels.js (npcs = [personage, x, z, quest]).
+// Koopman Kobus staat met zijn kraampje bij het begin van elk level: bij hem geef je je munten uit.
 
 const PEOPLE = {
   mila: { name: 'Mila', file: 'models/personages/mila.glb', height: 1.45 },
   strohoed: { name: 'Strohoed', file: null, height: 1.6 },
   robot: { name: 'Robot B-0P', file: 'models/robot.glb', height: 1.25 },
   ridder: { name: 'Sir Roestbout', file: 'models/speler.glb', height: 1.7, weapon: 'sword', helmet: 'ijzer' },
+  koopman: {
+    name: 'Koopman Kobus', file: null, height: 1.6, shop: true,
+    colors: { shirt: 0x2f7a4a, shorts: 0x6b4a2b, sash: 0xffd23a, straw: 0x5b3a8a, band: 0xffd23a, hair: 0x8a5a2b, cuff: 0x6b4a2b },
+  },
 };
+
+// Wat de koopman zegt als je bij hem komt
+const SHOP_GREETINGS = [
+  'Welkom, welkom! Munten? Daar heb ik precies de juiste spullen voor.',
+  'Ah, een Munt Jager! Kijk gerust rond, alles is vers.',
+  'Hallo vriend! Vandaag extra lekkere soep in de aanbieding.',
+];
+
+/** Het marktkraampje van de koopman: tafel met spulletjes en een gestreept dakje. */
+function buildStall() {
+  const g = new THREE.Group();
+  const wood = new THREE.MeshStandardMaterial({ color: 0x8a5a2b, roughness: 0.85 });
+  const add = (geo, mat, x, y, z) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    g.add(m);
+    return m;
+  };
+  add(new THREE.BoxGeometry(1.8, 0.1, 0.8), wood, 0, 0.85, 0); // tafelblad
+  add(new THREE.BoxGeometry(1.7, 0.75, 0.05), wood, 0, 0.42, 0.36); // voorkant
+  for (const x of [-0.85, 0.85]) for (const z of [-0.35, 0.35]) add(new THREE.BoxGeometry(0.08, 2.3, 0.08), wood, x, 1.15, z);
+  // Gestreept dakje (rood-wit)
+  for (let i = 0; i < 6; i++) {
+    const stripe = add(new THREE.BoxGeometry(0.34, 0.05, 1.1), new THREE.MeshStandardMaterial({ color: i % 2 ? 0xffffff : 0xd0342c, roughness: 0.8 }), -0.85 + 0.17 + i * 0.34, 2.35, 0.05);
+    stripe.rotation.x = 0.18;
+  }
+  // Spulletjes op tafel: flesjes, een stapeltje munten en een hartje
+  const flask = new THREE.MeshStandardMaterial({ color: 0xff5a7a, emissive: 0x8a1a33, emissiveIntensity: 0.5, roughness: 0.2 });
+  for (const x of [-0.6, -0.42]) add(new THREE.CylinderGeometry(0.07, 0.09, 0.22, 10), flask, x, 1.01, 0.05);
+  const gold = new THREE.MeshStandardMaterial({ color: 0xffd23a, metalness: 0.6, roughness: 0.3, emissive: 0x6b4a00, emissiveIntensity: 0.4 });
+  for (let i = 0; i < 5; i++) add(new THREE.CylinderGeometry(0.09, 0.09, 0.03, 14), gold, 0.15 + (i % 2) * 0.02, 0.92 + i * 0.03, 0.05);
+  add(new THREE.SphereGeometry(0.1, 10, 8), new THREE.MeshStandardMaterial({ color: 0xe0405a, roughness: 0.4 }), 0.55, 0.98, 0.0);
+  const soup = add(new THREE.CylinderGeometry(0.16, 0.12, 0.14, 12), new THREE.MeshStandardMaterial({ color: 0x6b6b6b, metalness: 0.5, roughness: 0.4 }), -0.1, 0.97, -0.2);
+  soup.castShadow = false;
+  // Kistjes naast de kraam
+  add(new THREE.BoxGeometry(0.5, 0.45, 0.5), wood, 1.25, 0.23, 0.2);
+  add(new THREE.BoxGeometry(0.4, 0.35, 0.4), wood, 1.2, 0.63, 0.15);
+  return g;
+}
 
 /**
  * De zij-quests. goal.kind = 'kill' (versla `count` vijanden van soort `type`) of 'collect' (raap `count` dingen op).
@@ -110,6 +156,7 @@ class NPC {
     this.person = PEOPLE[who];
     this.name = this.person.name;
     this.questId = questId;
+    this.shop = !!this.person.shop;
     this.mesh = new THREE.Group();
     this.mesh.position.set(x, 0, z);
     this.mesh.rotation.y = Math.random() * Math.PI * 2;
@@ -144,7 +191,7 @@ class NPC {
   async load() {
     const height = this.person.height;
     if (!this.person.file) {
-      const c = buildCharacter();
+      const c = buildCharacter(this.person.colors);
       this.inner.add(c.group);
       this.useRig(c.rig);
       return;
@@ -197,16 +244,16 @@ class NPC {
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       this.mesh.rotation.y += diff * Math.min(1, 4 * dt);
     }
-    // Teken boven het hoofd
-    const state = quests.state(this.questId);
-    const [text, color] = state === 'nieuw' ? ['!', '#ffd23a'] : state === 'klaar' ? ['?', '#ffd23a'] : state === 'actief' ? ['…', '#cfcfcf'] : [null, null];
+    // Teken boven het hoofd (de koopman: een muntje)
+    const state = this.shop ? 'winkel' : quests.state(this.questId);
+    const [text, color] = state === 'winkel' ? ['€', '#ffd23a'] : state === 'nieuw' ? ['!', '#ffd23a'] : state === 'klaar' ? ['?', '#ffd23a'] : state === 'actief' ? ['…', '#cfcfcf'] : [null, null];
     if (text !== this.markerText) {
       this.markerText = text;
       this.marker.userData.draw(text, color);
     }
     this.marker.position.y = this.person.height + 0.55 + Math.sin(time * 3) * 0.08;
     // Zwaaien als je in de buurt komt en hij een quest voor je heeft
-    const wantWave = dist < 12 && dist > 2.5 && (state === 'nieuw' || state === 'klaar');
+    const wantWave = dist < 12 && dist > 2.5 && (state === 'nieuw' || state === 'klaar' || (state === 'winkel' && dist < 8));
     if (this.rig && dist < 50) {
       this.animator.update(dt, { moving: false, onGround: true, attack: null, pickup: null, wave: wantWave });
       this.rig.apply?.();
@@ -250,6 +297,15 @@ export class NPCs {
     this.scene = scene;
     this.stats = stats;
     this.list = LEVEL.npcs.map((def) => new NPC(scene, def, colliders));
+    // De koopman met zijn kraampje, vlak bij de eerste Plek van Genade
+    const [, , gx, gz] = LEVEL.graces[0];
+    this.list.push(new NPC(scene, ['koopman', gx + 3.6, gz - 3], colliders));
+    const stall = buildStall();
+    stall.position.set(gx + 3.6 + 1.9, 0, gz - 3);
+    stall.rotation.y = -Math.PI / 2; // voorkant naar de koopman en het pad
+    scene.add(stall);
+    colliders.push(new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(gx + 5.5, 0.6, gz - 2.75), new THREE.Vector3(1.0, 1.2, 2.9)));
+    this.koopman = this.list[this.list.length - 1];
     this.items = []; // quest-voorwerpen in de wereld
     loadGLB('models/kaykit/star.glb').catch(() => null).then((star) => {
       for (const [questId, spots] of Object.entries(LEVEL.questItems ?? {})) {
@@ -273,6 +329,11 @@ export class NPCs {
   progress(questId) {
     const q = this.stats.data.quests[questId];
     return q ? q.count : 0;
+  }
+
+  /** Een begroeting van de koopman. */
+  shopGreeting() {
+    return SHOP_GREETINGS[Math.floor(Math.random() * SHOP_GREETINGS.length)];
   }
 
   /** Welke NPC staat er dichtbij genoeg om mee te praten? */
@@ -340,6 +401,7 @@ export class NPCs {
   /** Markeringen voor de minimap. */
   mapMarkers() {
     const marks = this.list.map((n) => {
+      if (n.shop) return { x: n.position.x, z: n.position.z, icon: '€', color: '#ffd23a' };
       const s = this.state(n.questId);
       return { x: n.position.x, z: n.position.z, icon: s === 'nieuw' ? '!' : s === 'klaar' ? '?' : '●', color: s === 'beloond' || s === 'actief' ? '#cfcfcf' : '#ffd23a' };
     });
