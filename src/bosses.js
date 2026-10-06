@@ -9,12 +9,15 @@ import { play } from './audio.js';
 // De vier bosses: aan het eind van elk level één. De boss woont in een arena (zie ARENAS in world.js).
 // Loop je de arena in, dan gaat er een mistmuur omhoog en begint het gevecht.
 // Elke boss heeft een eigen set aanvallen, en wordt bij de helft van zijn leven sneller en gemener (fase 2).
+// Omar de Baas woont niet in een level maar in zijn eigen kasteel: hij staat in omarFighter.js
+// en meldt zich zelf aan in BOSS_CLASSES (onderaan dit bestand).
 
 export const BOSS_INFO = {
   koning: { name: 'Koning Slijm', title: 'Heerser van de Ruïnevallei', hp: 900, runes: 600 },
   ridder: { name: 'De Gevallen Ridder', title: 'Bewaker van het Spookwoud', hp: 1100, runes: 900 },
   reus: { name: 'Steenreus Gorath', title: 'Hart van het Hoogland', hp: 1800, runes: 2000 },
   mario: { name: 'Budget Mario', title: 'De Vliegende Loodgieter', hp: 650, runes: 300 },
+  omar: { name: 'Omar de Baas', title: 'De Baas van Alles', hp: 1600, runes: 3000 }, // hp hangt af van jouw level (omarFighter.js)
 };
 
 const tmp = new THREE.Vector3();
@@ -55,7 +58,7 @@ function createFogWall(arena) {
   return wall;
 }
 
-class Boss {
+export class Boss {
   constructor(scene, arena, id) {
     this.id = id;
     this.info = BOSS_INFO[id];
@@ -1008,11 +1011,13 @@ class FlyingMario extends Boss {
   }
 }
 
+// Welke boss hoort bij welke arena-id. Omar (omarFighter.js) zet zichzelf hier ook bij.
+export const BOSS_CLASSES = { koning: KingSlime, ridder: FallenKnight, reus: StoneGiant, mario: FlyingMario };
+
 /** Maak alle bosses. `defeated` = lijst met id's van bosses die al verslagen zijn (uit de save). */
 export function createBosses(scene, arenas, defeated) {
-  const classes = { koning: KingSlime, ridder: FallenKnight, reus: StoneGiant, mario: FlyingMario };
   return arenas.map((arena) => {
-    const boss = new classes[arena.id](scene, arena);
+    const boss = new BOSS_CLASSES[arena.id](scene, arena);
     if (defeated.includes(arena.id)) boss.setDefeated();
     return boss;
   });

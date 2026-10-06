@@ -19,6 +19,7 @@ export const CHARACTERS = [
   { id: 'strohoed', name: 'Strohoed', file: null, info: 'Het allereerste poppetje van deze game!' },
 ];
 export const PLAYABLE = CHARACTERS.filter((c) => ['eve', 'soldaat'].includes(c.id));
+export const otherPlayable = (id) => PLAYABLE.find((c) => c.id !== (PLAYABLE.some((p) => p.id === id) ? id : PLAYABLE[0].id))?.id ?? 'soldaat'; // Omar draagt altijd het andere personage
 
 // Instellingen van de speler — speel hiermee om het gevoel te veranderen!
 const SPEED = 6.5; // loopsnelheid (meter per seconde)

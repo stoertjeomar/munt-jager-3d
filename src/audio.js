@@ -153,6 +153,10 @@ const SOUNDS = {
   // Gewonnen!
   win: () => [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone({ type: 'square', from: f, duration: 0.18, volume: 0.12, delay: i * 0.11 })),
   lose: () => [392, 330, 262, 196].forEach((f, i) => tone({ type: 'triangle', from: f, duration: 0.3, volume: 0.2, delay: i * 0.18 })),
+  // Omar lacht je uit: "ha-ha-ha-ha" naar beneden
+  laugh: () => [520, 470, 430, 380].forEach((f, i) => tone({ type: 'square', from: f, to: f * 0.8, duration: 0.12, volume: 0.12, delay: i * 0.15 })),
+  // Wind die aanzwelt (Omar neemt je mee)
+  whoosh: () => noise({ from: 200, to: 3000, duration: 0.9, volume: 0.35, q: 1 }),
 };
 
 /** Speel een geluid, bijvoorbeeld play('hit'). */

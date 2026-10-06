@@ -22,6 +22,7 @@ import { UI } from './ui.js';
 import { play, unlockAudio, toggleMute, setFootsteps } from './audio.js';
 import { Pickups, DIAMONDS } from './pickups.js';
 import { Projectiles } from './projectiles.js';
+import { OmarFlow } from './omar.js';
 
 // ---------- Basis: renderer, scene, camera ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -227,6 +228,7 @@ const BOSS_REWARDS = {
 };
 
 function onBossDefeated(boss) {
+  if (boss.id === 'omar') return omar.onWin(boss); // Omar verslagen: eigen feest, beloning en terugreis (omar.js)
   const firstTime = !stats.data.bosses.includes(boss.id);
   play('win');
   effects.shake(0.5);
@@ -322,6 +324,7 @@ function closeShop() {
 
 /** Praten met een NPC. */
 function talkTo(npc) {
+  if (npc.omar) return omar.challenge(npc); // Omar geeft geen quest: hij daagt je uit (omar.js)
   if (npc.shop) {
     openShop(npc);
     return;
@@ -437,6 +440,7 @@ function onGolemSlam(enemy, radius, damage) {
 // ---------- Doodgaan, rusten, reizen ----------
 
 function die() {
+  if (omar.onDeath()) return; // in Omars kasteel ga je niet echt dood: Omar lacht je uit en je mag terug
   state.deathTimer = 4;
   play('lose');
   ui.banner('JE BENT GESTORVEN', 'Je komt terug bij het laatste checkpoint.', 'death', 3.8);
@@ -721,6 +725,8 @@ function updateBossFights() {
 // ---------- Game loop ----------
 const clock = new THREE.Clock();
 const bossCtx = { player, effects, hurtPlayer, spawnEnemy: addSummon, camera, projectiles };
+// Omar staat in elk level en neemt je mee naar zijn Gekke Kasteel (alles daarover staat in omar.js)
+const omar = new OmarFlow({ scene, camera, cameraRig, input, state, stats, ui, player, bosses, npcs, sites, world, effects, pickups, decor, giveKills, giveRunes, announceNewPowers });
 
 function gameLoop() {
   // realDt = tijd sinds vorige frame. Begrensd zodat een lag-piek je niet door de vloer laat vallen.
@@ -848,6 +854,7 @@ function gameLoop() {
   }
 
   ui.update(realDt, player, state.activeBoss, elapsed);
+  omar.update(realDt); // Omar: keuzes, reizen en tussenfilmpjes (mag de camera overnemen)
 
   // Af en toe automatisch opslaan
   state.saveTimer += realDt;
@@ -873,3 +880,4 @@ if (stats.level === 1 && stats.runes === 0 && stats.data.bosses.length === 0) {
 
 // Handig voor debuggen in de browser-console (F12): typ bijvoorbeeld `game.player.position`
 window.game = { scene, player, enemies, bosses, sites, npcs, stats, ui, world, state, camera, cameraRig, renderer, composer, effects, trail, onDefeated, loop: gameLoop };
+window.game.omar = omar;
