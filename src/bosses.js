@@ -632,6 +632,7 @@ class StoneGiant extends Boss {
     this.body = model.body;
     this.body.scale.setScalar(GIANT_SCALE);
     this.mesh.add(this.body);
+    for (const p of model.pebbles) p.visible = false; // de reus gooit liever echte rotsblokken
     this.rememberMaterials(model.materials);
     this.rocks = [];
   }

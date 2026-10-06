@@ -5,6 +5,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { Player, PLAYABLE } from './player.js';
 import { createWorld, GRACES, ARENAS, CHESTS } from './world.js';
 import { LEVELS, LEVEL, LEVEL_INDEX } from './levels.js';
@@ -41,6 +42,22 @@ composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth / 2, window.innerHeight / 2), 0.35, 0.5, 0.92);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
+// Kleuren net wat levendiger en een zachte donkere rand (vignet): dan voelt het meer als een echte game
+composer.addPass(new ShaderPass({
+  uniforms: { tDiffuse: { value: null } },
+  vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+    void main() {
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      float grey = dot(c, vec3(0.299, 0.587, 0.114));
+      c = mix(vec3(grey), c, 1.14);                 // verzadiging
+      c = (c - 0.5) * 1.05 + 0.5;                   // contrast
+      c *= vec3(1.02, 1.0, 0.97);                   // een tikje warmer
+      vec2 d = vUv - 0.5;
+      c *= 1.0 - smoothstep(0.35, 0.85, length(d * vec2(1.25, 1.0))) * 0.35; // vignet
+      gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+    }`,
+}));
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -786,7 +803,11 @@ function gameLoop() {
     state.attackRequested = false;
     ui.advanceDialog();
   }
-  const canAct = player.alive && !ui.menuOpen && !inDialog && state.deathTimer <= 0 && !paused;
+  // Uitrusting open: I, Tab of Esc sluit hem weer (andere spelknoppen doen niks zolang er een menu open is).
+  // In die frame doen we verder niks, anders opent dezelfde toetsdruk het menu meteen opnieuw.
+  const closeInventory = ui.menuOpen === 'inventory' && (input.wasPressed('KeyI') || input.wasPressed('Tab') || input.wasPressed('Escape'));
+  if (closeInventory) toggleInventory();
+  const canAct = player.alive && !ui.menuOpen && !inDialog && state.deathTimer <= 0 && !paused && !closeInventory;
   crosshairEl.classList.toggle('hidden', !player.sword.ranged || !cameraRig.locked);
   if (canAct) handleActions(move);
   else ui.prompt(null);
@@ -876,7 +897,7 @@ function gameLoop() {
   });
   const walking = player.moving && player.onGround && player.rollTimer <= 0 && !ui.menuOpen && player.alive && !paused;
   setFootsteps(walking, input.heldFor('ShiftLeft') > 0.22 || input.heldFor('ShiftRight') > 0.22);
-  decor.update(dt, elapsed, player.position);
+  decor.update(dt, elapsed, player.position, world.night ?? 0);
   updateTrail(dt);
   effects.update(dt);
   world.updateSun(player.position, dt);

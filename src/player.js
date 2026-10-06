@@ -537,8 +537,14 @@ export class Player {
     const drink = this.drinkTimer > 0 ? 1 - this.drinkTimer / DRINK.time : null;
 
     if (this.rig) {
+      // Hoe snel draait de speler? (voor meeleunen in bochten)
+      const yaw = this.mesh.rotation.y;
+      const turn = this.prevYaw === undefined ? 0 : Math.atan2(Math.sin(yaw - this.prevYaw), Math.cos(yaw - this.prevYaw)) / Math.max(dt, 1e-3);
+      this.prevYaw = yaw;
       this.animator.update(dt, {
         moving: this.moving && this.rollTimer <= 0,
+        vy: this.velocity.y,
+        turn: this.rollTimer > 0 || this.dashTimer > 0 ? 0 : turn,
         run: this.sprinting && this.sword.attackProgress === null,
         onGround: this.onGround || this.rollTimer > 0,
         attack: this.sword.attackProgress,

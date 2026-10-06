@@ -94,6 +94,7 @@ const RECOVER_TIME = 0.7;
 const SLAM_COOLDOWN = 1.6;
 
 const DEATH_TIME = 0.45;
+const SPAWN_TIME = 0.5; // zo lang duurt het "opploppen" als een vijand (terug)komt
 const WHITE = new THREE.Color(0xffffff);
 
 function mat(color, extra = {}) {
@@ -103,13 +104,19 @@ function mat(color, extra = {}) {
 function addEyes(parent, { spread, y, z, size, angry = false, color = 0xffffff, pupil = 0x111111 }) {
   const eyeGeo = new THREE.SphereGeometry(size, 12, 12);
   const pupilGeo = new THREE.SphereGeometry(size * 0.5, 8, 8);
+  const eyes = [];
   for (const side of [-1, 1]) {
-    const eye = new THREE.Mesh(eyeGeo, new THREE.MeshStandardMaterial({ color }));
+    const eye = new THREE.Mesh(eyeGeo, new THREE.MeshStandardMaterial({ color, roughness: 0.25 }));
     eye.position.set(side * spread, y, z);
-    const p = new THREE.Mesh(pupilGeo, new THREE.MeshStandardMaterial({ color: pupil }));
+    const p = new THREE.Mesh(pupilGeo, new THREE.MeshStandardMaterial({ color: pupil, roughness: 0.2 }));
     p.position.z = size * 0.65;
     eye.add(p);
+    // Klein glimlichtje in de pupil: dan lijken de ogen levend
+    const glint = new THREE.Mesh(new THREE.SphereGeometry(size * 0.16, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    glint.position.set(size * 0.15, size * 0.18, size * 0.42);
+    p.add(glint);
     parent.add(eye);
+    eyes.push({ eye, pupil: p, size });
     if (angry) {
       const brow = new THREE.Mesh(new THREE.BoxGeometry(size * 1.9, size * 0.4, size * 0.4), new THREE.MeshStandardMaterial({ color: 0x111111 }));
       brow.position.set(side * spread, y + size * 1.35, z + size * 0.3);
@@ -117,26 +124,48 @@ function addEyes(parent, { spread, y, z, size, angry = false, color = 0xffffff, 
       parent.add(brow);
     }
   }
+  return eyes;
 }
 
 // ---------- Modellen ----------
 
 export function buildSlime(type, angry) {
   const body = new THREE.Group(); // stuitert en squasht
-  const bodyMat = mat(type.color, { roughness: 0.35, transparent: true, opacity: 0.92 });
-  const blob = new THREE.Mesh(new THREE.SphereGeometry(type.radius, 22, 16), bodyMat);
-  blob.scale.y = type.height / 2 / type.radius;
+  // Glanzende gelei: doorzichtig, met een laklaagje en een beetje eigen gloed
+  const bodyMat = new THREE.MeshPhysicalMaterial({
+    color: type.color, roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.08, sheen: 0.6, sheenColor: new THREE.Color(0xffffff),
+    transparent: true, opacity: 0.84, emissive: type.color, emissiveIntensity: 0.12,
+  });
+  const ry = type.height / 2 / type.radius;
+  const blob = new THREE.Mesh(new THREE.SphereGeometry(type.radius, 28, 20), bodyMat);
+  blob.scale.y = ry;
   blob.castShadow = true;
-  body.add(blob);
+  // Donkere kern binnenin (zie je door de gelei heen) met een paar luchtbelletjes
+  const core = new THREE.Mesh(new THREE.SphereGeometry(type.radius * 0.55, 16, 12), new THREE.MeshStandardMaterial({ color: new THREE.Color(type.color).multiplyScalar(0.45), roughness: 0.6 }));
+  core.scale.y = ry;
+  core.position.y = -type.height * 0.08;
+  body.add(core, blob);
+  const bubbleMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 });
+  for (let i = 0; i < 3; i++) {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(type.radius * (0.06 + i * 0.025), 6, 6), bubbleMat);
+    b.position.set((i - 1) * type.radius * 0.35, -type.height * 0.15 + i * 0.05, type.radius * 0.2);
+    body.add(b);
+  }
   // glimmend lichtje bovenop
-  const shine = new THREE.Mesh(new THREE.SphereGeometry(type.radius * 0.18, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 }));
-  shine.position.set(-type.radius * 0.35, type.height * 0.3, type.radius * 0.45);
+  const shine = new THREE.Mesh(new THREE.SphereGeometry(type.radius * 0.18, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75 }));
+  shine.scale.set(1.4, 0.7, 1);
+  shine.position.set(-type.radius * 0.38, type.height * 0.3, type.radius * 0.45);
   body.add(shine);
-  addEyes(body, {
+  const eyes = addEyes(body, {
     spread: type.radius * 0.33, y: type.height * 0.12, z: type.radius * 0.83,
     size: type.radius * (angry ? 0.2 : 0.26), angry,
   });
-  return { body, materials: [bodyMat] };
+  // Mondje
+  const mouth = new THREE.Mesh(new THREE.TorusGeometry(type.radius * 0.12, type.radius * 0.03, 6, 12, Math.PI), new THREE.MeshBasicMaterial({ color: 0x1a1a1a }));
+  mouth.position.set(0, -type.height * 0.08, type.radius * 0.93);
+  mouth.rotation.z = angry ? 0 : Math.PI; // boos = mondhoeken omlaag, blij = glimlach
+  body.add(mouth);
+  return { body, materials: [bodyMat], lookEyes: eyes };
 }
 
 function buildGhost(type) {
@@ -146,21 +175,39 @@ function buildGhost(type) {
   head.position.y = type.height * 0.55;
   const skirt = new THREE.Mesh(new THREE.CylinderGeometry(type.radius, type.radius * 0.75, type.height * 0.55, 22, 1, true), bodyMat);
   skirt.position.y = type.height * 0.275;
-  // golvende onderrand: kleine kegeltjes
+  // golvende onderrand: kleine kegeltjes (die wapperen, zie animateGhost)
+  const tips = [];
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;
     const tip = new THREE.Mesh(new THREE.ConeGeometry(type.radius * 0.2, type.height * 0.22, 6), bodyMat);
     tip.position.set(Math.sin(a) * type.radius * 0.7, -type.height * 0.08, Math.cos(a) * type.radius * 0.7);
     tip.rotation.x = Math.PI;
     body.add(tip);
+    tips.push(tip);
   }
   body.add(head, skirt);
+  // Spookachtige gloed eromheen
+  // (alleen de rand gloeit: hoe schuiner je ertegenaan kijkt, hoe feller)
+  const halo = new THREE.Mesh(
+    new THREE.SphereGeometry(type.radius * 1.2, 20, 14),
+    new THREE.ShaderMaterial({
+      uniforms: { color: { value: new THREE.Color(type.color) }, strength: { value: 0.6 } },
+      vertexShader: `varying vec3 vN; varying vec3 vV;
+        void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
+      fragmentShader: `uniform vec3 color; uniform float strength; varying vec3 vN; varying vec3 vV;
+        void main() { float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 3.0); gl_FragColor = vec4(color * 1.4, f * strength); }`,
+      transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    })
+  );
+  halo.position.y = type.height * 0.4;
+  halo.scale.y = 1.2;
+  body.add(halo);
   // donkere ogen en een "O"-mond
-  addEyes(body, { spread: type.radius * 0.35, y: type.height * 0.6, z: type.radius * 0.85, size: type.radius * 0.17, color: 0x1a1030, pupil: 0xffffff });
+  const eyes = addEyes(body, { spread: type.radius * 0.35, y: type.height * 0.6, z: type.radius * 0.85, size: type.radius * 0.17, color: 0x1a1030, pupil: 0xffffff });
   const mouth = new THREE.Mesh(new THREE.TorusGeometry(type.radius * 0.12, type.radius * 0.04, 8, 16), new THREE.MeshBasicMaterial({ color: 0x1a1030 }));
   mouth.position.set(0, type.height * 0.38, type.radius * 0.93);
   body.add(mouth);
-  return { body, materials: [bodyMat] };
+  return { body, materials: [bodyMat], lookEyes: eyes, tips, halo, mouth };
 }
 
 export function buildGolem(type) {
@@ -195,7 +242,21 @@ export function buildGolem(type) {
     body.add(shoulder);
     arms.push(shoulder);
   }
-  return { body, materials: [stone, dark, moss], eyes, eyeMat, arms };
+  // Gloeiende scheuren in zijn lijf (zelfde vuur als zijn ogen)
+  for (const [w, h, x, y, rz] of [[0.06, 0.55, -0.3, 1.05, 0.5], [0.05, 0.4, 0.25, 1.15, -0.4], [0.05, 0.3, 0.05, 0.8, 0.2]]) {
+    const crack = box(w, h, 0.03, eyeMat, x, y, 0.48);
+    crack.rotation.z = rz;
+    crack.castShadow = false;
+  }
+  // Steentjes die om hem heen zweven
+  const pebbles = [];
+  for (let i = 0; i < 4; i++) {
+    const p = new THREE.Mesh(new THREE.DodecahedronGeometry(0.1 + (i % 2) * 0.05, 0), dark);
+    p.castShadow = true;
+    body.add(p);
+    pebbles.push(p);
+  }
+  return { body, materials: [stone, dark, moss], eyes, eyeMat, arms, pebbles };
 }
 
 // ---------- Levensbalk boven de vijand ----------
@@ -334,6 +395,9 @@ class Enemy {
     this.knockback.set(0, 0, 0);
     this.mesh.visible = true;
     this.mesh.scale.setScalar(1);
+    this.spawnT = SPAWN_TIME;
+    this.punch = 0;
+    this.blinkTimer = 1 + Math.random() * 3;
     this.mesh.rotation.set(0, 0, 0);
     this.healthBar.visible = false;
     this.phase = Math.random() * Math.PI * 2;
@@ -358,6 +422,7 @@ class Enemy {
     this.lastSwingId = swingId;
     this.hp = Math.max(0, this.hp - damage);
     this.flash = 0.12;
+    this.punch = 1; // "boing": even platgedrukt
     this.healthBar.visible = true;
 
     const away = this.position.clone().sub(from).setY(0);
@@ -424,6 +489,7 @@ class Enemy {
     }
     if (!this.alive) return;
     if (this.position.distanceTo(ctx.player.position) > ACTIVE_RANGE) return;
+    this.animateLife(dt, ctx);
 
     const playerPos = ctx.player.position;
     const toPlayer = playerPos.clone().sub(this.position);
@@ -518,6 +584,31 @@ class Enemy {
     else if (this.typeKey === 'golem') this.animateGolem(dt, ctx.time);
     else if (type.flies) this.animateGhost(ctx.time);
     else this.animateSlime(ctx.time);
+  }
+
+  /** Opploppen bij het (terug)komen, "boing" na een klap, knipperen en je met de ogen volgen. */
+  animateLife(dt, ctx) {
+    this.spawnT = Math.max(0, this.spawnT - dt);
+    this.punch = Math.max(0, this.punch - dt * 4);
+    const k = 1 - this.spawnT / SPAWN_TIME;
+    const grow = k >= 1 ? 1 : 1 + 2.7 * Math.pow(k - 1, 3) + 1.7 * Math.pow(k - 1, 2); // even te groot, dan terug
+    const p = Math.sin(this.punch * Math.PI) * 0.22;
+    this.mesh.scale.set(grow * (1 + p), grow * (1 - p), grow * (1 + p));
+
+    const eyes = this.model.lookEyes; // ogen die kunnen kijken en knipperen (slijm en spook)
+    if (!eyes) return;
+    // Knipperen
+    this.blinkTimer -= dt;
+    const closed = this.blinkTimer < 0.12;
+    if (this.blinkTimer <= 0) this.blinkTimer = 2 + Math.random() * 3;
+    // Pupillen kijken naar de speler
+    const target = this.body.worldToLocal(ctx.player.position.clone().setY(ctx.player.position.y + 1.2));
+    for (const { eye, pupil, size } of eyes) {
+      eye.scale.y = closed ? 0.12 : 1;
+      const dir = target.clone().sub(eye.position).normalize();
+      dir.z = Math.max(0.55, dir.z); // niet achter in het hoofd kijken
+      pupil.position.copy(dir.normalize().multiplyScalar(size * 0.65));
+    }
   }
 
   /** Modellen zonder eigen animaties: wiegen en wippen tijdens het lopen. */
@@ -704,17 +795,34 @@ class Enemy {
     const h = this.type.height;
     this.body.position.y = h / 2 + hop * h * 0.25;
     const squash = 1 - (1 - hop) * 0.18;
-    this.body.scale.set(1 / Math.sqrt(squash), squash, 1 / Math.sqrt(squash));
+    // Gelei-wiebel na elke landing
+    const jiggle = Math.sin(time * 30 + this.phase) * 0.05 * (1 - hop);
+    this.body.scale.set((1 + jiggle) / Math.sqrt(squash), squash * (1 - jiggle), (1 - jiggle) / Math.sqrt(squash));
+    this.body.rotation.x = THREE.MathUtils.lerp(this.body.rotation.x, this.chasing ? 0.18 : 0.08, 0.1); // voorover als hij achter je aan zit
   }
 
   animateGhost(time) {
     this.body.position.y = Math.sin(time * 2.5 + this.phase) * 0.15;
     this.body.rotation.z = Math.sin(time * 1.7 + this.phase) * 0.12;
     this.model.materials[0].opacity = 0.65 + Math.sin(time * 3 + this.phase) * 0.15;
+    // Wapperende onderrand en een ademende gloed
+    this.model.tips.forEach((tip, i) => {
+      tip.rotation.z = Math.sin(time * 6 + i * 1.3 + this.phase) * 0.35;
+      tip.scale.y = 1 + Math.sin(time * 5 + i) * 0.2;
+    });
+    this.model.halo.material.uniforms.strength.value = 0.5 + Math.sin(time * 2 + this.phase) * 0.2 + (this.chasing ? 0.4 : 0);
+    this.model.mouth.scale.setScalar(this.chasing ? 1.4 + Math.sin(time * 10) * 0.2 : 1); // "Boeoeoe!"
   }
 
   animateGolem(dt, time) {
-    const { arms, eyeMat } = this.model;
+    const { arms, eyeMat, pebbles } = this.model;
+    // Zwevende steentjes draaien rond zijn schouders (sneller als hij boos wordt)
+    const spin = this.state === 'windup' ? 5 : 1.2;
+    pebbles.forEach((p, i) => {
+      const a = time * spin + (i / pebbles.length) * Math.PI * 2 + this.phase;
+      p.position.set(Math.sin(a) * 1.25, 1.9 + Math.sin(time * 2 + i) * 0.15, Math.cos(a) * 1.25);
+      p.rotation.set(time * 2 + i, time * 1.5, 0);
+    });
     if (this.state === 'windup') {
       // Armen omhoog, ogen feller, een beetje trillen
       const k = 1 - this.stateTimer / WINDUP_TIME;
