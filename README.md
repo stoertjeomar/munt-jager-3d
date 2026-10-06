@@ -1,8 +1,8 @@
 # Munt Jager 3D
 
-Een **actie-RPG met levels** in de browser, in de stijl van Elden Ring, gemaakt met **JavaScript** en **[Three.js](https://threejs.org/)**.
-Kies je held, volg het pad door 4 levels, versla vijanden voor munten, help de dorpelingen met zij-quests,
-word sterker bij de Plekken van Genade en versla aan het eind van elk level de boss.
+Een **actie-RPG met levels** in de browser, gemaakt met **JavaScript** en **[Three.js](https://threejs.org/)**.
+Kies je held, volg het pad door 4 levels, versla vijanden voor munten en XP, help de dorpelingen met zij-quests,
+koop spullen bij de koopman en versla aan het eind van elk level de boss.
 
 ![Screenshot van Munt Jager 3D](docs/screenshot.png)
 
@@ -36,10 +36,10 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 | Muis | Rondkijken (de camera draait ook vanzelf achter je aan) |
 | Shift | Kort tikken = rollen (onkwetsbaar), ingedrukt houden = sprinten |
 | Spatie | Springen (in de lucht nog eens = dubbele sprong) |
-| Klik / F | Slaan of schieten (F in de lucht = grondslag) |
+| Klik / F | Slaan (F in de lucht = grondslag) |
 | Q | Vastzetten op een vijand (lock-on) |
 | R | Flesje drinken (leven terug) |
-| E | Praten met een NPC / rusten bij een Plek van Genade / kist openen |
+| E | Praten met een NPC / winkelen bij de koopman / kist openen |
 | C | Dash |
 | V | Wervelslag |
 | X | Vuurzwaard |
@@ -60,15 +60,22 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 - **NPC's met zij-quests**: Mila, Strohoed, Robot B-0P en Sir Roestbout wonen in de levels. Praat met ze (E) als er een **!** boven
   hun hoofd staat, doe de quest (vijanden verslaan of sterren/batterijen zoeken) en haal je beloning op bij het **?**
 - **Huizen waar je in kunt**: loop door de deur naar binnen — met meubels, een haardvuur en het dak verdwijnt zodat je binnen kunt kijken
+- Wind in de bomen en het gras, ronde loofbomen, zwevend stuifmeel overdag en vuurvliegjes 's nachts, een zon en maan aan de hemel
+- Levendige vijanden: glanzende slijmpjes die knipperen en je met hun ogen volgen, spoken met een gloed, golems met gloeiende scheuren
 - Lantaarns langs het pad, een bos rond elk level, minimap met het pad, **dag-en-nachtritme** met sterren en een zachte **gloed** (bloom)
 - Vijanden (ook spoken) lopen niet meer door muren, bomen of stenen heen
-- **Elden Ring-stijl**: munten verdienen, levelen bij Plekken van Genade (Vitaliteit, Kracht, Uithouding),
-  rusten brengt vijanden terug, doodgaan = je munten blijven liggen waar je viel
+- **Levelen door te vechten**: elke verslagen vijand telt mee (een boss telt voor 10). Elk level geeft meer leven,
+  stamina en schade, en op sommige levels speel je een kracht of bonus vrij (extra flesjes, sneller lopen, minder schade).
+  Je voortgang staat onder je levensbalk en in het menu *Level & krachten*.
+- **Checkpoint-vlaggen**: halverwege elk level staat een vlag. Loop erlangs en hij wordt goud: als je doodgaat kom je daar terug
+  (je munten houd je gewoon)
+- **Koopman Kobus** staat met zijn kraampje bij het begin van elk level: Herstel-soep, Gouden Zaadje (+1 flesje),
+  Hartversterker (+20 leven) en Wapen slijpen (+10% schade)
 - **Gevechten**: leven en stamina, rollen met onkwetsbaarheid, lock-on, flesjes, zwaard-windje,
   vonken, schade-getallen, camera-schok en hitstop
 - **5 krachten**: Dash, Dubbele sprong, Wervelslag, Grondslag en Vuurzwaard (vrijspelen door te levelen en bosses te verslaan)
-- **Wapens**: kort zwaard, ridderzwaard, katana, knots, diamanten zwaard, revolver, shotgun, machinegeweer,
-  sluipschuttersgeweer en boog — plus 3 helmen. Te vinden in kisten en bij bosses
+- **Wapens** (alleen slagwapens): kort zwaard, dolk, bijl, ridderzwaard, katana, knots, strijdhamer, IJszwaard,
+  Zonnezwaard en het diamanten zwaard — plus 3 helmen. Te vinden in kisten, bij quests en bij bosses
 - **Vijanden**: slijmpjes, slijmballen, spoken, rotsgolems, zombies, Spierbonken en Mecha-Wachters
 - **4 bosses** met een mistmuur, boss-balk en een tweede fase: Koning Slijm, De Gevallen Ridder,
   Steenreus Gorath en Budget Mario
@@ -80,14 +87,14 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 ```
 munt-jager-3d/
 ├── index.html        → pagina, HUD en startscherm
-├── style.css         → opmaak (Elden Ring-stijl)
+├── style.css         → opmaak
 ├── lib/              → Three.js (r170) + loaders + licentie
 ├── models/           → 3D-modellen (personages, wapens, helmen, bosses, KayKit, Kenney)
 ├── textures/         → Kenney Retro Textures (grond, muren, daken, ramen)
 ├── sounds/           → geluiden uit het Kenney Starter Kit
 ├── images/           → portretten voor het startscherm
 └── src/
-    ├── main.js       → start alles op, game loop, gevechten, rusten, doodgaan
+    ├── main.js       → start alles op, game loop, gevechten, winkel, doodgaan
     ├── levels.js     → de 4 levels: pad, vijanden, kisten, NPC's, huizen (pas hier je levels aan!)
     ├── world.js      → bouwt het level: grond, pad, huizen, ruïnes, natuur, arena, dag en nacht
     ├── npcs.js       → NPC's en hun zij-quests
@@ -98,11 +105,11 @@ munt-jager-3d/
     ├── character.js  → het Strohoed-poppetje uit simpele vormen
     ├── weapons.js    → alle wapens · gear.js → helmen
     ├── sword.js      → het wapen in de hand · trail.js → het zwaard-windje
-    ├── projectiles.js→ kogels, pijlen, energie- en vuurballen
+    ├── projectiles.js→ energie- en vuurballen van vijanden
     ├── enemies.js    → vijanden en hun aanvallen · bosses.js → de vier bosses
-    ├── sites.js      → Plekken van Genade, kisten, verloren munten
+    ├── sites.js      → checkpoint-vlaggen en kisten
     ├── pickups.js    → munten, hartjes, diamanten
-    ├── stats.js      → level, eigenschappen, krachten, opslaan
+    ├── stats.js      → level (door vijanden te verslaan), bonussen, krachten, opslaan
     ├── ui.js         → balken, menu's, banners, minimap
     ├── effects.js    → deeltjes, schokgolven, waarschuwingscirkels
     ├── audio.js      → geluiden · camera.js · input.js · assets.js
@@ -114,17 +121,16 @@ munt-jager-3d/
 - **Quests** → `QUESTS` bovenaan `src/npcs.js`
 - **Vijanden** → `ENEMY_TYPES` bovenaan `src/enemies.js`
 - **Wapens** → `WEAPONS` in `src/weapons.js` · **Helmen** → `HELMETS` in `src/gear.js`
-- **Krachten en levelen** → `POWERS` en `levelCost` in `src/stats.js`
+- **Krachten en levelen** → `POWERS`, `PERKS` en `killsNeeded` in `src/stats.js`
 - **Personages** → `CHARACTERS` en `PLAYABLE` bovenaan `src/player.js`
 - **Opnieuw beginnen** → uitrusting (I) → *Nieuw spel beginnen*
 
 ## Credits
 
 - Ridder, helmen, zwaarden, knots en zombie: [Quaternius](https://quaternius.com) — CC0
-- Mini-Game Variety Pack (planten, stenen, dieren, boog, hart, diamant): [KayKit / Kay Lousberg](https://kaylousberg.com) — CC0
+- Mini-Game Variety Pack (planten, stenen, dieren, hart, diamant): [KayKit / Kay Lousberg](https://kaylousberg.com) — CC0
 - Starter Kit 3D Platformer (munt, wolken, gras, vlaggen, robot, geluiden): [Kenney](https://kenney.nl) — MIT
 - Retro Textures Fantasy: [Kenney](https://kenney.nl) — CC0
-- Ultimate Guns Pack (geweren)
 - Personages Eve, Soldaat en Mila: via Mixamo
 - Budget Mario door Teh_LaughingMan, Buff man door joney_lol, MS Gundam RX-78-2 door Tipatat Chennavasin
   (fan-modellen; Mario en Gundam zijn van Nintendo en Bandai — alleen voor eigen plezier)

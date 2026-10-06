@@ -37,11 +37,10 @@ export class Sword {
     this.damage = weapon.damage;
     this.range = weapon.range;
     this.swingTime = weapon.swingTime;
-    this.blade = weapon.blade ?? [0.05, weapon.muzzle ?? 0.8];
+    this.blade = weapon.blade ?? [0.05, 0.8];
     this.trailColor = weapon.trail;
     this.stamina = weapon.stamina;
     this.weapon = weapon;
-    this.ranged = weapon.ranged ?? null;
 
     if (this.weaponMesh) this.grip.remove(this.weaponMesh);
     this.weaponMesh = createWeaponMesh(key);

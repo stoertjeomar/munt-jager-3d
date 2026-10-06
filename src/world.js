@@ -2,15 +2,15 @@ import * as THREE from 'three';
 import { LEVEL } from './levels.js';
 
 // De wereld van het huidige level: grond, pad, huizen (waar je in kunt!), ruïnes, natuur,
-// de boss-arena, de Plekken van Genade en de kisten. Wat er in elk level staat, staat in levels.js.
+// de boss-arena, de checkpoints en de kisten. Wat er in elk level staat, staat in levels.js.
 
 export const BOUNDS = LEVEL.half; // het level loopt van -BOUNDS.x tot BOUNDS.x (en z)
 export const WALKABLE = { x: BOUNDS.x - 1.5, z: BOUNDS.z - 1.5 }; // verder kun je niet lopen
 
 const v3 = (x, z, y = 0) => new THREE.Vector3(x, y, z);
 
-// Plekken van Genade: de eerste is het begin van het level, de tweede het checkpoint
-export const GRACES = LEVEL.graces.map(([id, name, x, z]) => ({ id, name, position: v3(x, z) }));
+// Checkpoints: de eerste is het begin van het level, de tweede een vlag halverwege
+export const CHECKPOINTS = LEVEL.checkpoints.map(([id, name, x, z]) => ({ id, name, position: v3(x, z) }));
 
 // De boss-arena staat altijd aan het eind (noorden) van het level
 export const ARENAS = [{ id: LEVEL.boss, center: v3(0, -78), radius: 18 }];
@@ -41,17 +41,54 @@ export function seededRandom(seed) {
 const textureLoader = new THREE.TextureLoader();
 const textureCache = {};
 
-/** Laadt een textuur uit textures/ (pixel-art: scherp, en herhalend). */
-export function tex(name) {
-  if (!textureCache[name]) {
+/** Laadt een textuur uit textures/ (pixel-art: scherp, en herhalend). smooth = zacht in plaats van pixelig (voor de grond). */
+export function tex(name, smooth = false) {
+  const key = name + (smooth ? ':smooth' : '');
+  if (!textureCache[key]) {
     const t = textureLoader.load(`textures/${name}.png`);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.colorSpace = THREE.SRGBColorSpace;
-    t.magFilter = THREE.NearestFilter;
+    t.magFilter = smooth ? THREE.LinearFilter : THREE.NearestFilter;
     t.anisotropy = 8;
-    textureCache[name] = t;
+    textureCache[key] = t;
   }
-  return textureCache[name];
+  return textureCache[key];
+}
+
+// ---------- Wind ----------
+// Eén klok voor alles wat in de wind beweegt (bomen, gras, planten).
+export const WIND = { value: 0 };
+
+/**
+ * Laat een materiaal meewiegen in de wind. Hoe hoger een punt (y), hoe meer het beweegt.
+ * @param {object} opts  strength = hoe ver, base = vanaf welke hoogte (lokaal) het begint te bewegen,
+ *                       lift = hoeveel de hoogte van het hele exemplaar meetelt (hoge boombladeren wiegen meer)
+ */
+export function addWind(material, { strength = 0.15, base = 0, speed = 1.6, lift = 0 } = {}) {
+  const before = material.onBeforeCompile;
+  material.onBeforeCompile = (shader, renderer) => {
+    before?.call(material, shader, renderer);
+    shader.uniforms.windTime = WIND;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float windTime;')
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        {
+          vec3 windOrigin = vec3(0.0);
+          #ifdef USE_INSTANCING
+            windOrigin = instanceMatrix[3].xyz;
+          #endif
+          float windH = max(0.0, transformed.y - ${base.toFixed(3)}) + windOrigin.y * ${lift.toFixed(3)};
+          float windPhase = windTime * ${speed.toFixed(3)} + windOrigin.x * 0.21 + windOrigin.z * 0.17;
+          float gust = 0.65 + 0.35 * sin(windTime * 0.37 + windOrigin.x * 0.03);
+          transformed.x += sin(windPhase) * windH * ${strength.toFixed(3)} * gust;
+          transformed.z += cos(windPhase * 0.8 + 1.3) * windH * ${(strength * 0.6).toFixed(3)} * gust;
+        }`
+      );
+  };
+  material.customProgramCacheKey = () => `wind-${strength}-${base}-${speed}-${lift}`;
+  return material;
 }
 
 /** Een blok waarvan de textuur netjes herhaalt (elke `tile` meter één keer), in plaats van uitgerekt. */
@@ -94,14 +131,14 @@ function inHouse(x, z, margin = 0) {
   return (LEVEL.houses ?? []).some(([hx, hz, w, d]) => Math.abs(x - hx) < Math.max(w, d) / 2 + 1.5 + margin && Math.abs(z - hz) < Math.max(w, d) / 2 + 1.5 + margin);
 }
 
-/** Is hier ruimte voor een boom of steen? (niet op het pad, in de arena, bij genade-plekken, kisten, huizen...) */
+/** Is hier ruimte voor een boom of steen? (niet op het pad, in de arena, bij checkpoints, kisten, huizen...) */
 export function isFree(x, z, margin = 0) {
   if (Math.abs(x) > WALKABLE.x - 1 || Math.abs(z) > WALKABLE.z - 1) return false;
   if (distToPath(x, z) < 4 + margin) return false;
   if (VILLAGE_CENTER && Math.hypot(x - VILLAGE_CENTER.x, z - VILLAGE_CENTER.z) < 18) return false;
   if (inHouse(x, z, margin)) return false;
   for (const a of ARENAS) if (Math.hypot(x - a.center.x, z - a.center.z) < a.radius + 5) return false;
-  for (const g of GRACES) if (Math.hypot(x - g.position.x, z - g.position.z) < 8) return false;
+  for (const c of CHECKPOINTS) if (Math.hypot(x - c.position.x, z - c.position.z) < 8) return false;
   for (const c of CHESTS) if (Math.hypot(x - c.position.x, z - c.position.z) < 4) return false;
   for (const [nx, nz] of (LEVEL.npcs ?? []).map((n) => [n[1], n[2]])) if (Math.hypot(x - nx, z - nz) < 4) return false;
   for (const spots of Object.values(LEVEL.questItems ?? {})) for (const [qx, qz] of spots) if (Math.hypot(x - qx, z - qz) < 3) return false;
@@ -163,10 +200,25 @@ function createSky(scene) {
       side: THREE.BackSide,
       depthWrite: false,
       fog: false,
-      uniforms: { top: { value: new THREE.Color(0x3d7fd9) }, horizon: { value: new THREE.Color(0xcdeaff) } },
+      uniforms: {
+        top: { value: new THREE.Color(0x3d7fd9) },
+        horizon: { value: new THREE.Color(0xcdeaff) },
+        sunDir: { value: new THREE.Vector3(0, 1, 0) },
+        sunColor: { value: new THREE.Color(0xffffff) },
+        sunSize: { value: 1 }, // 1 = zon, kleiner = maan
+      },
       vertexShader: `varying vec3 vPos; void main() { vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `uniform vec3 top; uniform vec3 horizon; varying vec3 vPos;
-        void main() { float h = clamp(normalize(vPos).y, 0.0, 1.0); gl_FragColor = vec4(mix(horizon, top, pow(h, 0.6)), 1.0);
+      // Kleurverloop van horizon naar boven, met een zon (of maan) met een zachte gloed eromheen
+      fragmentShader: `uniform vec3 top; uniform vec3 horizon; uniform vec3 sunDir; uniform vec3 sunColor; uniform float sunSize; varying vec3 vPos;
+        void main() {
+          vec3 dir = normalize(vPos);
+          float h = clamp(dir.y, 0.0, 1.0);
+          vec3 col = mix(horizon, top, pow(h, 0.55));
+          float s = max(dot(dir, normalize(sunDir)), 0.0);
+          col += sunColor * (smoothstep(0.9993 - 0.0004 * (1.0 - sunSize), 0.9997, s) * 2.5 * sunSize + smoothstep(0.9988, 0.9995, s) * (1.0 - sunSize) * 1.2);
+          col += sunColor * (pow(s, 24.0) * 0.35 + pow(s, 4.0) * 0.12) * sunSize;
+          col = mix(col, horizon * 1.05, (1.0 - smoothstep(0.0, 0.12, dir.y)) * 0.6); // nevel bij de horizon
+          gl_FragColor = vec4(col, 1.0);
         #include <colorspace_fragment>
         }`,
     })
@@ -217,19 +269,39 @@ function createGround(scene) {
 
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
   material.onBeforeCompile = (shader) => {
-    shader.uniforms.tGrass = { value: tex('floor_ground_grass') };
-    shader.uniforms.tDirt = { value: tex('floor_ground_dirt') };
-    shader.uniforms.tRock = { value: tex('wall_rock') };
+    shader.uniforms.tGrass = { value: tex('floor_ground_grass', true) };
+    shader.uniforms.tDirt = { value: tex('floor_ground_dirt', true) };
+    shader.uniforms.tRock = { value: tex('wall_rock', true) };
     shader.uniforms.tStone = { value: tex('floor_stone_pattern') };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute vec4 blend;\nvarying vec4 vBlend;\nvarying vec2 vGroundUv;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBlend = blend;\nvGroundUv = position.xz / 2.5;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform sampler2D tGrass, tDirt, tRock, tStone;\nvarying vec4 vBlend;\nvarying vec2 vGroundUv;')
+      .replace(
+        '#include <common>',
+        `#include <common>
+        uniform sampler2D tGrass, tDirt, tRock, tStone;
+        varying vec4 vBlend;
+        varying vec2 vGroundUv;
+        // Zachte ruis: grote vlekken lichter/donkerder gras, zodat de grond niet overal hetzelfde is
+        float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float gNoise(vec2 p) {
+          vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(gHash(i), gHash(i + vec2(1, 0)), f.x), mix(gHash(i + vec2(0, 1)), gHash(i + vec2(1, 1)), f.x), f.y);
+        }
+        // Textuur op twee schalen mengen: dan zie je geen herhalend patroon meer
+        vec3 gTex(sampler2D t, vec2 uv) { return mix(texture2D(t, uv).rgb, texture2D(t, uv * 0.31 + 0.37).rgb, 0.45); }`
+      )
       .replace(
         '#include <map_fragment>',
-        `vec3 groundTex = texture2D(tGrass, vGroundUv).rgb * vBlend.x + texture2D(tDirt, vGroundUv).rgb * vBlend.y
-          + texture2D(tRock, vGroundUv * 0.6).rgb * vBlend.z + texture2D(tStone, vGroundUv).rgb * vBlend.w;
+        `vec3 groundTex = gTex(tGrass, vGroundUv) * vBlend.x + gTex(tDirt, vGroundUv) * vBlend.y
+          + gTex(tRock, vGroundUv * 0.6) * vBlend.z + texture2D(tStone, vGroundUv).rgb * vBlend.w;
+        // Minder harde pixel-contrast, en grote vlekken: droog/geel gras en donker, sappig gras
+        groundTex = mix(vec3(dot(groundTex, vec3(0.333))), groundTex, 1.15);
+        groundTex = mix(groundTex, vec3(dot(groundTex, vec3(0.333))) * vec3(1.0, 1.05, 0.9), 0.25);
+        float gPatch = gNoise(vGroundUv * 0.09) * 0.65 + gNoise(vGroundUv * 0.35) * 0.35;
+        float grassy = vBlend.x;
+        groundTex *= mix(vec3(1.0), mix(vec3(0.92, 1.02, 0.86), vec3(1.32, 1.24, 0.9), gPatch), grassy);
         diffuseColor.rgb *= groundTex;`
       );
   };
@@ -459,30 +531,51 @@ function createNature(scene, colliders) {
 
   const trunkMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.22, 0.3, 1.6, 7), new THREE.MeshStandardMaterial({ color: 0x6b4226, roughness: 0.9 }), trees.length);
   const leafColors = { dark: [0x24502c, 0x2d5e33, 0x1f4527], green: [0x3f9b4a, 0x4fae52, 0x2f8a45], pine: [0x3a6b48, 0x46775a] };
-  const leafMesh = new THREE.InstancedMesh(new THREE.ConeGeometry(1.3, 1.6, 8), new THREE.MeshStandardMaterial({ roughness: 0.8, flatShading: true }), trees.length * 3);
+  const roundColors = [0x5aa845, 0x6fb84a, 0x4c9a3e, 0x86c24f];
+  // Naaldbomen (3 kegels) en, in de weide, ook ronde loofbomen (bolle bladerdaken); allebei wiegen in de wind
+  const leafMesh = new THREE.InstancedMesh(new THREE.ConeGeometry(1.3, 1.6, 8), addWind(new THREE.MeshStandardMaterial({ roughness: 0.8, flatShading: true }), { strength: 0.045, base: -0.8, speed: 1.3, lift: 0.6 }), trees.length * 3);
+  const roundMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), addWind(new THREE.MeshStandardMaterial({ roughness: 0.85, flatShading: true }), { strength: 0.045, base: -1, speed: 1.1, lift: 0.6 }), trees.length * 4);
   trunkMesh.castShadow = true;
-  leafMesh.castShadow = true;
-  leafMesh.receiveShadow = true;
+  leafMesh.castShadow = roundMesh.castShadow = true;
+  leafMesh.receiveShadow = roundMesh.receiveShadow = true;
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const color = new THREE.Color();
+  let cones = 0;
+  let blobs = 0;
   trees.forEach(([x, z, s, k, collide], i) => {
     m.compose(new THREE.Vector3(x, 0.8 * s, z), q.identity(), new THREE.Vector3(s, s, s));
     trunkMesh.setMatrixAt(i, m);
-    const palette = leafColors[k];
-    for (let j = 0; j < 3; j++) {
-      const layer = 1 - j * 0.25;
-      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI);
-      m.compose(new THREE.Vector3(x, (1.8 + j * 0.85) * s, z), q, new THREE.Vector3(s * layer, s, s * layer));
-      leafMesh.setMatrixAt(i * 3 + j, m);
-      leafMesh.setColorAt(i * 3 + j, color.set(palette[Math.floor(rand() * palette.length)]));
+    if (k === 'green' && rand() < 0.55) {
+      // Loofboom: een paar bollen bladeren bovenop de stam
+      const tint = roundColors[Math.floor(rand() * roundColors.length)];
+      for (let j = 0; j < 4; j++) {
+        const a = rand() * Math.PI * 2;
+        const off = j === 0 ? 0 : 0.55 * s;
+        const r = (j === 0 ? 1.25 : 0.85 + rand() * 0.25) * s;
+        q.setFromEuler(new THREE.Euler(rand() * 3, rand() * 3, rand() * 3));
+        m.compose(new THREE.Vector3(x + Math.sin(a) * off, (j === 0 ? 2.5 : 2.0 + rand() * 0.9) * s, z + Math.cos(a) * off), q, new THREE.Vector3(r, r * 0.9, r));
+        roundMesh.setMatrixAt(blobs, m);
+        roundMesh.setColorAt(blobs++, color.set(tint).offsetHSL((rand() - 0.5) * 0.03, 0, (rand() - 0.5) * 0.08));
+      }
+    } else {
+      const palette = leafColors[k];
+      for (let j = 0; j < 3; j++) {
+        const layer = 1 - j * 0.25;
+        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI);
+        m.compose(new THREE.Vector3(x, (1.8 + j * 0.85) * s, z), q, new THREE.Vector3(s * layer, s, s * layer));
+        leafMesh.setMatrixAt(cones, m);
+        leafMesh.setColorAt(cones++, color.set(palette[Math.floor(rand() * palette.length)]));
+      }
     }
     if (collide) {
       const r = 0.32 * s;
       colliders.push(new THREE.Box3(new THREE.Vector3(x - r, 0, z - r), new THREE.Vector3(x + r, 4 * s, z + r)));
     }
   });
-  scene.add(trunkMesh, leafMesh);
+  leafMesh.count = cones;
+  roundMesh.count = blobs;
+  scene.add(trunkMesh, leafMesh, roundMesh);
 
   // Rotsblokken (in het hoogland veel, elders een paar) en een rotsrand langs de kant van het level
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x8f8a80, roughness: 0.95, flatShading: true });
@@ -603,11 +696,16 @@ export function createWorld(scene) {
     /** Laat de zon (en zijn schaduw) met de speler meelopen, en laat de dag verstrijken. */
     updateSun(playerPos, dt = 0) {
       this.timeOfDay = (this.timeOfDay + dt / DAY_LENGTH) % 1;
+      WIND.value += dt;
       const look = dayLook(this.timeOfDay);
       // Zon (overdag) of maan (nacht) draait over de hemel
       const angle = (this.timeOfDay - 0.25) * Math.PI * 2;
       const dir = new THREE.Vector3(Math.cos(angle) * 0.8, Math.sin(angle), 0.45);
-      if (dir.y < 0.15) dir.set(-dir.x, Math.max(0.35, -dir.y), dir.z); // 's nachts schijnt de maan van de andere kant
+      const isMoon = dir.y < 0.15;
+      if (isMoon) dir.set(-dir.x, Math.max(0.35, -dir.y), dir.z); // 's nachts schijnt de maan van de andere kant
+      sky.material.uniforms.sunDir.value.copy(dir).normalize();
+      sky.material.uniforms.sunColor.value.copy(isMoon ? new THREE.Color(0xdfe8ff) : look.sun);
+      sky.material.uniforms.sunSize.value = isMoon ? 0.25 : 1;
       sun.target.position.copy(playerPos);
       sun.position.copy(playerPos).addScaledVector(dir.normalize(), 55);
       sun.color.copy(look.sun);
@@ -618,6 +716,7 @@ export function createWorld(scene) {
       sky.material.uniforms.horizon.value.copy(look.horizon);
       scene.fog.color.copy(look.horizon);
       stars.material.opacity = look.stars;
+      this.night = look.stars; // 0 = dag, 1 = nacht
       stars.position.copy(playerPos);
       sky.position.copy(playerPos); // de lucht reist mee, anders valt hij buiten beeld (zwart gat!)
       for (const m of glowingWindows) m.emissiveIntensity = 0.4 + look.stars * 1.6; // ramen gloeien 's nachts

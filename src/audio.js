@@ -149,16 +149,6 @@ const SOUNDS = {
   },
   // Golem laadt op: brommend geluid omhoog
   charge: () => tone({ type: 'sawtooth', from: 60, to: 140, duration: 0.6, volume: 0.12 }),
-  // Schot met een geweer: harde knal + ruis
-  shot: () => {
-    noise({ from: 3000, to: 300, duration: 0.18, volume: 0.6, q: 0.6 });
-    tone({ type: 'square', from: 160, to: 40, duration: 0.12, volume: 0.3 });
-  },
-  bigShot: () => {
-    noise({ from: 2000, to: 120, duration: 0.4, volume: 0.7, q: 0.5 });
-    tone({ type: 'sawtooth', from: 120, to: 30, duration: 0.3, volume: 0.35 });
-  },
-  bow: () => noise({ from: 900, to: 3500, duration: 0.15, volume: 0.35, q: 3 }),
   laser: () => tone({ type: 'sawtooth', from: 1400, to: 200, duration: 0.25, volume: 0.15 }),
   // Gewonnen!
   win: () => [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone({ type: 'square', from: f, duration: 0.18, volume: 0.12, delay: i * 0.11 })),

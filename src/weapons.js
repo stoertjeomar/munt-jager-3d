@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { loadGLB } from './assets.js';
 
 // Alle wapens in het spel. Pas de getallen aan om ze sterker of sneller te maken!
-//   damage    = schade per klap (wordt nog groter met je Kracht-level)
+//   damage    = schade per klap (wordt nog groter naarmate je level hoger is)
 //   stamina   = hoeveel uithouding één slag kost
 //   range     = hoe ver het wapen reikt
 //   swingTime = hoe lang een slag duurt (kleiner = sneller slaan)
@@ -32,38 +32,36 @@ export const WEAPONS = {
     file: 'models/wapens/Club.glb', scale: 0.42, blade: [0.35, 0.87], trail: 0xff8a2b,
     info: 'Langzaam maar loeihard.',
   },
-  // ---------- Afstandswapens ----------
-  //   ranged   = soort projectiel: 'bullet' (kogel) of 'arrow' (pijl)
-  //   fireRate = tijd tussen twee schoten · auto = blijven schieten als je de knop ingedrukt houdt
-  //   pellets/spread = hagel (shotgun) · pierce = gaat door vijanden heen · muzzle = waar de loop eindigt
-  revolver: {
-    name: 'Revolver', rarity: 'zeldzaam', ranged: 'bullet', damage: 26, stamina: 6, fireRate: 0.42, speed: 75,
-    file: 'models/wapens/Revolver.glb', scale: 1, muzzle: 0.33, range: 0, swingTime: 0.3, trail: 0xffe27a,
-    info: 'Zes schoten, elk raak. Mik met de muis.',
+  // ---------- Blokjes-wapens (pixel art, zie PIXEL_ART onderaan) ----------
+  //   pixels = welke tekening uit PIXEL_ART
+  dolk: {
+    name: 'Dolk', rarity: 'zeldzaam', damage: 12, stamina: 6, range: 1.8, swingTime: 0.17,
+    pixels: 'dolk', blade: [0.12, 0.42], trail: 0xe8eef5,
+    info: 'Klein maar supersnel. Prik prik prik!',
   },
-  shotgun: {
-    name: 'Shotgun', rarity: 'episch', ranged: 'bullet', damage: 13, pellets: 7, spread: 0.11, stamina: 14, fireRate: 0.95, speed: 60, life: 0.4,
-    file: 'models/wapens/Shotgun.glb', scale: 1, muzzle: 0.83, range: 0, swingTime: 0.3, trail: 0xffe27a,
-    info: 'Van dichtbij verwoestend. Hagel waaiert uit.',
+  bijl: {
+    name: 'Bijl', rarity: 'zeldzaam', damage: 26, stamina: 16, range: 2.3, swingTime: 0.4,
+    pixels: 'bijl', blade: [0.35, 0.65], trail: 0xd0d6de,
+    info: 'Hakt door alles heen. Iets langzamer dan een zwaard.',
   },
-  rifle: {
-    name: 'Machinegeweer', rarity: 'episch', ranged: 'bullet', damage: 11, stamina: 2.5, fireRate: 0.1, auto: true, spread: 0.025, speed: 80,
-    file: 'models/wapens/AssaultRifle.glb', scale: 1, muzzle: 0.73, range: 0, swingTime: 0.3, trail: 0xffe27a,
-    info: 'Houd de knop ingedrukt voor een regen van kogels.',
+  hamer: {
+    name: 'Strijdhamer', rarity: 'episch', damage: 38, stamina: 26, range: 2.4, swingTime: 0.56,
+    pixels: 'hamer', blade: [0.45, 0.72], trail: 0xffc84a,
+    info: 'Loodzwaar. Eén klap en ze vliegen weg.',
   },
-  sniper: {
-    name: 'Sluipschuttersgeweer', rarity: 'legendarisch', ranged: 'bullet', damage: 95, stamina: 18, fireRate: 1.3, speed: 150, pierce: true,
-    file: 'models/wapens/SniperRifle.glb', scale: 1, muzzle: 1, range: 0, swingTime: 0.3, trail: 0xbfe8ff,
-    info: 'De beloning van Budget Mario. Gaat dwars door vijanden heen.',
+  ijszwaard: {
+    name: 'IJszwaard', rarity: 'episch', damage: 28, stamina: 12, range: 2.8, swingTime: 0.27,
+    pixels: 'ijs', blade: [0.2, 0.92], trail: 0x8fe8ff,
+    info: 'Gemaakt van eeuwig ijs. Snel, scherp en koud.',
   },
-  bow: {
-    name: 'Boog', rarity: 'zeldzaam', ranged: 'arrow', damage: 34, stamina: 10, fireRate: 0.75, speed: 42, gravity: 7,
-    file: 'models/wapens/Bow.glb', scale: 1, muzzle: 0.15, range: 0, swingTime: 0.3, trail: 0xffd27a,
-    info: 'Stil en sterk. Pijlen vallen een beetje, dus mik iets hoger.',
+  zonnezwaard: {
+    name: 'Zonnezwaard', rarity: 'legendarisch', damage: 36, stamina: 13, range: 2.9, swingTime: 0.3,
+    pixels: 'zon', blade: [0.3, 1.0], trail: 0xffb340,
+    info: 'Het gloeit als de zon. Bijna net zo sterk als het Diamanten zwaard.',
   },
   diamant: {
     name: 'Diamanten zwaard', rarity: 'legendarisch', damage: 40, stamina: 15, range: 2.6, swingTime: 0.32,
-    blade: [0.3, 1.0], trail: 0x5ff7de,
+    pixels: 'diamant', blade: [0.3, 1.0], trail: 0x5ff7de,
     info: 'Het zwaard van de Gevallen Ridder. Het sterkste wapen dat er is.',
   },
 };
@@ -79,7 +77,7 @@ export const RARITY_COLORS = { gewoon: '#d8d8d8', zeldzaam: '#6fb7ff', episch: '
 export function createWeaponMesh(key, scaleMultiplier = 1) {
   const weapon = WEAPONS[key];
   if (!weapon.file) {
-    const block = buildBlockSword();
+    const block = buildBlockWeapon(PIXEL_ART[weapon.pixels]);
     block.scale.setScalar(scaleMultiplier);
     return block;
   }
@@ -105,11 +103,13 @@ export function createWeaponMesh(key, scaleMultiplier = 1) {
   return group;
 }
 
-// Het zwaard is "pixel art" van blokjes, net als een diamanten zwaard in Minecraft.
-// Elke letter is één blokje; de bovenste regel is de punt. Teken je eigen zwaard!
-//   d = donkergroene rand   m = turquoise   l = lichtblauw
-//   g = goud                b = donker goud   . = leeg
-const SWORD_PIXELS = [
+// Blokjes-wapens zijn "pixel art", net als in Minecraft. Elke letter is één blokje; de bovenste regel is de punt,
+// en `hand` zegt welke regel in de hand zit. `colors` zegt welke kleur elke letter heeft (. = leeg).
+// Teken je eigen wapen!
+const STEEL = { s: { color: 0x7d8796, roughness: 0.35, metalness: 0.5 }, w: { color: 0xe3e9f0, roughness: 0.2, metalness: 0.4 } };
+const WOOD = { h: { color: 0x6b4423, roughness: 0.8 } };
+const GOLD = { g: { color: 0xd9a52b, roughness: 0.4, metalness: 0.4 }, b: { color: 0x8a5a14, roughness: 0.6 } };
+const SWORD_SHAPE = [
   '.....d.....',
   '....dld....',
   '...dllmd...',
@@ -135,26 +135,134 @@ const SWORD_PIXELS = [
   '...dlmld...',
   '....ddd....',
 ];
-const PIXEL = 0.052; // grootte van één blokje
-const HANDLE_ROW = 19; // deze regel zit in de hand
-
-const PIXEL_COLORS = {
-  d: { color: 0x0d4a3c, roughness: 0.6 },
-  m: { color: 0x2fa58f, roughness: 0.35, emissive: 0x0b3b33 },
-  l: { color: 0x8ff0dc, roughness: 0.25, emissive: 0x1d5c50 },
-  g: { color: 0xd9a52b, roughness: 0.4, metalness: 0.4 },
-  b: { color: 0x8a5a14, roughness: 0.6 },
+const PIXEL_ART = {
+  // d = donkergroene rand, m = turquoise, l = lichtblauw, g/b = goud
+  diamant: {
+    hand: 19,
+    rows: SWORD_SHAPE,
+    colors: {
+      d: { color: 0x0d4a3c, roughness: 0.6 },
+      m: { color: 0x2fa58f, roughness: 0.35, emissive: 0x0b3b33 },
+      l: { color: 0x8ff0dc, roughness: 0.25, emissive: 0x1d5c50 },
+      ...GOLD,
+    },
+  },
+  // Zelfde vorm, maar in de kleuren van de zon (gloeit een beetje)
+  zon: {
+    hand: 19,
+    rows: SWORD_SHAPE,
+    colors: {
+      d: { color: 0x8a3a00, roughness: 0.6 },
+      m: { color: 0xff8a1a, roughness: 0.3, emissive: 0x7a2a00 },
+      l: { color: 0xffe27a, roughness: 0.25, emissive: 0x8a5a00 },
+      g: { color: 0xfff0b0, roughness: 0.3, metalness: 0.5 },
+      b: { color: 0xb8860b, roughness: 0.5 },
+    },
+  },
+  dolk: {
+    hand: 9,
+    rows: [
+      '...w...',
+      '..sws..',
+      '..sws..',
+      '..sws..',
+      '..sws..',
+      '..sws..',
+      '.ggggg.',
+      '...h...',
+      '...h...',
+      '...h...',
+      '..ggg..',
+    ],
+    colors: { ...STEEL, ...WOOD, ...GOLD },
+  },
+  bijl: {
+    hand: 13,
+    rows: [
+      '..ssh....',
+      '.swwhs...',
+      'swwwhs...',
+      'swwwh....',
+      'swwwh....',
+      '.swwh....',
+      '..ssh....',
+      '....h....',
+      '....h....',
+      '....h....',
+      '....h....',
+      '....h....',
+      '....h....',
+      '....h....',
+      '...ggg...',
+    ],
+    colors: { ...STEEL, ...WOOD, ...GOLD },
+  },
+  hamer: {
+    hand: 14,
+    rows: [
+      '.sssssss.',
+      'swwwwwwws',
+      'sgggggggs',
+      'swwwwwwws',
+      '.sssssss.',
+      '....h....',
+      '....h....',
+      '....h....',
+      '....h....',
+      '....h....',
+      '....h....',
+      '....h....',
+      '....h....',
+      '....h....',
+      '....h....',
+      '...ggg...',
+    ],
+    colors: { ...STEEL, ...WOOD, ...GOLD },
+  },
+  // c = ijsblauw, l = licht ijs, w = wit, n = donkerblauw handvat
+  ijs: {
+    hand: 17,
+    rows: [
+      '....w....',
+      '...lwl...',
+      '...lwl...',
+      '...cwl...',
+      '...lwc...',
+      '...lwl...',
+      '...cwl...',
+      '...lwl...',
+      '...lwc...',
+      '...lwl...',
+      '...cwl...',
+      '...lwl...',
+      '...lwl...',
+      'c..lwl..c',
+      'cc.lcl.cc',
+      'ccccccccc',
+      '....n....',
+      '....n....',
+      '....n....',
+      '...ccc...',
+    ],
+    colors: {
+      c: { color: 0x3fb6ff, roughness: 0.2, emissive: 0x0a3a6a },
+      l: { color: 0xbff4ff, roughness: 0.1, emissive: 0x2a6a8a },
+      w: { color: 0xffffff, roughness: 0.1, emissive: 0x4a6a7a },
+      n: { color: 0x1d2f5a, roughness: 0.6 },
+    },
+  },
 };
+const PIXEL = 0.052; // grootte van één blokje
 
-/** Bouwt het zwaard uit blokjes. Per kleur één InstancedMesh, dat is snel. */
-function buildBlockSword() {
+/** Bouwt een wapen uit blokjes. Per kleur één InstancedMesh, dat is snel. */
+function buildBlockWeapon(art) {
   const group = new THREE.Group();
   const cube = new THREE.BoxGeometry(PIXEL, PIXEL, PIXEL * 1.4);
-  const width = SWORD_PIXELS[0].length;
+  const width = art.rows[0].length;
 
-  for (const [letter, settings] of Object.entries(PIXEL_COLORS)) {
+  for (const [letter, settings] of Object.entries(art.colors)) {
     const spots = [];
-    SWORD_PIXELS.forEach((row, r) => {
+    art.rows.forEach((row, r) => {
       [...row].forEach((ch, c) => {
         if (ch === letter) spots.push([c, r]);
       });
@@ -164,7 +272,7 @@ function buildBlockSword() {
     const mesh = new THREE.InstancedMesh(cube, new THREE.MeshStandardMaterial({ flatShading: true, ...settings }), spots.length);
     const m = new THREE.Matrix4();
     spots.forEach(([c, r], i) => {
-      m.makeTranslation((c - (width - 1) / 2) * PIXEL, (HANDLE_ROW - r) * PIXEL, 0);
+      m.makeTranslation((c - (width - 1) / 2) * PIXEL, (art.hand - r) * PIXEL, 0);
       mesh.setMatrixAt(i, m);
     });
     mesh.castShadow = true;

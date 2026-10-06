@@ -1,8 +1,7 @@
 import * as THREE from 'three';
-import { loadGLB } from './assets.js';
 
-// Alles wat door de lucht vliegt: kogels, pijlen, energieballen van de Mecha en vuurballen van Mario.
-// Een projectiel van de speler raakt vijanden; een projectiel van een vijand raakt de speler.
+// Alles wat vijanden door de lucht laten vliegen: energieballen van de Mecha en vuurballen van Mario.
+// Ze raken alleen de speler.
 
 const MAX_LIFE = 3;
 
@@ -12,8 +11,6 @@ function sharedGeo(key, make) {
   shared[key] ??= make();
   return shared[key];
 }
-let arrowModel = null;
-loadGLB('models/kaykit/arrow_teamRed.glb').then((g) => (arrowModel = g.scene)).catch(() => {});
 
 export class Projectiles {
   constructor(scene) {
@@ -23,8 +20,8 @@ export class Projectiles {
 
   /**
    * @param {object} p
-   *   from, dir (Vector3), speed, damage, owner: 'player' | 'enemy'
-   *   kind: 'bullet' | 'arrow' | 'energy' | 'fire'
+   *   from, dir (Vector3), speed, damage
+   *   kind: 'energy' | 'fire'
    *   radius (raak-afstand), gravity (0 = rechtdoor), bounces (hoe vaak stuiteren op de grond)
    */
   spawn(p) {
@@ -32,16 +29,13 @@ export class Projectiles {
       pos: p.from.clone(),
       vel: p.dir.clone().normalize().multiplyScalar(p.speed),
       damage: p.damage,
-      owner: p.owner,
       kind: p.kind,
       radius: p.radius ?? 0.4,
       gravity: p.gravity ?? 0,
       bounces: p.bounces ?? 0,
-      pierce: p.pierce ?? false,
       id: `proj-${Math.random()}`,
       age: 0,
       life: p.life ?? MAX_LIFE,
-      hitIds: new Set(),
     };
     proj.mesh = this.buildMesh(p.kind, p.color);
     proj.mesh.position.copy(proj.pos);
@@ -51,25 +45,6 @@ export class Projectiles {
   }
 
   buildMesh(kind, color) {
-    if (kind === 'arrow' && arrowModel) {
-      const m = arrowModel.clone();
-      m.scale.setScalar(0.6);
-      const holder = new THREE.Group();
-      m.rotation.x = Math.PI / 2; // pijl ligt langs +Y in het model → langs de vliegrichting
-      holder.add(m);
-      return holder;
-    }
-    if (kind === 'bullet') {
-      const c = color ?? 0xffe27a;
-      const m = new THREE.Mesh(
-        sharedGeo('bullet', () => new THREE.CylinderGeometry(0.03, 0.03, 0.9, 6)),
-        sharedGeo(`bulletMat${c}`, () => new THREE.MeshBasicMaterial({ color: c, toneMapped: false }))
-      );
-      m.rotation.x = Math.PI / 2;
-      const holder = new THREE.Group();
-      holder.add(m);
-      return holder;
-    }
     // Energie- en vuurballen: een gloeiende bol met een zachte gloed eromheen
     const c = color ?? (kind === 'fire' ? 0xff7a1a : 0x5ff0ff);
     const holder = new THREE.Group();
@@ -97,7 +72,7 @@ export class Projectiles {
   }
 
   /**
-   * @param {object} ctx  { targets(), player, hurtPlayer(from, dmg), colliders, effects, onPlayerHit(target, result, proj) }
+   * @param {object} ctx  { player, hurtPlayer(from, dmg), colliders, effects }
    */
   update(dt, ctx) {
     for (let i = this.list.length - 1; i >= 0; i--) {
@@ -134,20 +109,7 @@ export class Projectiles {
         }
       }
 
-      if (!dead && p.owner === 'player') {
-        for (const t of ctx.targets()) {
-          if (p.hitIds.has(t)) continue;
-          const center = t.center;
-          const flat = Math.hypot(center.x - p.pos.x, center.z - p.pos.z);
-          if (flat < t.type.radius + p.radius && Math.abs(center.y - p.pos.y) < t.type.height / 2 + p.radius) {
-            const result = t.hit(p.pos.clone().sub(p.vel.clone().setLength(2)), p.id + (p.pierce ? t.position.x : ''), p.damage);
-            p.hitIds.add(t);
-            if (result) ctx.onPlayerHit(t, result, p);
-            if (!p.pierce) dead = true;
-            break;
-          }
-        }
-      } else if (!dead && p.owner === 'enemy') {
+      if (!dead) {
         const pl = ctx.player.position;
         const center = new THREE.Vector3(pl.x, pl.y + 0.9, pl.z);
         if (center.distanceTo(p.pos) < 0.7 + p.radius) {
@@ -158,7 +120,7 @@ export class Projectiles {
 
       if (dead) {
         const color = p.kind === 'fire' ? 0xff7a1a : p.kind === 'energy' ? 0x5ff0ff : 0xffe27a;
-        ctx.effects.burst(p.pos, color, { count: p.kind === 'bullet' || p.kind === 'arrow' ? 5 : 14, speed: 4, size: 0.1, life: 0.35 });
+        ctx.effects.burst(p.pos, color, { count: 14, speed: 4, size: 0.1, life: 0.35 });
         if (p.kind === 'energy' || p.kind === 'fire') ctx.effects.shockwave(p.pos.clone().setY(Math.max(0, p.pos.y - 0.5)), color, 1.6);
         this.remove(i);
       }

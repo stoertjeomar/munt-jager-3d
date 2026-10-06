@@ -1,11 +1,11 @@
 // De levels van Munt Jager. Elk level is een pad van het begin (zuiden) naar de boss-arena (noorden),
-// met halverwege een Plek van Genade als checkpoint. Versla de boss om het volgende level te openen.
+// met halverwege een checkpoint-vlag. Versla de boss om het volgende level te openen.
 //
 // Pas deze lijsten aan om je eigen levels te maken!
 //   half      = hoe groot het level is: x van -half.x tot half.x, z van -half.z tot half.z
 //   theme     = 'weide' (gras), 'woud' (donker bos) of 'hoogland' (rotsen)
 //   path      = punten van het pad, van start naar boss
-//   graces    = [id, naam, x, z]  (de eerste is het begin)
+//   checkpoints = [id, naam, x, z]  (de eerste is het begin; als je doodgaat kom je terug bij de laatste die je haalde)
 //   spawns    = [soort, aantal]  → worden langs het pad verdeeld
 //   chests    = [id, x, y, z, voorwerp]
 //   npcs      = [personage, x, z, quest]  (zie quests.js)
@@ -22,11 +22,11 @@ export const LEVELS = [
     half: { x: 36, z: 100 },
     boss: 'mario',
     path: [[4, 92], [8, 72], [6, 44], [-6, 16], [-10, -14], [0, -40], [0, -62]],
-    graces: [['l1-start', 'Muntdorp', 6, 88], ['l1-mid', 'Weidepoort', -9, 0]],
+    checkpoints: [['l1-start', 'Muntdorp', 6, 88], ['l1-mid', 'Weidepoort', -9, 0]],
     spawns: [['slijmpje', 10], ['slijmbal', 5], ['zombie', 2]],
     chests: [
-      ['l1-dorp', -11, 0, 74, { kind: 'weapon', key: 'revolver' }], // binnen in het grote huis in Muntdorp!
-      ['l1-boog', 26, 0, 20, { kind: 'weapon', key: 'bow' }],
+      ['l1-dorp', -11, 0, 74, { kind: 'weapon', key: 'dolk' }], // binnen in het grote huis in Muntdorp!
+      ['l1-boog', 26, 0, 20, { kind: 'weapon', key: 'bijl' }],
       ['l1-fles', -28, 0, -30, { kind: 'flask' }],
     ],
     diamonds: [['l1-d1', 30, 0, 80], ['l1-d2', -30, 0, 10], ['l1-d3', 28, 0, -50]],
@@ -52,7 +52,7 @@ export const LEVELS = [
     half: { x: 36, z: 100 },
     boss: 'koning',
     path: [[-4, 92], [-14, 66], [-16, 36], [0, 22], [14, -10], [6, -40], [0, -62]],
-    graces: [['l2-start', 'Valleipoort', -4, 88], ['l2-mid', 'Oude Ruïne', 16, -18]],
+    checkpoints: [['l2-start', 'Valleipoort', -4, 88], ['l2-mid', 'Oude Ruïne', 16, -18]],
     spawns: [['slijmbal', 8], ['slijmpje', 4], ['spierbonk', 2], ['golem', 1]],
     chests: [
       ['l2-platform', -3, 7.25, -14 + 24, { kind: 'weapon', key: 'katana' }], // bovenop het hoogste platform!
@@ -80,10 +80,10 @@ export const LEVELS = [
     half: { x: 36, z: 100 },
     boss: 'ridder',
     path: [[0, 92], [14, 70], [10, 40], [-14, 18], [-12, -12], [8, -38], [0, -62]],
-    graces: [['l3-start', 'Rand van het Woud', 0, 88], ['l3-mid', 'Woudruïne', -14, 4]],
+    checkpoints: [['l3-start', 'Rand van het Woud', 0, 88], ['l3-mid', 'Woudruïne', -14, 4]],
     spawns: [['spook', 6], ['zombie', 7], ['slijmbal', 3]],
     chests: [
-      ['l3-sluip', 28, 0, 22, { kind: 'weapon', key: 'rifle' }],
+      ['l3-sluip', 28, 0, 22, { kind: 'weapon', key: 'ijszwaard' }],
       ['l3-fles', -28, 0, 60, { kind: 'flask' }],
       ['l3-fles2', 28, 0, -46, { kind: 'flask' }],
     ],
@@ -101,10 +101,10 @@ export const LEVELS = [
     half: { x: 38, z: 100 },
     boss: 'reus',
     path: [[0, 92], [-14, 64], [-8, 34], [14, 10], [14, -20], [0, -44], [0, -60]],
-    graces: [['l4-start', 'Voet van het Hoogland', 0, 88], ['l4-mid', 'Rotsentop', 16, 0]],
+    checkpoints: [['l4-start', 'Voet van het Hoogland', 0, 88], ['l4-mid', 'Rotsentop', 16, 0]],
     spawns: [['golem', 4], ['mecha', 3], ['spierbonk', 3], ['spook', 2]],
     chests: [
-      ['l4-sluip', -30, 0, 10, { kind: 'weapon', key: 'sniper' }],
+      ['l4-sluip', -30, 0, 10, { kind: 'weapon', key: 'zonnezwaard' }],
       ['l4-fles', 30, 0, 50, { kind: 'flask' }],
       ['l4-fles2', -30, 0, -44, { kind: 'flask' }],
     ],

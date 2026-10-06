@@ -1,7 +1,7 @@
-import { ATTRIBUTES, POWERS, levelCost } from './stats.js';
+import { POWERS, PERKS, SHOP_ITEMS } from './stats.js';
 import { WEAPONS } from './weapons.js';
 import { HELMETS, itemInfo, itemColor } from './gear.js';
-import { BOUNDS, GRACES, ARENAS } from './world.js';
+import { BOUNDS, CHECKPOINTS, ARENAS } from './world.js';
 import { LEVEL, LEVELS, LEVEL_INDEX } from './levels.js';
 
 // Alles wat je op het scherm ziet (behalve de 3D-wereld): balken, munten, menu's, banners en de minimap.
@@ -13,7 +13,7 @@ export class UI {
     this.stats = stats;
     this.el = {
       hpFill: $('hp-fill'), hpLag: $('hp-lag'), hpText: $('hp-text'),
-      stFill: $('st-fill'), level: $('level'),
+      stFill: $('st-fill'), level: $('level'), xpFill: $('xp-fill'),
       runes: $('runes'), runesGain: $('runes-gain'),
       flasks: $('flasks'), weapon: $('equip-weapon'), helmet: $('equip-helmet'),
       powers: $('powers'), prompt: $('prompt'),
@@ -52,9 +52,10 @@ export class UI {
     $('hp-bar').style.width = `${Math.min(46, 14 + player.maxHealth / 12)}vw`;
     this.el.stFill.style.width = `${(player.stamina / player.maxStamina) * 100}%`;
     $('st-bar').style.width = `${Math.min(40, 10 + player.maxStamina / 10)}vw`;
-    this.el.level.textContent = `Level ${this.stats.level}`;
+    this.el.level.textContent = `Level ${this.stats.level} · ${this.stats.xp} / ${this.stats.xpNeeded} verslagen`;
+    this.el.xpFill.style.width = `${(this.stats.xp / this.stats.xpNeeded) * 100}%`;
     this.el.runes.textContent = this.stats.runes.toLocaleString('nl-NL');
-    this.el.flasks.textContent = `🧪 ${player.flasks} / ${this.stats.data.flasksMax}`;
+    this.el.flasks.textContent = `🧪 ${player.flasks} / ${this.stats.flasksMax}`;
     this.el.weapon.textContent = `⚔ ${WEAPONS[player.sword.weaponKey].name}${player.fireTimer > 0 ? ' 🔥' : ''}`;
     this.el.weapon.style.color = itemColor({ kind: 'weapon', key: player.sword.weaponKey });
     this.el.helmet.textContent = `⛑ ${HELMETS[player.helmetKey].name}`;
@@ -121,7 +122,7 @@ export class UI {
     if (text) this.el.prompt.innerHTML = text;
   }
 
-  /** Grote tekst in het midden, Elden Ring-stijl. kind: 'gold' | 'death' | 'power' */
+  /** Grote tekst in het midden. kind: 'gold' | 'death' | 'power' */
   banner(text, sub = '', kind = 'gold', duration = 3.5) {
     this.el.banner.className = `banner-${kind}`;
     this.el.bannerText.textContent = text;
@@ -194,60 +195,38 @@ export class UI {
     this.el.menu.classList.add('hidden');
   }
 
-  /** Menu bij een Plek van Genade: levelen, reizen, verlaten. */
-  openGraceMenu(grace, actions) {
-    this.menuOpen = 'grace';
+  /** De winkel van de koopman: munten uitgeven. actions = { buy(key), close() } */
+  openShop(name, actions) {
+    this.menuOpen = 'shop';
     this.el.menu.classList.remove('hidden');
-    this.el.menuTitle.textContent = grace.name;
-    const render = (tab = 'main') => {
-      if (tab === 'main') {
-        this.el.menuBody.innerHTML = `
-          <button data-act="level">⬆ Level omhoog</button>
-          <button data-act="travel">🗺 Reizen</button>
-          <button data-act="inventory">🎒 Uitrusting</button>
-          <button data-act="powers">✨ Krachten</button>
-          <button data-act="leave">Verder gaan</button>`;
-      } else if (tab === 'level') {
-        const cost = levelCost(this.stats.level);
-        const can = this.stats.runes >= cost;
-        this.el.menuBody.innerHTML = `
-          <p class="menu-info">Level <b>${this.stats.level}</b> · Munten <b>${this.stats.runes}</b> · Volgend level kost <b class="${can ? 'ok' : 'bad'}">${cost}</b></p>
-          ${Object.entries(ATTRIBUTES)
-            .map(([key, a]) => `<button data-up="${key}" ${can ? '' : 'disabled'}><span>${a.name} <b>${this.stats.data[key]}</b></span><small>${a.info}</small></button>`)
-            .join('')}
-          <p class="menu-info">Leven ${this.stats.maxHealth} · Stamina ${this.stats.maxStamina} · Schade ×${this.stats.damageMultiplier.toFixed(1)}</p>
-          <button data-act="back">← Terug</button>`;
-      } else if (tab === 'travel') {
-        this.el.menuBody.innerHTML =
-          GRACES.filter((g) => this.stats.data.discovered.includes(g.id))
-            .map((g) => `<button data-travel="${g.id}" ${g.id === grace.id ? 'disabled' : ''}>${g.name}</button>`)
-            .join('') + `<button data-act="back">← Terug</button>`;
-      } else if (tab === 'inventory') {
-        this.el.menuBody.innerHTML = this.inventoryHtml() + `<button data-act="back">← Terug</button>`;
-      } else if (tab === 'powers') {
-        this.el.menuBody.innerHTML = this.powersHtml() + `<button data-act="back">← Terug</button>`;
-      }
+    this.el.menuTitle.textContent = name;
+    const render = () => {
+      const st = this.stats;
+      this.el.menuBody.innerHTML = `<p class="menu-info">● Je hebt <b>${st.runes.toLocaleString('nl-NL')}</b> munten</p>` +
+        Object.entries(SHOP_ITEMS).map(([key, item]) => {
+          const price = st.shopPrice(key);
+          const soldOut = price === null;
+          const count = item.repeat ? '' : ` · gekocht ${st.bought(key)} / ${item.price.length}`;
+          return `<button data-buy="${key}" class="item" ${soldOut || st.runes < price ? 'disabled' : ''}>
+            <span>${item.icon} ${item.name}</span><small>${item.info}${count}</small>
+            <em class="${!soldOut && st.runes < price ? 'bad' : ''}">${soldOut ? 'Uitverkocht' : `● ${price}`}</em></button>`;
+        }).join('') +
+        `<p class="menu-info">Leven ${st.maxHealth} · Schade ×${st.damageMultiplier.toFixed(2)} · Flesjes ${st.flasksMax}</p>
+        <button data-act="close">Tot ziens! (Esc)</button>`;
     };
     render();
     this.el.menuBody.onclick = (e) => {
       const b = e.target.closest('button');
       if (!b || b.disabled) return;
-      if (b.dataset.act === 'leave') actions.leave();
-      else if (b.dataset.act === 'back') render('main');
-      else if (b.dataset.act) render(b.dataset.act);
-      else if (b.dataset.up) {
-        const before = this.stats.unlockedPowers();
-        if (this.stats.levelUp(b.dataset.up)) actions.leveled(before);
-        render('level');
-      } else if (b.dataset.travel) actions.travel(b.dataset.travel);
-      else if (b.dataset.equip) {
-        actions.equip(JSON.parse(b.dataset.equip));
-        render('inventory');
+      if (b.dataset.act === 'close') actions.close();
+      else if (b.dataset.buy) {
+        actions.buy(b.dataset.buy);
+        render();
       }
     };
   }
 
-  /** Uitrusting (I of Tab), ook buiten een Genade-plek. */
+  /** Uitrusting (I of Tab): wapens, helmen, je level en krachten. */
   openInventory(actions) {
     this.menuOpen = 'inventory';
     this.el.menu.classList.remove('hidden');
@@ -275,7 +254,7 @@ export class UI {
     const row = (item) => {
       const info = itemInfo(item);
       const equipped = (item.kind === 'weapon' && d.weapon === item.key) || (item.kind === 'helmet' && d.helmet === item.key);
-      const stat = item.kind === 'weapon' ? `${info.damage}${info.pellets ? ` × ${info.pellets}` : ''} schade${info.ranged ? ' · afstand' : ''}` : `${Math.round(info.defense * 100)}% bescherming`;
+      const stat = item.kind === 'weapon' ? `${info.damage} schade` : `${Math.round(info.defense * 100)}% bescherming`;
       return `<button data-equip='${JSON.stringify(item)}' class="item ${equipped ? 'equipped' : ''}">
         <span style="color:${itemColor(item)}">${item.kind === 'weapon' ? '⚔' : '⛑'} ${info.name}</span>
         <small>${stat} · ${info.info}</small>${equipped ? '<em>uitgerust</em>' : ''}</button>`;
@@ -285,13 +264,22 @@ export class UI {
       <h3>Helmen</h3>${d.inventory.filter((i) => i.kind === 'helmet').map(row).join('')}`;
   }
 
+  /** Je level, hoe sterk je bent en wat je nog kunt vrijspelen. */
   powersHtml() {
-    return `<h3>Krachten</h3>` + Object.entries(POWERS)
-      .map(([key, p]) => {
-        const has = this.stats.hasPower(key);
-        const how = p.unlock.level ? `Vanaf level ${p.unlock.level}` : `Versla ${p.unlock.boss === 'koning' ? 'Koning Slijm' : 'De Gevallen Ridder'}`;
-        return `<div class="power-row ${has ? '' : 'locked'}"><b>${has ? p.key : '🔒'}</b><span>${p.name}</span><small>${has ? p.info : how}</small></div>`;
-      })
+    const st = this.stats;
+    const progress = `<p class="menu-info">Level <b>${st.level}</b> · Nog <b>${st.xpNeeded - st.xp}</b> vijanden tot level ${st.level + 1} · Totaal verslagen: <b>${st.data.kills}</b></p>
+      <p class="menu-info">Leven ${st.maxHealth} · Stamina ${st.maxStamina} · Schade ×${st.damageMultiplier.toFixed(2)}</p>`;
+    const unlocks = [
+      ...Object.entries(POWERS).map(([key, p]) => ({
+        has: st.hasPower(key), sort: p.unlock.level ?? 99, key: p.key, name: p.name, info: p.info,
+        how: p.unlock.level ? `Vanaf level ${p.unlock.level}` : `Versla ${p.unlock.boss === 'koning' ? 'Koning Slijm' : 'De Gevallen Ridder'}`,
+      })),
+      ...Object.entries(PERKS).map(([key, p]) => ({
+        has: st.hasPerk(key), sort: p.level, key: '★', name: p.name, info: p.info, how: `Vanaf level ${p.level}: ${p.info}`,
+      })),
+    ].sort((a, b) => a.sort - b.sort);
+    return `<h3>Level</h3>${progress}<h3>Krachten en bonussen</h3>` + unlocks
+      .map((u) => `<div class="power-row ${u.has ? '' : 'locked'}"><b>${u.has ? u.key : '🔒'}</b><span>${u.name}</span><small>${u.has ? u.info : u.how}</small></div>`)
       .join('');
   }
 
@@ -340,28 +328,19 @@ export class UI {
       ctx.fillStyle = n.color;
       ctx.fillText(n.icon, mx, my);
     }
-    // Arena's (doodshoofd) en graces (gouden punt)
+    // Arena's (doodshoofd)
     for (const a of ARENAS) {
       const [mx, my] = toMap(a.center.x, a.center.z);
       ctx.fillStyle = '#ff5a5a';
       ctx.fillText('☠', mx, my);
     }
-    for (const g of GRACES) {
-      if (!this.stats.data.discovered.includes(g.id)) continue;
-      const [mx, my] = toMap(g.position.x, g.position.z);
-      ctx.fillStyle = '#ffd76a';
-      ctx.beginPath();
-      ctx.arc(mx, my, 3.5 + Math.sin(time * 3), 0, Math.PI * 2);
-      ctx.fill();
-    }
-    const lost = this.stats.data.lostRunes;
-    if (lost && lost.level === LEVEL_INDEX) {
-      const [mx, my] = toMap(lost.x, lost.z);
-      ctx.fillStyle = '#8dffb0';
-      ctx.beginPath();
-      ctx.arc(mx, my, 4, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // Checkpoints: een vlaggetje (goud als je er al was)
+    const reached = CHECKPOINTS.findIndex((c) => c.id === this.stats.data.checkpoint);
+    CHECKPOINTS.forEach((c, i) => {
+      const [mx, my] = toMap(c.position.x, c.position.z);
+      ctx.fillStyle = i <= reached ? '#ffd76a' : '#e8e8e8';
+      ctx.fillText('⚑', mx, my);
+    });
     ctx.restore();
 
     // De speler: pijltje in kijkrichting

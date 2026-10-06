@@ -1,72 +1,60 @@
 import * as THREE from 'three';
-import { LEVEL_INDEX } from './levels.js';
 import { createWeaponMesh } from './weapons.js';
 import { createHelmetMesh } from './gear.js';
 
-// Plekken in de wereld waar je iets mee kunt: Plekken van Genade, kisten en je verloren munten.
+// Plekken in de wereld: checkpoint-vlaggen en kisten.
 
 const INTERACT_RANGE = 2.6;
 
-// ---------- Plek van Genade ----------
+// ---------- Checkpoint-vlag ----------
+// Loop je erlangs, dan wordt de vlag goud en kom je hier terug als je doodgaat.
 
-class Grace {
+const FLAG_GREY = new THREE.Color(0xb8b8b8);
+const FLAG_GOLD = new THREE.Color(0xffc93a);
+
+class Checkpoint {
   constructor(scene, def) {
     this.id = def.id;
     this.name = def.name;
     this.position = def.position.clone();
     this.group = new THREE.Group();
-    this.group.position.copy(this.position);
+    this.group.position.copy(this.position).add(new THREE.Vector3(1.4, 0, 0));
     scene.add(this.group);
 
-    // Kring van stenen
-    const stoneMat = new THREE.MeshStandardMaterial({ color: 0x8d8a85, roughness: 0.9, flatShading: true });
-    for (let i = 0; i < 7; i++) {
-      const a = (i / 7) * Math.PI * 2;
-      const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.28, 0), stoneMat);
-      stone.position.set(Math.sin(a) * 1.1, 0.12, Math.cos(a) * 1.1);
-      stone.castShadow = true;
-      this.group.add(stone);
-    }
-    // Gouden licht in het midden
-    const glowMat = new THREE.MeshBasicMaterial({ color: 0xffd76a, transparent: true, opacity: 0.9, toneMapped: false });
-    this.core = new THREE.Mesh(new THREE.OctahedronGeometry(0.22, 0), glowMat);
-    this.core.position.y = 1.1;
-    this.group.add(this.core);
-    this.halo = new THREE.Mesh(
-      new THREE.SphereGeometry(0.6, 16, 12),
-      new THREE.MeshBasicMaterial({ color: 0xffc94a, transparent: true, opacity: 0.18, depthWrite: false, toneMapped: false })
-    );
-    this.halo.position.y = 1.1;
-    this.group.add(this.halo);
-    // Lichtstraal naar boven, zodat je hem van ver ziet
-    this.beam = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.15, 0.4, 30, 12, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0xffd76a, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })
-    );
-    this.beam.position.y = 15;
-    this.group.add(this.beam);
+    // Stenen voetje, paal en een knop bovenop
+    const stone = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 0.25, 10), new THREE.MeshStandardMaterial({ color: 0x8d8a85, roughness: 0.9, flatShading: true }));
+    stone.position.y = 0.12;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 3.2, 8), new THREE.MeshStandardMaterial({ color: 0xd8d8d8, metalness: 0.5, roughness: 0.35 }));
+    pole.position.y = 1.6;
+    this.knob = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 10), new THREE.MeshStandardMaterial({ color: 0xffd76a, metalness: 0.5, roughness: 0.3, emissive: 0x000000 }));
+    this.knob.position.y = 3.25;
+    for (const m of [stone, pole, this.knob]) m.castShadow = true;
+    this.group.add(stone, pole, this.knob);
 
-    // Opstijgende vonkjes
-    const count = 24;
-    this.sparkGeo = new THREE.BufferGeometry();
-    this.sparkGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(count * 3), 3));
-    this.sparkData = Array.from({ length: count }, () => ({ a: Math.random() * 6.28, r: Math.random() * 0.5, y: Math.random() * 2.5, s: 0.4 + Math.random() * 0.6 }));
-    this.sparks = new THREE.Points(this.sparkGeo, new THREE.PointsMaterial({ color: 0xffe08a, size: 0.09, transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false }));
-    this.group.add(this.sparks);
+    // De vlag zelf: een plat doek dat wappert (de punten bewegen in update)
+    const geo = new THREE.PlaneGeometry(1.3, 0.8, 10, 4);
+    geo.translate(0.65, 0, 0);
+    this.flagBase = geo.attributes.position.array.slice();
+    this.flagMat = new THREE.MeshStandardMaterial({ color: FLAG_GREY.clone(), roughness: 0.8, side: THREE.DoubleSide, emissive: 0x000000 });
+    this.flag = new THREE.Mesh(geo, this.flagMat);
+    this.flag.position.set(0.06, 2.75, 0);
+    this.flag.castShadow = true;
+    this.group.add(this.flag);
   }
 
-  update(dt, time, discovered) {
-    this.core.rotation.y = time * 1.5;
-    this.core.position.y = 1.1 + Math.sin(time * 2) * 0.08;
-    this.halo.scale.setScalar(1 + Math.sin(time * 3) * 0.15);
-    this.beam.visible = discovered;
-    const pos = this.sparkGeo.attributes.position;
-    this.sparkData.forEach((p, i) => {
-      p.y += dt * p.s;
-      if (p.y > 2.6) p.y = 0.2;
-      pos.setXYZ(i, Math.sin(p.a + time * 0.5) * p.r, p.y, Math.cos(p.a + time * 0.5) * p.r);
-    });
+  update(time, reached) {
+    // Wapperen: hoe verder van de paal, hoe meer het doek golft
+    const pos = this.flag.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = this.flagBase[i * 3];
+      pos.setZ(i, Math.sin(time * 5 + x * 4) * 0.12 * x);
+      pos.setY(i, this.flagBase[i * 3 + 1] - x * 0.05);
+    }
     pos.needsUpdate = true;
+    this.flag.geometry.computeVertexNormals();
+    this.flagMat.color.lerp(reached ? FLAG_GOLD : FLAG_GREY, 0.1);
+    this.flagMat.emissive.setHex(reached ? 0x3a2a00 : 0x000000);
+    this.knob.material.emissive.setHex(reached ? 0x8a6a00 : 0x000000);
   }
 }
 
@@ -157,64 +145,24 @@ class Chest {
   }
 }
 
-// ---------- Verloren munten (waar je doodging) ----------
-
-class LostRunes {
-  constructor(scene) {
-    this.group = new THREE.Group();
-    this.orb = new THREE.Mesh(
-      new THREE.SphereGeometry(0.3, 16, 12),
-      new THREE.MeshBasicMaterial({ color: 0x8dffb0, transparent: true, opacity: 0.85, toneMapped: false })
-    );
-    this.orb.position.y = 0.8;
-    this.ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.5, 0.75, 32),
-      new THREE.MeshBasicMaterial({ color: 0x8dffb0, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })
-    );
-    this.ring.rotation.x = -Math.PI / 2;
-    this.ring.position.y = 0.04;
-    this.group.add(this.orb, this.ring);
-    this.group.visible = false;
-    scene.add(this.group);
-  }
-
-  show(data) {
-    this.data = data;
-    this.group.visible = !!data;
-    if (data) this.group.position.set(data.x, data.y, data.z);
-  }
-
-  update(time) {
-    if (!this.group.visible) return;
-    this.orb.position.y = 0.8 + Math.sin(time * 3) * 0.12;
-    this.orb.scale.setScalar(1 + Math.sin(time * 6) * 0.1);
-  }
-}
-
 export class Sites {
   /**
    * @param {THREE.Scene} scene
-   * @param {object} defs  { graces, chests } uit world.js
+   * @param {object} defs  { checkpoints, chests } uit world.js
    * @param {import('./stats.js').Stats} stats
    */
   constructor(scene, defs, stats) {
     this.stats = stats;
-    this.graces = defs.graces.map((g) => new Grace(scene, g));
+    this.checkpoints = defs.checkpoints.map((c) => new Checkpoint(scene, c));
     this.chests = defs.chests.map((c) => new Chest(scene, c, stats.data.chests.includes(c.id)));
-    this.lostRunes = new LostRunes(scene);
-    // Verloren munten liggen alleen in het level waar je ze liet vallen
-    this.lostRunes.show(stats.data.lostRunes?.level === LEVEL_INDEX ? stats.data.lostRunes : null);
   }
 
-  grace(id) {
-    return this.graces.find((g) => g.id === id);
+  checkpoint(id) {
+    return this.checkpoints.find((c) => c.id === id);
   }
 
-  /** Waar kun je nu iets mee? Geeft { kind, target } of null. */
+  /** Staat er een kist dichtbij die je kunt openen? Geeft { kind, target } of null. */
   nearbyInteraction(pos) {
-    for (const g of this.graces) {
-      if (Math.hypot(g.position.x - pos.x, g.position.z - pos.z) < INTERACT_RANGE && Math.abs(pos.y - g.position.y) < 1.5) return { kind: 'grace', target: g };
-    }
     for (const c of this.chests) {
       if (c.opened) continue;
       if (Math.hypot(c.position.x - pos.x, c.position.z - pos.z) < INTERACT_RANGE && Math.abs(pos.y - c.position.y) < 1.5) return { kind: 'chest', target: c };
@@ -222,33 +170,26 @@ export class Sites {
     return null;
   }
 
-  /** Graces die je ontdekt als je er dichtbij komt. Geeft de nieuw ontdekte terug (of null). */
-  discover(pos) {
-    for (const g of this.graces) {
-      if (this.stats.data.discovered.includes(g.id)) continue;
-      if (Math.hypot(g.position.x - pos.x, g.position.z - pos.z) < 9) {
-        this.stats.data.discovered.push(g.id);
+  /**
+   * Kom je langs een checkpoint dat verder is dan je laatste? Dan wordt dat je nieuwe terugkom-plek.
+   * Geeft het nieuwe checkpoint terug (of null).
+   */
+  reachCheckpoint(pos) {
+    const current = this.checkpoints.findIndex((c) => c.id === this.stats.data.checkpoint);
+    for (let i = current + 1; i < this.checkpoints.length; i++) {
+      const c = this.checkpoints[i];
+      if (Math.hypot(c.position.x - pos.x, c.position.z - pos.z) < 4) {
+        this.stats.data.checkpoint = c.id;
         this.stats.save();
-        return g;
+        return c;
       }
     }
     return null;
   }
 
-  /** Raakt de speler zijn verloren munten aan? Geeft het bedrag terug (of 0). */
-  touchLostRunes(pos) {
-    const data = this.lostRunes.data;
-    if (!data) return 0;
-    if (Math.hypot(data.x - pos.x, data.z - pos.z) < 1.4 && Math.abs(pos.y - data.y) < 2) {
-      this.lostRunes.show(null);
-      return data.amount;
-    }
-    return 0;
-  }
-
   update(dt, time) {
-    for (const g of this.graces) g.update(dt, time, this.stats.data.discovered.includes(g.id));
+    const current = this.checkpoints.findIndex((c) => c.id === this.stats.data.checkpoint);
+    this.checkpoints.forEach((c, i) => c.update(time, i <= current));
     for (const c of this.chests) c.update(dt, time);
-    this.lostRunes.update(time);
   }
 }

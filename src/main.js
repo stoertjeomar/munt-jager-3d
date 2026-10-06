@@ -5,15 +5,16 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { Player, PLAYABLE } from './player.js';
-import { createWorld, GRACES, ARENAS, CHESTS } from './world.js';
+import { createWorld, CHECKPOINTS, ARENAS, CHESTS } from './world.js';
 import { LEVELS, LEVEL, LEVEL_INDEX } from './levels.js';
 import { NPCs } from './npcs.js';
 import { createEnemies, spawnEnemy } from './enemies.js';
 import { createBosses, BOSS_INFO } from './bosses.js';
 import { Sites } from './sites.js';
 import { Decor } from './decor.js';
-import { Stats, POWERS } from './stats.js';
+import { Stats, POWERS, PERKS, BOSS_KILLS, SHOP_ITEMS } from './stats.js';
 import { itemInfo } from './gear.js';
 import { Effects } from './effects.js';
 import { SwordTrail } from './trail.js';
@@ -35,12 +36,28 @@ document.body.prepend(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 230); // verder dan 230 m tekenen we niet (mist)
 
-// Nabewerking: felle dingen (vuur, lampen, zwaard-windjes, de Genade) krijgen een zachte gloed
+// Nabewerking: felle dingen (vuur, lampen, zwaard-windjes) krijgen een zachte gloed
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth / 2, window.innerHeight / 2), 0.35, 0.5, 0.92);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
+// Kleuren net wat levendiger en een zachte donkere rand (vignet): dan voelt het meer als een echte game
+composer.addPass(new ShaderPass({
+  uniforms: { tDiffuse: { value: null } },
+  vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+    void main() {
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      float grey = dot(c, vec3(0.299, 0.587, 0.114));
+      c = mix(vec3(grey), c, 1.14);                 // verzadiging
+      c = (c - 0.5) * 1.05 + 0.5;                   // contrast
+      c *= vec3(1.02, 1.0, 0.97);                   // een tikje warmer
+      vec2 d = vUv - 0.5;
+      c *= 1.0 - smoothstep(0.35, 0.85, length(d * vec2(1.25, 1.0))) * 0.35; // vignet
+      gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+    }`,
+}));
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -51,14 +68,13 @@ window.addEventListener('resize', () => {
 
 // ---------- Game-objecten ----------
 const stats = new Stats();
-// Nieuw level (of een oude save)? Begin bij de eerste Plek van Genade van dit level.
-if (!GRACES.some((g) => g.id === stats.data.lastGrace)) stats.data.lastGrace = GRACES[0].id;
-if (!stats.data.discovered.includes(GRACES[0].id)) stats.data.discovered.push(GRACES[0].id);
+// Nieuw level (of een oude save)? Begin bij het begin van dit level.
+if (!CHECKPOINTS.some((c) => c.id === stats.data.checkpoint)) stats.data.checkpoint = CHECKPOINTS[0].id;
 stats.data.currentLevel = LEVEL_INDEX;
 const ui = new UI(stats);
 const input = new Input();
 const world = createWorld(scene);
-const sites = new Sites(scene, { graces: GRACES, chests: CHESTS }, stats);
+const sites = new Sites(scene, { checkpoints: CHECKPOINTS, chests: CHESTS }, stats);
 const decor = new Decor(scene);
 const pickups = new Pickups(scene, stats);
 const projectiles = new Projectiles(scene);
@@ -76,18 +92,17 @@ const state = {
   activeBoss: null,
   lockTarget: null,
   attackRequested: false,
-  mouseDown: false,
   forceRun: false, // voor tests: doorspelen zonder dat de muis vastzit
   saveTimer: 0,
 };
 
-/** Waar je terugkomt bij een Plek van Genade (net naast het licht). */
-function graceSpawn(id) {
-  const grace = sites.grace(id) ?? sites.graces[0];
-  return grace.position.clone().add(new THREE.Vector3(0, 0, 2.5));
+/** Waar je terugkomt bij een checkpoint (net naast de vlag). */
+function checkpointSpawn(id) {
+  const checkpoint = sites.checkpoint(id) ?? sites.checkpoints[0];
+  return checkpoint.position.clone().add(new THREE.Vector3(0, 0, 2.5));
 }
 
-player.respawnAt(graceSpawn(stats.data.lastGrace));
+player.respawnAt(checkpointSpawn(stats.data.checkpoint));
 cameraRig.snapTo(player.position);
 cameraRig.yaw = 0;
 
@@ -123,6 +138,28 @@ function giveRunes(amount) {
   ui.addRunes(amount);
 }
 
+/**
+ * Vijanden verslagen: telt mee voor je level. Geeft de nieuwe bonussen terug (of null als je niet omhoog ging).
+ * `announce` = meteen een LEVEL-banner laten zien (bij een boss staat het op het LEVEL VOLTOOID-scherm).
+ */
+function giveKills(amount, announce = true) {
+  const before = stats.unlockedPowers();
+  const perksBefore = stats.unlockedPerks();
+  if (!stats.addKills(amount)) return null;
+  // Sterker geworden: meteen weer vol leven en stamina, en de nieuwe flesjes erbij
+  const newPerks = stats.unlockedPerks().filter((k) => !perksBefore.includes(k));
+  player.health = player.maxHealth;
+  player.stamina = player.maxStamina;
+  player.flasks += newPerks.reduce((n, k) => n + (PERKS[k].flasks ?? 0), 0);
+  play('win');
+  effects.burst(player.position.clone().setY(player.position.y + 1.2), 0xffd76a, { count: 40, speed: 5, size: 0.12, life: 1, up: 4 });
+  if (announce) {
+    ui.banner(`LEVEL ${stats.level}`, 'Je bent sterker geworden! Meer leven, stamina en schade.', 'gold', 3.5);
+    announceNewPowers(before, 3.6, newPerks);
+  }
+  return newPerks;
+}
+
 function addSummon(typeKey, x, z) {
   const e = spawnEnemy(scene, typeKey, x, z);
   enemies.push(e);
@@ -137,7 +174,7 @@ function removeSummons() {
   }
 }
 
-/** Vijanden terug tot leven (na rusten of doodgaan), net als in Elden Ring. */
+/** Vijanden terug tot leven (na doodgaan). */
 function respawnWorld() {
   removeSummons();
   pickups.clearHearts();
@@ -173,6 +210,7 @@ function onDefeated(target) {
   const finished = target.typeKey ? npcs.onKill(target.typeKey) : null;
   if (finished) questReady(finished);
   if (!target.summoned) {
+    giveKills(1);
     giveRunes(target.type.runes);
     pickups.coinBurst(target.center, target.type.runes);
     if (Math.random() < 0.2) pickups.dropHeart(target.position);
@@ -189,11 +227,14 @@ const BOSS_REWARDS = {
 };
 
 function onBossDefeated(boss) {
-  const before = stats.unlockedPowers();
   const firstTime = !stats.data.bosses.includes(boss.id);
   play('win');
   effects.shake(0.5);
   ui.banner('VIJAND GEVELD', boss.name, 'gold', 5);
+  const before = stats.unlockedPowers();
+  const levelBefore = stats.level;
+  // Een boss telt als een heleboel verslagen vijanden
+  const newPerks = giveKills(firstTime ? BOSS_KILLS.first : BOSS_KILLS.again, false) ?? [];
   giveRunes(firstTime ? BOSS_INFO[boss.id].runes : Math.round(BOSS_INFO[boss.id].runes / 3));
   pickups.coinBurst(boss.center, 100);
   const rewards = firstTime ? BOSS_REWARDS[boss.id] : [];
@@ -206,13 +247,13 @@ function onBossDefeated(boss) {
   stats.save();
 
   setTimeout(() => {
-    announceNewPowers(before, 0);
-    showLevelComplete(rewards.map((i) => itemInfo(i).name));
+    announceNewPowers(before, 0, newPerks);
+    showLevelComplete(rewards.map((i) => itemInfo(i).name), stats.level > levelBefore);
   }, 4500);
 }
 
 /** "LEVEL VOLTOOID": door naar het volgende level (of het einde van het spel). */
-function showLevelComplete(rewards) {
+function showLevelComplete(rewards, leveledUp = false) {
   const last = LEVEL_INDEX === LEVELS.length - 1;
   if (last) {
     stats.data.victory = true;
@@ -222,12 +263,13 @@ function showLevelComplete(rewards) {
   const next = LEVELS[LEVEL_INDEX + 1];
   const html = `${last ? 'Alle vier de bosses zijn verslagen. <b>Jij bent de echte Munt Jager!</b>' : `Je hebt <b>${LEVEL.name}</b> gehaald!`}
     ${rewards.length ? `<br>Beloning: <b>${rewards.join(', ')}</b>` : ''}
+    ${leveledUp ? `<br>⬆ Je bent nu <b>level ${stats.level}</b>!` : ''}
     ${next ? `<br><br>Volgende: <b>${next.subtitle} — ${next.name}</b>` : ''}`;
   const buttons = [];
   if (next) buttons.push([`▶ Naar ${next.name}`, () => goToLevel(LEVEL_INDEX + 1)]);
   buttons.push(['Nog even rondlopen', () => {
     ui.closeMenu();
-    renderer.domElement.requestPointerLock();
+    cameraRig.lock();
   }]);
   ui.openLevelComplete(last ? 'DE WERELD IS GERED' : 'LEVEL VOLTOOID', html, buttons);
 }
@@ -235,7 +277,7 @@ function showLevelComplete(rewards) {
 /** Ander level laden: opslaan en de pagina opnieuw laden met het nieuwe level. */
 function goToLevel(index) {
   stats.data.currentLevel = index;
-  stats.data.lastGrace = null;
+  stats.data.checkpoint = null;
   stats.save();
   if (location.search) location.href = location.pathname; // ?level=... uit de adresbalk halen
   else location.reload();
@@ -247,8 +289,43 @@ function questReady(quest) {
   ui.toast(`✔ <b>${quest.title}</b> voltooid!<br><small>Ga terug om je beloning te halen.</small>`, 4);
 }
 
+/** De winkel van de koopman openen (na een begroeting). */
+function openShop(npc) {
+  play('pickup');
+  ui.prompt(null);
+  ui.openDialog(npc.name, [npcs.shopGreeting()], () => {
+    document.exitPointerLock?.();
+    ui.openShop(npc.name, {
+      buy: (key) => {
+        if (!stats.buy(key)) return;
+        play('pickup');
+        const item = SHOP_ITEMS[key];
+        if (key === 'soep') {
+          player.health = player.maxHealth;
+          player.stamina = player.maxStamina;
+          player.flasks = stats.flasksMax;
+          play('heal');
+        } else if (key === 'zaadje') player.flasks++;
+        else if (key === 'hart') player.health += 20;
+        effects.burst(player.position.clone().setY(player.position.y + 1.2), 0xffd76a, { count: 20, speed: 3, size: 0.09, life: 0.7, up: 3 });
+        ui.toast(`Gekocht: <b>${item.icon} ${item.name}</b>`, 2.5);
+      },
+      close: closeShop,
+    });
+  });
+}
+
+function closeShop() {
+  ui.closeMenu();
+  cameraRig.lock();
+}
+
 /** Praten met een NPC. */
 function talkTo(npc) {
+  if (npc.shop) {
+    openShop(npc);
+    return;
+  }
   const result = npcs.talk(npc);
   play('pickup');
   ui.prompt(null);
@@ -266,13 +343,17 @@ function talkTo(npc) {
   });
 }
 
-/** Laat zien welke krachten je net hebt vrijgespeeld. */
-function announceNewPowers(before, delay = 0) {
+/** Laat zien welke krachten (en level-bonussen) je net hebt vrijgespeeld, één voor één. */
+function announceNewPowers(before, delay = 0, newPerks = []) {
   const fresh = stats.unlockedPowers().filter((k) => !before.includes(k));
-  fresh.forEach((key, i) => {
+  const banners = [
+    ...fresh.map((key) => [`NIEUWE KRACHT: ${POWERS[key].name.toUpperCase()}`, `${POWERS[key].key} — ${POWERS[key].info}`]),
+    ...newPerks.map((key) => [`NIEUWE BONUS: ${PERKS[key].name.toUpperCase()}`, PERKS[key].info]),
+  ];
+  banners.forEach(([text, sub], i) => {
     setTimeout(() => {
       play('pickup');
-      ui.banner(`NIEUWE KRACHT: ${POWERS[key].name.toUpperCase()}`, `${POWERS[key].key} — ${POWERS[key].info}`, 'power', 4.5);
+      ui.banner(text, sub, 'power', 4.5);
     }, (delay + i * 4.8) * 1000);
   });
 }
@@ -358,58 +439,14 @@ function onGolemSlam(enemy, radius, damage) {
 function die() {
   state.deathTimer = 4;
   play('lose');
-  ui.banner('JE BENT GESTORVEN', stats.runes > 0 ? 'Je munten liggen nog waar je viel...' : '', 'death', 3.8);
-  // Munten laten vallen; vorige verloren munten zijn nu echt weg
-  if (stats.runes > 0) {
-    stats.data.lostRunes = { level: LEVEL_INDEX, x: player.position.x, y: player.position.y, z: player.position.z, amount: stats.runes };
-    stats.data.runes = 0;
-  } else {
-    stats.data.lostRunes = null;
-  }
-  sites.lostRunes.show(stats.data.lostRunes);
-  stats.save();
+  ui.banner('JE BENT GESTORVEN', 'Je komt terug bij het laatste checkpoint.', 'death', 3.8);
 }
 
 function respawnAfterDeath() {
   respawnWorld();
-  player.respawnAt(graceSpawn(stats.data.lastGrace));
+  player.respawnAt(checkpointSpawn(stats.data.checkpoint));
   player.invulnerable = 2; // even veilig na het terugkomen
   cameraRig.snapTo(player.position);
-}
-
-function rest(grace) {
-  stats.data.lastGrace = grace.id;
-  stats.save();
-  respawnWorld();
-  player.respawnAt(player.position.clone());
-  player.mesh.rotation.y = Math.atan2(grace.position.x - player.position.x, grace.position.z - player.position.z);
-  player.resting = true;
-  play('heal');
-  document.exitPointerLock?.();
-  ui.openGraceMenu(grace, {
-    leave: () => {
-      player.resting = false;
-      ui.closeMenu();
-      renderer.domElement.requestPointerLock();
-    },
-    travel: (id) => {
-      stats.data.lastGrace = id;
-      stats.save();
-      player.resting = false;
-      ui.closeMenu();
-      player.respawnAt(graceSpawn(id));
-      cameraRig.snapTo(player.position);
-      renderer.domElement.requestPointerLock();
-      ui.toast(`Gereisd naar <b>${sites.grace(id).name}</b>`);
-    },
-    leveled: (before) => {
-      play('pickup');
-      player.health = player.maxHealth;
-      player.stamina = player.maxStamina;
-      announceNewPowers(before);
-    },
-    equip,
-  });
 }
 
 function equip(item) {
@@ -439,7 +476,7 @@ function openChest(chest) {
 function toggleInventory() {
   if (ui.menuOpen === 'inventory') {
     ui.closeMenu();
-    renderer.domElement.requestPointerLock();
+    cameraRig.lock();
     return;
   }
   if (ui.menuOpen) return;
@@ -447,7 +484,7 @@ function toggleInventory() {
   ui.openInventory({
     close: () => {
       ui.closeMenu();
-      renderer.domElement.requestPointerLock();
+      cameraRig.lock();
     },
     equip,
     wipe: () => {
@@ -490,16 +527,11 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   // De eerste klik zet alleen de muis vast; daarna is klikken = slaan
   if (e.button === 0 && cameraRig.locked) {
     state.attackRequested = true;
-    state.mouseDown = true;
   }
-});
-window.addEventListener('pointerup', (e) => {
-  if (e.button === 0) state.mouseDown = false;
 });
 
 // ---------- Startscherm: kies je held ----------
 const lockHintEl = document.getElementById('lock-hint');
-const crosshairEl = document.getElementById('crosshair');
 const charSelectEl = document.getElementById('char-select');
 const startBtn = document.getElementById('start-btn');
 let gameStarted = false;
@@ -543,7 +575,7 @@ levelSelectEl.addEventListener('click', (e) => {
 startBtn.addEventListener('click', () => {
   unlockAudio();
   gameStarted = true;
-  renderer.domElement.requestPointerLock();
+  cameraRig.lock();
 });
 
 document.addEventListener('pointerlockchange', () => {
@@ -578,11 +610,7 @@ function handleActions(move) {
   const shiftUp = input.wasReleased('ShiftLeft') ?? input.wasReleased('ShiftRight');
   if (shiftUp !== null && shiftUp < 0.22 && player.tryRoll(move)) play('swing');
 
-  // Automatische wapens: blijven schieten zolang je de knop ingedrukt houdt
-  const holding = state.mouseDown || input.isDown('KeyF');
-  player.aiming = !!player.sword.ranged && holding;
-  if (player.sword.weapon?.auto && holding) player.tryAttack();
-  else if (attack) {
+  if (attack) {
     if (!player.onGround && player.position.y > 1.2 && player.trySlam()) play('heavySwing');
     else if (player.tryAttack()) {
       play(player.sword.weaponKey === 'club' ? 'heavySwing' : 'swing');
@@ -599,21 +627,18 @@ function handleActions(move) {
   if (input.wasPressed('KeyQ')) toggleLock();
   if (input.wasPressed('KeyI') || input.wasPressed('Tab')) toggleInventory();
 
-  // E: praten, rusten of een kist openen
+  // E: praten of een kist openen
   const npc = player.isBusy ? null : npcs.nearby(player.position);
   if (npc) {
-    ui.prompt(`<b>E</b> Praat met ${npc.name}`);
+    ui.prompt(npc.shop ? `<b>E</b> Winkelen bij ${npc.name}` : `<b>E</b> Praat met ${npc.name}`);
     if (input.wasPressed('KeyE')) talkTo(npc);
     return;
   }
   const near = player.isBusy ? null : sites.nearbyInteraction(player.position);
-  if (near?.kind === 'grace') ui.prompt(`<b>E</b> Rusten bij ${near.target.name}`);
-  else if (near?.kind === 'chest') ui.prompt('<b>E</b> Kist openen');
-  else ui.prompt(null);
+  ui.prompt(near ? '<b>E</b> Kist openen' : null);
   if (near && input.wasPressed('KeyE')) {
     ui.prompt(null);
-    if (near.kind === 'grace') rest(near.target);
-    else openChest(near.target);
+    openChest(near.target);
   }
 }
 
@@ -632,8 +657,6 @@ function handlePlayerEvents() {
       const at = player.position.clone().setY(player.position.y + 1);
       effects.burst(at, 0x7dff9a, { count: 18, speed: 3, size: 0.09, life: 0.7, up: 3, gravity: -0.3 });
       effects.floatText(at.setY(at.y + 0.9), `+${Math.round(player.maxHealth * 0.45)}`, '#7dff9a', 0.55);
-    } else if (ev === 'shoot') {
-      shoot();
     } else if (ev === 'land') {
       play('land');
     } else if (ev === 'fire') {
@@ -641,45 +664,6 @@ function handlePlayerEvents() {
     }
   }
   player.events.length = 0;
-}
-
-// ---------- Schieten ----------
-
-function shoot() {
-  const w = player.sword.weapon;
-  // Waar mik je op? Je vastgezette doel, of anders het midden van het scherm
-  let aimPoint;
-  if (state.lockTarget) aimPoint = state.lockTarget.center;
-  else {
-    const dir = new THREE.Vector3();
-    camera.getWorldDirection(dir);
-    aimPoint = camera.position.clone().addScaledVector(dir, 60);
-  }
-  const flat = aimPoint.clone().sub(player.position).setY(0);
-  player.mesh.rotation.y = Math.atan2(flat.x, flat.z);
-  player.aimPitch = THREE.MathUtils.clamp(Math.atan2(aimPoint.y - (player.position.y + 1.3), flat.length()), -0.8, 0.8);
-
-  const facing = player.facing;
-  const right = new THREE.Vector3(-facing.z, 0, facing.x); // rechterhand-kant van het personage
-  const muzzle = player.position.clone().add(new THREE.Vector3(0, 1.3, 0)).addScaledVector(facing, 0.5 + (w.muzzle ?? 0.5)).addScaledVector(right, 0.25);
-  const fire = player.fireTimer > 0 ? 1.5 : 1;
-  const damage = Math.round(w.damage * stats.damageMultiplier * fire);
-  for (let i = 0; i < (w.pellets ?? 1); i++) {
-    const dir = aimPoint.clone().sub(muzzle).normalize();
-    const spread = w.spread ?? 0;
-    dir.x += (Math.random() - 0.5) * spread * 2;
-    dir.y += (Math.random() - 0.5) * spread * 2;
-    dir.z += (Math.random() - 0.5) * spread * 2;
-    projectiles.spawn({
-      from: muzzle, dir, speed: w.speed, damage, owner: 'player', kind: w.ranged,
-      gravity: w.gravity ?? 0, pierce: w.pierce, radius: 0.35, life: w.life,
-      color: player.fireTimer > 0 ? 0xff7a1a : undefined,
-    });
-  }
-  // Mondingsvuur, geluid en een klein schokje
-  effects.burst(muzzle, w.ranged === 'arrow' ? 0xffffff : 0xffd27a, { count: w.ranged === 'arrow' ? 3 : 8, speed: 3, size: 0.07, life: 0.12, up: 0, gravity: 0 });
-  play(w.ranged === 'arrow' ? 'bow' : w.damage >= 50 || w.pellets ? 'bigShot' : 'shot');
-  effects.shake(w.damage >= 50 || w.pellets ? 0.12 : 0.04);
 }
 
 // ---------- Effecten bij het wapen ----------
@@ -743,20 +727,26 @@ function gameLoop() {
   const realDt = Math.min(clock.getDelta(), 0.05);
   // Tijdens een "hitstop" of een menu staat het spel even stil (de camera niet)
   // Pauze: in een menu (behalve rusten), of op het start-/pauzescherm (muis niet vast)
-  const paused = (!!ui.menuOpen && ui.menuOpen !== 'grace') || (!ui.menuOpen && !cameraRig.locked && !state.forceRun);
+  const paused = !!ui.menuOpen || (!cameraRig.locked && !state.forceRun);
   const dt = state.hitstop > 0 || paused ? 0 : realDt;
   state.hitstop -= realDt;
   const elapsed = clock.elapsedTime;
 
   const move = readMove();
+  const menuAtStart = ui.menuOpen; // welk menu was er open toen deze frame begon
   // In een gesprek: E, Spatie of klikken = volgende zin
   const inDialog = ui.menuOpen === 'dialog';
   if (inDialog && (input.wasPressed('KeyE') || input.wasPressed('Space') || input.wasPressed('Enter') || state.attackRequested)) {
     state.attackRequested = false;
     ui.advanceDialog();
   }
-  const canAct = player.alive && !ui.menuOpen && !inDialog && state.deathTimer <= 0 && !paused;
-  crosshairEl.classList.toggle('hidden', !player.sword.ranged || !cameraRig.locked);
+  // Uitrusting open: I, Tab of Esc sluit hem weer; de winkel sluit met Esc of E.
+  // In die frame doen we verder niks, anders opent dezelfde toetsdruk het menu meteen opnieuw.
+  const closeInventory = menuAtStart === 'inventory' && (input.wasPressed('KeyI') || input.wasPressed('Tab') || input.wasPressed('Escape'));
+  const closeShopKey = menuAtStart === 'shop' && (input.wasPressed('Escape') || input.wasPressed('KeyE'));
+  if (closeInventory) toggleInventory();
+  if (closeShopKey) closeShop();
+  const canAct = player.alive && !ui.menuOpen && !inDialog && state.deathTimer <= 0 && !paused && !closeInventory && !closeShopKey;
   if (canAct) handleActions(move);
   else ui.prompt(null);
 
@@ -780,18 +770,12 @@ function gameLoop() {
     enemyContact();
     updateBossFights();
 
-    const found = sites.discover(player.position);
-    if (found) {
-      play('heal');
-      ui.banner('PLEK VAN GENADE GEVONDEN', found.name, 'gold', 3.5);
-    }
-    const recovered = sites.touchLostRunes(player.position);
-    if (recovered) {
-      giveRunes(recovered);
-      stats.data.lostRunes = null;
-      stats.save();
+    // Bij een checkpoint-vlag langs gelopen? Dan kom je hier terug als je doodgaat.
+    const reached = sites.reachCheckpoint(player.position);
+    if (reached) {
       play('pickup');
-      ui.toast(`Je munten terug: <b>+${recovered}</b>`);
+      effects.burst(reached.position.clone().setY(2.6), 0xffd76a, { count: 30, speed: 4, size: 0.1, life: 0.9, up: 3 });
+      ui.toast(`🚩 <b>Checkpoint: ${reached.name}</b><br><small>Als je doodgaat, kom je hier terug.</small>`, 3);
     }
   } else if (state.deathTimer > 0) {
     state.deathTimer -= realDt;
@@ -806,8 +790,7 @@ function gameLoop() {
   for (const enemy of enemies) enemy.update(dt, enemyCtx);
   for (const boss of bosses) boss.update(dt, bossCtx);
   projectiles.update(dt, {
-    targets, player, hurtPlayer, colliders: world.colliders, effects,
-    onPlayerHit: (target, result, proj) => onHit(target, result, proj.kind === 'arrow' ? 0xffd27a : 0xffe27a),
+    player, hurtPlayer, colliders: world.colliders, effects,
   });
   // Is de boss dood door iets anders dan een klap? (bijv. schade terwijl je doodging)
   if (state.activeBoss && (!state.activeBoss.awake || state.activeBoss.dead)) state.activeBoss = null;
@@ -843,7 +826,7 @@ function gameLoop() {
   });
   const walking = player.moving && player.onGround && player.rollTimer <= 0 && !ui.menuOpen && player.alive && !paused;
   setFootsteps(walking, input.heldFor('ShiftLeft') > 0.22 || input.heldFor('ShiftRight') > 0.22);
-  decor.update(dt, elapsed, player.position);
+  decor.update(dt, elapsed, player.position, world.night ?? 0);
   updateTrail(dt);
   effects.update(dt);
   world.updateSun(player.position, dt);
@@ -884,7 +867,7 @@ if (stats.level === 1 && stats.runes === 0 && stats.data.bosses.length === 0) {
   document.addEventListener('pointerlockchange', function intro() {
     if (!cameraRig.locked) return;
     document.removeEventListener('pointerlockchange', intro);
-    setTimeout(() => ui.toast('Volg het pad naar het noorden en versla de boss.<br>Praat met mensen (<b>E</b>) voor zij-quests, en rust bij de gouden <b>Plek van Genade</b> om sterker te worden.', 8), 5000);
+    setTimeout(() => ui.toast('Volg het pad naar het noorden en versla de boss.<br>Praat met mensen (<b>E</b>) voor zij-quests, en versla vijanden om in level te stijgen en sterker te worden.<br>Loop langs de <b>vlaggen</b>: dat zijn checkpoints.', 8), 5000);
   });
 }
 
