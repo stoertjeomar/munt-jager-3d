@@ -47,8 +47,25 @@ export const ENEMY_TYPES = {
   },
 };
 
-const LEASH = 16; // verder dan dit van huis geeft een vijand het op en gaat terug
+// Verder dan dit van huis geeft een vijand het op en loopt hij terug naar huis.
+// Pas als hij weer thuis is, let hij weer op jou (anders staat hij te trillen bij een onzichtbare muur).
+const LEASH = 20;
 const ACTIVE_RANGE = 70; // vijanden verder weg dan dit staan stil (scheelt rekenwerk)
+const STUCK_TIME = 0.6; // zo lang vastzitten, en dan probeert een vijand iets anders
+
+/**
+ * In welk blok staat een rondje (midden x,z, straal r, van hoogte y tot y+h)? Geeft het blok terug, of null.
+ * Hoeken van blokken tellen als rond: dan glij je er makkelijk langs.
+ */
+function blockAt(x, z, r, y, h, colliders) {
+  for (const b of colliders) {
+    if (b.min.y > y + h || b.max.y < y + 0.05) continue; // boven of onder ons
+    const cx = THREE.MathUtils.clamp(x, b.min.x, b.max.x); // dichtstbijzijnde punt van het blok
+    const cz = THREE.MathUtils.clamp(z, b.min.z, b.max.z);
+    if ((x - cx) ** 2 + (z - cz) ** 2 < r * r) return b;
+  }
+  return null;
+}
 
 // Waar de vijanden lopen: dat staat per level in levels.js (spawns = [soort, aantal]).
 // Ze worden langs het pad verdeeld: makkelijke vijanden vooraan, sterke vijanden vlak voor de boss.
@@ -303,6 +320,9 @@ class Enemy {
     scene.add(this.mesh);
     this.velocity = new THREE.Vector3();
     this.knockback = new THREE.Vector3();
+    this.steerDir = new THREE.Vector3();
+    this.nearBlocks = []; // blokken vlakbij (voor het vooruitkijken)
+    this.patrolChecked = false; // zijn de patrouille-punten al nagekeken? (zie fitPatrol)
     this.reset();
   }
 
@@ -380,6 +400,11 @@ class Enemy {
     this.lastSwingId = -1;
     this.goingToB = true;
     this.chasing = false;
+    this.returning = false; // opgegeven en op weg naar huis
+    this.closeBy = false; // vlak bij de speler (dan staat hij stil)
+    this.stuckT = 0; // hoe lang zit hij al vast?
+    this.avoidT = 0; // zo lang blijft hij nog om iets heen lopen
+    this.avoidSide = 0; // om iets heen: links (1) of rechts (-1)
     this.state = 'walk'; // golem: walk / windup / recover, andere soorten hebben hun eigen aanvallen
     this.attackCooldown = 1;
     this.anim = 0; // > 0: een eenmalige animatie (zoals "geraakt") speelt nog
@@ -401,6 +426,7 @@ class Enemy {
     this.mesh.rotation.set(0, 0, 0);
     this.healthBar.visible = false;
     this.phase = Math.random() * Math.PI * 2;
+    this.gait = 0; // hoe ver de loop-animatie is (wiegen, springen)
     this.setFlash(0);
   }
 
@@ -420,6 +446,7 @@ class Enemy {
   hit(from, swingId, damage = 1) {
     if (!this.alive || this.lastSwingId === swingId) return null;
     this.lastSwingId = swingId;
+    this.returning = false; // geraakt? dan geeft hij het niet op
     this.hp = Math.max(0, this.hp - damage);
     this.flash = 0.12;
     this.punch = 1; // "boing": even platgedrukt
@@ -460,6 +487,8 @@ class Enemy {
    */
   update(dt, ctx) {
     const type = this.type;
+    // De eerste keer: kijken of de patrouille-punten niet in een boom, steen of muur liggen (nu bestaan alle blokken)
+    if (!this.patrolChecked) this.fitPatrol(ctx.colliders, ctx.bounds);
     this.flash = Math.max(0, this.flash - dt);
     this.setFlash(this.flash);
     this.healthBar.quaternion.copy(ctx.camera.quaternion); // altijd naar de camera gericht
@@ -473,6 +502,7 @@ class Enemy {
       this.mixer.update(dt);
       this.position.addScaledVector(this.knockback, dt);
       this.knockback.multiplyScalar(Math.exp(-8 * dt));
+      this.pushOutOfBlocks(ctx.colliders); // niet in een boom wegglijden
       if (this.dying < 0.4) this.position.y -= dt * 2;
       if (this.dying <= 0) this.mesh.visible = false;
       return;
@@ -484,6 +514,7 @@ class Enemy {
       this.mesh.rotation.y += dt * 12;
       this.position.addScaledVector(this.knockback, dt);
       this.knockback.multiplyScalar(Math.exp(-8 * dt));
+      this.pushOutOfBlocks(ctx.colliders);
       if (this.dying <= 0) this.mesh.visible = false;
       return;
     }
@@ -496,13 +527,27 @@ class Enemy {
     const flatToPlayer = toPlayer.clone().setY(0);
     const distToPlayer = flatToPlayer.length();
     const distFromHome = this.position.clone().setY(0).distanceTo(this.home);
-    const reachable = type.flies || playerPos.y < this.position.y + 2.5; // niet achter je aan als je hoog op een blok staat
-    this.chasing = ctx.player.alive && distToPlayer < type.sight && distFromHome < LEASH && reachable;
+    const giveUp = this.summoned ? 40 : LEASH; // opgeroepen slijmpjes lopen door de hele boss-arena achter je aan
+    // Niet achter je aan als je hoog op een blok staat (maar wel als je alleen even springt)
+    const reachable = type.flies || playerPos.y < this.position.y + 2.5 || (this.chasing && !ctx.player.onGround);
+    if (this.returning && distFromHome < 3) this.returning = false; // weer thuis
+    if (this.chasing) {
+      // Al achter je aan? Dan pas stoppen als je echt ver weg bent (zo trilt hij niet heen en weer op één plek)
+      this.chasing = ctx.player.alive && reachable && distToPlayer < type.sight * 1.5 && distFromHome < giveUp;
+    } else {
+      this.chasing = !this.returning && ctx.player.alive && reachable && distToPlayer < type.sight && distFromHome < giveUp;
+    }
+    if (!this.chasing && distFromHome >= giveUp) this.returning = true; // te ver weg: opgeven en terug naar huis
 
     // ---------- Eigen aanvallen van de nieuwe vijanden ----------
     if (this.typeKey === 'zombie' || this.typeKey === 'spierbonk' || this.typeKey === 'mecha') {
       this.attackCooldown -= dt;
       if (this.specialAttack(dt, ctx, distToPlayer, flatToPlayer)) {
+        // Terugstoot meteen (niet bewaren tot na de aanval), en niet in muren of buiten het level
+        this.position.addScaledVector(this.knockback, dt);
+        this.knockback.multiplyScalar(Math.exp(-8 * dt));
+        this.pushOutOfBlocks(ctx.colliders);
+        this.clampToBounds(ctx.bounds);
         this.mixer?.update(dt);
         return;
       }
@@ -521,6 +566,8 @@ class Enemy {
         this.animateGolem(dt, ctx.time);
         this.position.addScaledVector(this.knockback, dt);
         this.knockback.multiplyScalar(Math.exp(-8 * dt));
+        this.pushOutOfBlocks(ctx.colliders);
+        this.clampToBounds(ctx.bounds);
         if (this.state === 'windup' && this.stateTimer <= 0) {
           this.state = 'recover';
           this.stateTimer = RECOVER_TIME;
@@ -536,26 +583,54 @@ class Enemy {
     // ---------- Waar wil ik heen? ----------
     let dir;
     let speed;
+    let reach; // hoe ver weg is waar ik heen loop? (zo ver hoef ik maar vooruit te kijken)
+    let steerable = true; // mag hij om dingen heen lopen?
     if (this.chasing) {
       dir = type.flies ? toPlayer.clone().add(new THREE.Vector3(0, 0.6, 0)) : flatToPlayer.clone();
       speed = type.chaseSpeed;
+      reach = Math.max(0.3, distToPlayer - type.radius - 0.3);
       if (this.typeKey === 'mecha') {
         // De Mecha schiet liever van een afstandje
-        if (distToPlayer < 8) dir.negate();
-        else if (distToPlayer < 13) speed = 0;
+        if (distToPlayer < 8) {
+          dir.negate();
+          reach = 3;
+        } else if (distToPlayer < 13) speed = 0;
       }
-      if (!type.flies && distToPlayer < type.radius + 0.35) speed = 0; // niet in de speler kruipen
+      if (!type.flies) {
+        // Niet in de speler kruipen (met een beetje speling, anders wiebelt hij tussen lopen en stilstaan)
+        this.closeBy = distToPlayer < type.radius + (this.closeBy ? 0.5 : 0.35);
+        if (this.closeBy) speed = 0;
+        // Sta je bovenop een blok? Dan wacht hij eronder, in plaats van eromheen te blijven rennen
+        if (playerPos.y > 0.3) {
+          const under = blockAt(playerPos.x, playerPos.z, 0.3, this.position.y, type.height, ctx.colliders);
+          if (under && blockAt(this.position.x, this.position.z, type.radius + 1.5, this.position.y, type.height, [under])) steerable = false;
+        }
+      }
     } else {
       const goal = this.goingToB ? this.pointB : this.pointA;
       dir = goal.clone().sub(this.position);
       if (type.flies) dir.y = 1.2 - this.position.y;
       else dir.y = 0;
-      if (dir.clone().setY(0).length() < 0.2) this.goingToB = !this.goingToB;
-      speed = type.patrolSpeed;
+      reach = Math.hypot(dir.x, dir.z);
+      if (reach < 0.3) this.goingToB = !this.goingToB;
+      speed = this.returning ? type.patrolSpeed * 1.6 : type.patrolSpeed; // op weg naar huis loopt hij wat sneller
+      if (reach < 0.3 && this.pointA.distanceToSquared(this.pointB) < 0.01) speed = 0; // geen ruimte om heen en weer te lopen: op wacht staan
     }
     if (dir.lengthSq() > 1e-6) dir.normalize();
 
+    // ---------- Om bomen, stenen en muren heen lopen ----------
+    let steered = false;
+    const flat = Math.hypot(dir.x, dir.z);
+    if (speed > 0 && steerable && flat > 1e-3) {
+      const want = this.steerDir.set(dir.x / flat, 0, dir.z / flat);
+      steered = this.steer(want, Math.min(type.radius + 1.2, reach), ctx, dt);
+      dir.x = want.x * flat;
+      dir.z = want.z * flat;
+    }
+
     // ---------- Bewegen (plus terugstoot van een klap) ----------
+    const beforeX = this.position.x;
+    const beforeZ = this.position.z;
     this.velocity.copy(dir).multiplyScalar(speed).add(this.knockback);
     this.knockback.multiplyScalar(Math.exp(-8 * dt));
     this.position.addScaledVector(this.velocity, dt);
@@ -563,11 +638,24 @@ class Enemy {
     if (type.flies) this.position.y = Math.max(0.4, this.position.y); // zweven, maar niet door de grond
     else this.position.y = 0;
     this.pushOutOfBlocks(ctx.colliders); // niemand loopt (of zweeft) door muren, bomen en stenen
-    this.position.x = THREE.MathUtils.clamp(this.position.x, -ctx.bounds.x + type.radius, ctx.bounds.x - type.radius);
-    this.position.z = THREE.MathUtils.clamp(this.position.z, -ctx.bounds.z + type.radius, ctx.bounds.z - type.radius);
+    this.clampToBounds(ctx.bounds);
+
+    // ---------- Vast? ----------
+    // Hij wil lopen maar komt bijna niet vooruit: dan de andere kant om proberen (of naar zijn andere patrouille-punt)
+    const moved = Math.hypot(this.position.x - beforeX, this.position.z - beforeZ);
+    if (speed > 0 && steerable && moved < speed * dt * 0.3) this.stuckT += dt;
+    else this.stuckT = Math.max(0, this.stuckT - dt);
+    if (this.stuckT > STUCK_TIME) {
+      this.stuckT = 0;
+      if (this.chasing || this.returning) {
+        this.avoidSide = -(this.avoidSide || 1);
+        this.avoidT = 1.2;
+      } else this.goingToB = !this.goingToB;
+    }
 
     // ---------- Draaien naar de looprichting ----------
-    const look = this.chasing ? flatToPlayer : dir.clone().setY(0);
+    // Achter je aan: hij kijkt naar jou. Loopt hij ergens omheen, dan kijkt hij waar hij loopt (de Mecha blijft op jou mikken).
+    const look = this.chasing && (!steered || this.typeKey === 'mecha') ? flatToPlayer : dir.clone().setY(0);
     if (look.lengthSq() > 1e-6) {
       const targetAngle = Math.atan2(look.x, look.z);
       let diff = targetAngle - this.mesh.rotation.y;
@@ -580,10 +668,124 @@ class Enemy {
       this.anim -= dt;
       if (this.anim <= 0) this.playAnim(speed === 0 ? 'Idle' : this.chasing ? 'Run' : 'Walk');
       this.mixer.update(dt);
-    } else if (type.model) this.animateModel(ctx.time, speed);
+    } else if (type.model) this.animateModel(dt, speed);
     else if (this.typeKey === 'golem') this.animateGolem(dt, ctx.time);
     else if (type.flies) this.animateGhost(ctx.time);
-    else this.animateSlime(ctx.time);
+    else this.animateSlime(dt, ctx.time);
+  }
+
+  /** Patrouille-punten niet in (of achter) bomen, stenen, muren, of buiten het level. Gebeurt één keer. */
+  fitPatrol(colliders, bounds) {
+    this.patrolChecked = true;
+    const r = this.type.radius + 0.3; // een beetje ruimte over
+    const y = this.type.flies ? 1.2 : 0;
+    const h = this.type.height;
+    const free = (x, z) => Math.abs(x) < bounds.x - r && Math.abs(z) < bounds.z - r && !blockAt(x, z, r, y, h, colliders);
+    // Kun je in een rechte lijn van a naar b lopen?
+    const clearLine = (a, b) => {
+      const n = Math.ceil(a.distanceTo(b) / 0.4);
+      for (let i = 1; i <= n; i++) if (!free(a.x + ((b.x - a.x) * i) / n, a.z + ((b.z - a.z) * i) / n)) return false;
+      return true;
+    };
+    const oldA = this.pointA.clone();
+    if (!free(this.pointA.x, this.pointA.z)) {
+      // In rondjes steeds verder zoeken naar een vrij plekje
+      search: for (let s = 0.5; s <= 6; s += 0.5) {
+        for (let k = 0; k < 12; k++) {
+          const a = (k / 12) * Math.PI * 2;
+          const x = oldA.x + Math.sin(a) * s;
+          const z = oldA.z + Math.cos(a) * s;
+          if (free(x, z)) {
+            this.pointA.set(x, 0, z);
+            break search;
+          }
+        }
+      }
+    }
+    if (!free(this.pointB.x, this.pointB.z) || !clearLine(this.pointA, this.pointB)) {
+      // Punt B zit in de weg: draai hem een stukje om punt A heen (of maak de looproute korter)
+      const len = Math.max(0.5, this.pointA.distanceTo(this.pointB));
+      const start = Math.atan2(this.pointB.x - this.pointA.x, this.pointB.z - this.pointA.z);
+      const b = new THREE.Vector3();
+      let found = false;
+      for (const s of [len, len * 0.75, len * 0.5]) {
+        for (let k = 1; k < 16 && !found; k++) {
+          const a = start + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 8);
+          b.set(this.pointA.x + Math.sin(a) * s, 0, this.pointA.z + Math.cos(a) * s);
+          if (free(b.x, b.z) && clearLine(this.pointA, b)) found = true;
+        }
+        if (found) break;
+      }
+      this.pointB.copy(found ? b : this.pointA); // nergens plek? dan staat hij op wacht
+    }
+    this.home.copy(this.pointA).lerp(this.pointB, 0.5);
+    // Stond hij nog op zijn oude beginplek? Dan naar de nieuwe
+    if (Math.hypot(this.position.x - oldA.x, this.position.z - oldA.z) < 0.01) {
+      this.position.set(this.pointA.x, this.type.flies ? 1.2 : 0, this.pointA.z);
+    }
+  }
+
+  /**
+   * Kijk een stukje vooruit. Staat er iets in de weg, loop er dan schuin langs (en blijf even aan dezelfde kant).
+   * Past `want` (de looprichting) aan en geeft true terug als hij moest uitwijken.
+   */
+  steer(want, look, ctx, dt) {
+    const p = this.position;
+    const r = this.type.radius;
+    const h = this.type.height;
+    const B = ctx.bounds;
+    // Alleen blokken vlakbij bekijken (scheelt veel rekenwerk)
+    const R = r + look + 0.5;
+    const near = this.nearBlocks;
+    near.length = 0;
+    for (const b of ctx.colliders) {
+      if (b.min.y > p.y + h || b.max.y < p.y + 0.05) continue;
+      if (b.max.x < p.x - R || b.min.x > p.x + R || b.max.z < p.z - R || b.min.z > p.z + R) continue;
+      near.push(b);
+    }
+    this.avoidT = Math.max(0, this.avoidT - dt);
+    const atEdge = Math.abs(p.x) > B.x - R || Math.abs(p.z) > B.z - R;
+    if (!near.length && !atEdge) {
+      this.avoidT = 0;
+      return false; // meestal: niks in de weg
+    }
+    // Is de weg in richting `want`, gedraaid over hoek a, vrij? (een tikje kleiner rondje, zodat langs een muur glijden mag)
+    const rr = r - 0.03;
+    const free = (x, z) => Math.abs(x) <= B.x - rr && Math.abs(z) <= B.z - rr && !blockAt(x, z, rr, p.y, h, near);
+    const tryDir = (a) => {
+      const c = Math.cos(a);
+      const s = Math.sin(a);
+      const x = want.x * c + want.z * s;
+      const z = -want.x * s + want.z * c;
+      for (const k of [0.4, 0.75, 1]) if (!free(p.x + x * look * k, p.z + z * look * k)) return null;
+      return [x, z];
+    };
+    if (this.avoidT <= 0 && tryDir(0)) return false; // rechtdoor is vrij
+    if (!this.avoidSide || this.avoidT <= 0) {
+      // Welke kant om? Als maar één kant vrij is: die. Anders de kant waar het blok níet zit.
+      const left = tryDir(0.8);
+      const right = tryDir(-0.8);
+      if (left && !right) this.avoidSide = 1;
+      else if (right && !left) this.avoidSide = -1;
+      else if (!this.avoidSide) {
+        const block = blockAt(p.x + want.x * look, p.z + want.z * look, rr, p.y, h, near);
+        const side = block ? (block.min.x + block.max.x) / 2 - p.x : 0;
+        const ahead = block ? (block.min.z + block.max.z) / 2 - p.z : 0;
+        this.avoidSide = side * want.z - ahead * want.x > 0 ? -1 : 1;
+      }
+    }
+    for (const side of [this.avoidSide, -this.avoidSide]) {
+      for (const a of [0.45, 0.9, 1.35, 1.8, 2.3]) {
+        const d = tryDir(a * side);
+        if (d) {
+          this.avoidSide = side;
+          this.avoidT = Math.max(this.avoidT, 0.25); // even volhouden, anders wiebelt hij heen en weer
+          want.set(d[0], 0, d[1]);
+          return true;
+        }
+      }
+    }
+    return false; // helemaal ingesloten: gewoon duwen (de botsing laat hem langs de muur glijden)
   }
 
   /** Opploppen bij het (terug)komen, "boing" na een klap, knipperen en je met de ogen volgen. */
@@ -612,9 +814,10 @@ class Enemy {
   }
 
   /** Modellen zonder eigen animaties: wiegen en wippen tijdens het lopen. */
-  animateModel(time, speed) {
+  animateModel(dt, speed) {
     const moving = speed > 0 ? 1 : 0;
-    const step = Math.sin(time * (this.chasing ? 7 : 5) + this.phase);
+    this.gait += dt * (this.chasing ? 7 : 5); // sneller stappen als hij rent (zonder te haperen)
+    const step = Math.sin(this.gait + this.phase);
     this.body.position.y = Math.abs(step) * 0.12 * moving;
     this.body.rotation.z = step * 0.06 * moving;
     this.body.rotation.x = THREE.MathUtils.lerp(this.body.rotation.x, 0.08 * moving, 0.1);
@@ -694,6 +897,7 @@ class Enemy {
         const before = this.position.clone();
         this.position.addScaledVector(this.chargeDir, 15 * dt);
         this.pushOutOfBlocks(ctx.colliders);
+        this.clampToBounds(ctx.bounds); // tegen de rand van het level aan rennen telt ook als botsen
         const blocked = before.distanceTo(this.position) < 15 * dt * 0.5;
         if (Math.random() < 0.5) ctx.effects.burst(this.position.clone().setY(0.2), 0xb8a58c, { count: 2, speed: 2, size: 0.15, life: 0.4, up: 1 });
         const touch = ctx.player.position.clone().setY(0).distanceTo(this.position.clone().setY(0)) < this.type.radius + 0.7;
@@ -789,9 +993,9 @@ class Enemy {
     return false;
   }
 
-  animateSlime(time) {
-    const hopSpeed = this.chasing ? 13 : 8;
-    const hop = Math.abs(Math.sin(time * hopSpeed + this.phase));
+  animateSlime(dt, time) {
+    this.gait += dt * (this.chasing ? 13 : 8); // sneller springen als hij achter je aan zit (zonder te haperen)
+    const hop = Math.abs(Math.sin(this.gait + this.phase));
     const h = this.type.height;
     this.body.position.y = h / 2 + hop * h * 0.25;
     const squash = 1 - (1 - hop) * 0.18;
@@ -837,7 +1041,8 @@ class Enemy {
       this.body.rotation.x = THREE.MathUtils.lerp(this.body.rotation.x, 0.25, Math.min(1, 20 * dt));
     } else {
       // Zwaar sjokken: heen en weer wiegen, armen zwaaien
-      const step = Math.sin(time * (this.chasing ? 6 : 4) + this.phase);
+      this.gait += dt * (this.chasing ? 6 : 4);
+      const step = Math.sin(this.gait + this.phase);
       arms[0].rotation.x = step * 0.4;
       arms[1].rotation.x = -step * 0.4;
       this.body.rotation.z = step * 0.06;
@@ -847,29 +1052,51 @@ class Enemy {
     }
   }
 
-  /** Simpele botsing: duw de vijand uit blokken die op de grond staan. */
+  /**
+   * Botsing: duw de vijand (een rondje) uit blokken die op de grond staan.
+   * Een paar rondes, want soms staan blokken tegen elkaar (uit het ene blok duwen kan je in het andere duwen).
+   */
   pushOutOfBlocks(colliders) {
     const p = this.position;
     const r = this.type.radius;
-    for (const box of colliders) {
-      if (box.min.y > p.y + this.type.height || box.max.y < p.y + 0.05) continue; // boven of onder ons: geen botsing
-      const minX = box.min.x - r;
-      const maxX = box.max.x + r;
-      const minZ = box.min.z - r;
-      const maxZ = box.max.z + r;
-      if (p.x <= minX || p.x >= maxX || p.z <= minZ || p.z >= maxZ) continue;
-
-      // Duw naar de dichtstbijzijnde kant
-      const pushes = [
-        [minX - p.x, 'x'],
-        [maxX - p.x, 'x'],
-        [minZ - p.z, 'z'],
-        [maxZ - p.z, 'z'],
-      ];
-      pushes.sort((a, b) => Math.abs(a[0]) - Math.abs(b[0]));
-      const [amount, axis] = pushes[0];
-      p[axis] += amount;
+    const top = p.y + this.type.height;
+    for (let pass = 0; pass < 3; pass++) {
+      let moved = false;
+      for (const box of colliders) {
+        if (box.min.y > top || box.max.y < p.y + 0.05) continue; // boven of onder ons: geen botsing
+        if (p.x <= box.min.x - r || p.x >= box.max.x + r || p.z <= box.min.z - r || p.z >= box.max.z + r) continue;
+        const cx = THREE.MathUtils.clamp(p.x, box.min.x, box.max.x); // dichtstbijzijnde punt van het blok
+        const cz = THREE.MathUtils.clamp(p.z, box.min.z, box.max.z);
+        const dx = p.x - cx;
+        const dz = p.z - cz;
+        const d = Math.hypot(dx, dz);
+        if (d >= r - 1e-6) continue; // er net tegenaan of langs een (ronde) hoek: vrij
+        if (d > 1e-6) {
+          // Recht van het blok af duwen: zo glijdt hij langs muren en om hoeken heen
+          p.x = cx + (dx / d) * r;
+          p.z = cz + (dz / d) * r;
+        } else {
+          // Midden in het blok: naar de dichtstbijzijnde kant
+          const pushes = [
+            [box.min.x - r - p.x, 'x'],
+            [box.max.x + r - p.x, 'x'],
+            [box.min.z - r - p.z, 'z'],
+            [box.max.z + r - p.z, 'z'],
+          ];
+          pushes.sort((a, b) => Math.abs(a[0]) - Math.abs(b[0]));
+          p[pushes[0][1]] += pushes[0][0];
+        }
+        moved = true;
+      }
+      if (!moved) break;
     }
+  }
+
+  /** Binnen de rand van het level blijven. */
+  clampToBounds(bounds) {
+    const r = this.type.radius;
+    this.position.x = THREE.MathUtils.clamp(this.position.x, -bounds.x + r, bounds.x - r);
+    this.position.z = THREE.MathUtils.clamp(this.position.z, -bounds.z + r, bounds.z - r);
   }
 }
 
