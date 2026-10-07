@@ -3,8 +3,9 @@ import { Input } from './input.js';
 import { CameraRig } from './camera.js';
 import { createGraphics } from './graphics.js';
 import { BlobShadows } from './blobs.js';
+import { GrassField } from './grass.js';
 import { Player, PLAYABLE } from './player.js';
-import { createWorld, CHECKPOINTS, ARENAS, CHESTS } from './world.js';
+import { createWorld, CHECKPOINTS, ARENAS, CHESTS, grassMask } from './world.js';
 import { LEVELS, LEVEL, LEVEL_INDEX } from './levels.js';
 import { NPCs } from './npcs.js';
 import { createEnemies, spawnEnemy } from './enemies.js';
@@ -56,6 +57,9 @@ const cameraRig = new CameraRig(camera, renderer.domElement);
 const gfx = createGraphics({ renderer, scene, camera, world, ui });
 const composer = gfx.composer;
 const blobs = new BlobShadows(scene);
+// Dicht gras rond de speler (niet in Omars kasteel); hoeveel hangt af van de graphics-stand (G)
+const grass = LEVEL.castle ? null : new GrassField(scene, { theme: LEVEL.theme, mask: grassMask() });
+if (grass) gfx.onChange((preset) => grass.setCount(preset.grass, preset.grassRadius));
 
 // 's Nachts een zacht, warm lichtje net boven en achter je (aan de kant van de camera):
 // dan zie je jezelf, het pad en vijanden vlak bij je goed. Geen schaduw, dus het kost bijna niks.
@@ -830,6 +834,7 @@ function gameLoop() {
   effects.applyShake(camera, realDt);
   updateNightLight();
   updateBlobShadows();
+  grass?.update(player.position);
 
   // Lock-on markering
   lockMarker.visible = !!state.lockTarget;
@@ -892,5 +897,5 @@ if (stats.level === 1 && stats.runes === 0 && stats.data.bosses.length === 0) {
 }
 
 // Handig voor debuggen in de browser-console (F12): typ bijvoorbeeld `game.player.position`
-window.game = { scene, player, enemies, bosses, sites, npcs, stats, ui, world, state, camera, cameraRig, renderer, composer, gfx, nightLight, effects, trail, onDefeated, loop: gameLoop };
+window.game = { scene, player, enemies, bosses, sites, npcs, stats, ui, world, state, camera, cameraRig, renderer, composer, gfx, nightLight, grass, decor, effects, trail, onDefeated, loop: gameLoop };
 window.game.omar = omar;

@@ -62,7 +62,9 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 - **NPC's met zij-quests**: Mila, Strohoed, Robot B-0P en Sir Roestbout wonen in de levels. Praat met ze (E) als er een **!** boven
   hun hoofd staat, doe de quest (vijanden verslaan of sterren/batterijen zoeken) en haal je beloning op bij het **?**
 - **Huizen waar je in kunt**: loop door de deur naar binnen — met meubels, een haardvuur en het dak verdwijnt zodat je binnen kunt kijken
-- Wind in de bomen en het gras, ronde loofbomen, zwevend stuifmeel overdag en vuurvliegjes 's nachts, een zon en maan aan de hemel
+- **Een levende wereld**: dicht gras dat wuift in de wind en opzij buigt als je erdoorheen loopt, bergen in de verte,
+  bolle wolken die meekleuren met de zonsondergang, vijvers met riet, populieren, dennen met gekartelde takken en
+  bladeren waar de zon doorheen schijnt, zwevend stuifmeel overdag en vuurvliegjes 's nachts, een zon en maan aan de hemel
 - Levendige vijanden: glanzende slijmpjes die knipperen en je met hun ogen volgen, spoken met een gloed, golems met gloeiende scheuren
 - Lantaarns langs het pad, een bos rond elk level, minimap met het pad, **dag-en-nachtritme** met sterren en een zachte **gloed** (bloom)
 - 's Nachts is het donkerblauw maanlicht in plaats van pikzwart: de lantaarns verlichten de grond en een warm lichtje bij jou laat je de weg en de vijanden zien
@@ -103,10 +105,11 @@ munt-jager-3d/
     ├── main.js       → start alles op, game loop, gevechten, winkel, doodgaan
     ├── graphics.js   → hoe het getekend wordt: gloed, kleuren, gladde randjes, de standen Laag/Normaal/Hoog (G)
     ├── blobs.js      → zachte schaduw-vlekjes onder de speler, vijanden en mensen
+    ├── grass.js      → dicht, wuivend gras rond de speler (alleen op Normaal en Hoog)
     ├── levels.js     → de 4 levels: pad, vijanden, kisten, NPC's, huizen (pas hier je levels aan!)
     ├── world.js      → bouwt het level: grond, pad, huizen, ruïnes, natuur, arena, dag en nacht
     ├── npcs.js       → NPC's en hun zij-quests
-    ├── decor.js      → planten, stenen, wolken, vlaggen en dieren
+    ├── decor.js      → planten, stenen, bolle wolken, riet bij de vijvers en dieren
     ├── player.js     → speler: bewegen, rollen, krachten, flesjes, personages
     ├── animator.js   → laat het poppetje bewegen (lopen, slaan, richten, drinken...)
     ├── mixamo.js     → vertaalt die bewegingen naar een Mixamo-skelet
@@ -137,7 +140,7 @@ munt-jager-3d/
 
 - Ridder, helmen, zwaarden, knots en zombie: [Quaternius](https://quaternius.com) — CC0
 - Mini-Game Variety Pack (planten, stenen, dieren, hart, diamant): [KayKit / Kay Lousberg](https://kaylousberg.com) — CC0
-- Starter Kit 3D Platformer (munt, wolken, gras, vlaggen, robot, geluiden): [Kenney](https://kenney.nl) — MIT
+- Starter Kit 3D Platformer (munt, gras, vlaggen, robot, geluiden): [Kenney](https://kenney.nl) — MIT
 - Retro Textures Fantasy: [Kenney](https://kenney.nl) — CC0
 - Personages Eve, Soldaat en Mila: via Mixamo
 - Budget Mario door Teh_LaughingMan, Buff man door joney_lol, MS Gundam RX-78-2 door Tipatat Chennavasin

@@ -111,6 +111,44 @@ export function addWind(material, { strength = 0.15, base = 0, speed = 1.6, lift
   return material;
 }
 
+/**
+ * Mooiere bladeren: onderaan donker en bovenaan licht en warm (zon), een zachte gloed aan de rand,
+ * en als je tegen de zon in kijkt schijnt het licht door de bladeren heen. Werkt samen met addWind.
+ */
+export function addLeafShading(material) {
+  const before = material.onBeforeCompile;
+  material.onBeforeCompile = (shader, renderer) => {
+    before?.call(material, shader, renderer);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vLeafH;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLeafH = normalize(position + vec3(0.0, 0.001, 0.0)).y;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vLeafH;')
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        diffuseColor.rgb *= mix(0.55, 1.18, smoothstep(-0.9, 0.9, vLeafH));
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.05, 1.12, 0.85), smoothstep(0.2, 1.0, vLeafH) * 0.5);`
+      )
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        totalEmissiveRadiance += diffuseColor.rgb * pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0) * 0.12;`
+      )
+      .replace(
+        '#include <lights_fragment_end>',
+        `#include <lights_fragment_end>
+        #if NUM_DIR_LIGHTS > 0
+          float leafBack = pow(saturate(dot(normalize(-vViewPosition), directionalLights[0].direction)), 4.0);
+          reflectedLight.directDiffuse += diffuseColor.rgb * directionalLights[0].color * leafBack * 0.35;
+        #endif`
+      );
+  };
+  const key = material.customProgramCacheKey?.bind(material);
+  material.customProgramCacheKey = () => (key ? key() : '') + '-leaf';
+  return material;
+}
+
 /** Een blok waarvan de textuur netjes herhaalt (elke `tile` meter één keer), in plaats van uitgerekt. */
 export function texturedBox(w, h, d, material, tile = 2) {
   const geo = new THREE.BoxGeometry(w, h, d);
@@ -151,9 +189,13 @@ function inHouse(x, z, margin = 0) {
   return (LEVEL.houses ?? []).some(([hx, hz, w, d]) => Math.abs(x - hx) < Math.max(w, d) / 2 + 1.5 + margin && Math.abs(z - hz) < Math.max(w, d) / 2 + 1.5 + margin);
 }
 
-/** Is hier ruimte voor een boom of steen? (niet op het pad, in de arena, bij checkpoints, kisten, huizen...) */
+// Vijvers: [x, z, straal]. Ze worden pas gemaakt als de bomen en stenen er al staan (zie createPonds).
+export const PONDS = [];
+
+/** Is hier ruimte voor een boom of steen? (niet op het pad, in de arena, bij checkpoints, kisten, huizen, in vijvers...) */
 export function isFree(x, z, margin = 0) {
   if (Math.abs(x) > WALKABLE.x - 1 || Math.abs(z) > WALKABLE.z - 1) return false;
+  for (const [px, pz, pr] of PONDS) if (Math.hypot(x - px, z - pz) < pr + 1 + margin) return false;
   if (distToPath(x, z) < 4 + margin) return false;
   if (VILLAGE_CENTER && Math.hypot(x - VILLAGE_CENTER.x, z - VILLAGE_CENTER.z) < 18) return false;
   if (inHouse(x, z, margin)) return false;
@@ -164,6 +206,40 @@ export function isFree(x, z, margin = 0) {
   for (const spots of Object.values(LEVEL.questItems ?? {})) for (const [qx, qz] of spots) if (Math.hypot(x - qx, z - qz) < 3) return false;
   for (const b of LEVEL.blocks ?? []) if (Math.abs(x - b[0]) < b[3] / 2 + 2 && Math.abs(z - b[2]) < b[5] / 2 + 2) return false;
   return true;
+}
+
+/**
+ * Waar mag dicht gras groeien? Een plaatje over het hele level (2 pixels per meter): wit = gras, zwart = geen gras.
+ * Geen gras op het pad, het dorpsplein, in de boss-arena, in huizen, onder blokken en bij vlaggen en kisten.
+ * Gebruikt door grass.js.
+ */
+export function grassMask() {
+  const RES = 2; // pixels per meter
+  const margin = 10;
+  const min = [-BOUNDS.x - margin, -BOUNDS.z - margin];
+  const size = [(BOUNDS.x + margin) * 2, (BOUNDS.z + margin) * 2];
+  const w = Math.ceil(size[0] * RES);
+  const h = Math.ceil(size[1] * RES);
+  const data = new Uint8Array(w * h);
+  for (let j = 0; j < h; j++) {
+    for (let i = 0; i < w; i++) {
+      const x = min[0] + (i + 0.5) / RES;
+      const z = min[1] + (j + 0.5) / RES;
+      let k = THREE.MathUtils.smoothstep(distToPath(x, z), 2.4, 3.4); // het pad
+      if (VILLAGE_CENTER && Math.hypot(x - VILLAGE_CENTER.x, z - VILLAGE_CENTER.z) < 8) k = 0;
+      for (const a of ARENAS) k *= THREE.MathUtils.smoothstep(Math.hypot(x - a.center.x, z - a.center.z), a.radius + 1, a.radius + 2.5);
+      if (inHouse(x, z, -1.4)) k = 0;
+      for (const b of LEVEL.blocks ?? []) if (b[1] - b[4] / 2 < 0.3 && Math.abs(x - b[0]) < b[3] / 2 + 0.2 && Math.abs(z - b[2]) < b[5] / 2 + 0.2) k = 0;
+      for (const c of CHECKPOINTS) if (Math.hypot(x - c.position.x - 1.4, z - c.position.z) < 1.2) k = 0;
+      for (const c of CHESTS) if (Math.hypot(x - c.position.x, z - c.position.z) < 1.1) k = 0;
+      for (const [px, pz, pr] of PONDS) k *= THREE.MathUtils.smoothstep(Math.hypot(x - px, z - pz), pr * 0.95, pr + 0.4); // niet in het water
+      data[j * w + i] = Math.round(k * 255);
+    }
+  }
+  const texture = new THREE.DataTexture(data, w, h, THREE.RedFormat, THREE.UnsignedByteType);
+  texture.magFilter = texture.minFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  return { texture, min, size };
 }
 
 // ---------- Dag en nacht ----------
@@ -295,6 +371,70 @@ function createSky(scene) {
   return sky;
 }
 
+/**
+ * Bergen in de verte: twee ringen van bergsilhouetten rond het level (alleen voor de sier, je kunt er niet komen).
+ * Ze lopen mee met de speler (net als de lucht) en krijgen de kleur van de horizon: hoe verder weg, hoe blauwer.
+ * In het hoogland zijn ze hoger en hebben ze sneeuw op de toppen.
+ */
+function createMountains(scene, skyUniforms) {
+  const group = new THREE.Group();
+  const light = { value: 1 };
+  const rand = seededRandom(1234 + LEVEL.subtitle.length * 7);
+  const high = LEVEL.theme === 'hoogland';
+  const woud = LEVEL.theme === 'woud';
+  const rings = [
+    // straal, stukjes, laagste en hoogste top, kleur, hoeveel nevel ervoor hangt
+    { r: 178, n: 160, hMin: high ? 30 : 18, hMax: high ? 72 : 46, color: high ? 0x8a8478 : 0x6f86a8, haze: high ? 0.42 : 0.6, snow: high },
+    { r: 152, n: 140, hMin: high ? 14 : 7, hMax: high ? 36 : 22, color: high ? 0x6b6458 : woud ? 0x2f4a3a : 0x4f6e58, haze: high ? 0.28 : 0.4, snow: false },
+  ];
+  for (const ring of rings) {
+    // Grilige toppen: een paar golven van verschillende grootte bij elkaar opgeteld
+    const waves = Array.from({ length: 12 }, (_, i) => ({ f: 1 + i * 1.7 + rand() * 2, ph: rand() * Math.PI * 2, amp: 1 / (1 + i * 0.45) }));
+    const pos = [];
+    const idx = [];
+    for (let i = 0; i <= ring.n; i++) {
+      const a = (i / ring.n) * Math.PI * 2;
+      let w = 0;
+      for (const wave of waves) w += Math.sin(a * wave.f + wave.ph) * wave.amp;
+      const h = ring.hMin + (ring.hMax - ring.hMin) * THREE.MathUtils.clamp(0.5 + w / 5, 0, 1);
+      pos.push(Math.sin(a) * ring.r, -10, Math.cos(a) * ring.r, Math.sin(a) * ring.r, h, Math.cos(a) * ring.r);
+      if (i < ring.n) {
+        const k = i * 2;
+        idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setIndex(idx);
+    const mat = new THREE.ShaderMaterial({
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      fog: false,
+      defines: ring.snow ? { SNOW: '' } : {},
+      uniforms: { color: { value: new THREE.Color(ring.color) }, haze: { value: ring.haze }, light, horizon: skyUniforms.horizon, top: skyUniforms.top },
+      vertexShader: `varying float vH; void main() { vH = position.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `uniform vec3 color; uniform float haze; uniform float light; uniform vec3 horizon; uniform vec3 top; varying float vH;
+        void main() {
+          vec3 c = color * light;
+          #ifdef SNOW
+            c = mix(c, vec3(0.92, 0.94, 0.98) * light, smoothstep(48.0, 54.0, vH) * 0.85); // sneeuw op de toppen
+          #endif
+          float k = haze + (1.0 - smoothstep(0.0, 40.0, vH)) * (1.0 - haze) * 0.55; // de voet van de berg verdwijnt in de nevel
+          c = mix(c, horizon, clamp(k, 0.0, 1.0));
+          gl_FragColor = vec4(c, 1.0);
+          #include <colorspace_fragment>
+        }`,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.renderOrder = -1; // na de lucht, voor al het andere (de lucht schrijft geen diepte)
+    mesh.frustumCulled = false;
+    mesh.userData.noAO = true;
+    group.add(mesh);
+  }
+  scene.add(group);
+  return { group, light };
+}
+
 /** De grond: één groot vlak dat 4 texturen mengt (gras, aarde, rots, stenen vloer). */
 function createGround(scene) {
   const w = BOUNDS.x * 2 + 80;
@@ -417,6 +557,83 @@ function bakeGroundAO(geo, colliders) {
     color.setXYZ(i, color.getX(i) * k, color.getY(i) * k, color.getZ(i) * k);
   }
   color.needsUpdate = true;
+}
+
+/**
+ * Een paar vijvers op open plekken (waar geen boom, steen, pad of huis is). Plat water dat de lucht weerspiegelt
+ * en een beetje kabbelt, met een donkere modderrand. Je kunt er gewoon doorheen lopen (het is ondiep).
+ * Geeft het water-materiaal terug (de golfjes bewegen in updateSun).
+ */
+function createPonds(scene, colliders, groundGeo) {
+  const rand = seededRandom(4242 + LEVEL.subtitle.length * 13);
+  const wanted = LEVEL.theme === 'hoogland' ? 1 : 2;
+  for (let tries = 0; PONDS.length < wanted && tries < 600; tries++) {
+    const r = 3 + rand() * 2;
+    const x = (rand() * 2 - 1) * (WALKABLE.x - r - 3);
+    const z = (rand() * 2 - 1) * (WALKABLE.z - r - 10);
+    if (!isFree(x, z, r + 2)) continue;
+    const clear = colliders.every((b) => b.distanceToPoint(new THREE.Vector3(x, Math.min(Math.max(0, b.min.y), b.max.y), z)) > r + 1.5);
+    if (!clear || PONDS.some(([px, pz, pr]) => Math.hypot(x - px, z - pz) < pr + r + 15)) continue;
+    PONDS.push([x, z, r]);
+  }
+  // Golfjes: een klein "normal map"-plaatje met zachte ruis (getekend in code)
+  const N = 128;
+  const height = new Float32Array(N * N);
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      let hgt = 0;
+      for (let k = 1; k <= 4; k++) hgt += Math.sin(((i * k * 3) / N) * Math.PI * 2 + k * 1.7) * Math.cos(((j * (5 - k) * 2) / N) * Math.PI * 2 + k) / k;
+      height[j * N + i] = hgt;
+    }
+  }
+  const nd = new Uint8Array(N * N * 4);
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      const dx = height[j * N + ((i + 1) % N)] - height[j * N + ((i + N - 1) % N)];
+      const dz = height[((j + 1) % N) * N + i] - height[((j + N - 1) % N) * N + i];
+      const v = new THREE.Vector3(-dx, -dz, 2).normalize();
+      nd.set([(v.x * 0.5 + 0.5) * 255, (v.y * 0.5 + 0.5) * 255, (v.z * 0.5 + 0.5) * 255, 255], (j * N + i) * 4);
+    }
+  }
+  const normalMap = new THREE.DataTexture(nd, N, N);
+  normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
+  normalMap.magFilter = THREE.LinearFilter;
+  normalMap.minFilter = THREE.LinearMipmapLinearFilter;
+  normalMap.generateMipmaps = true;
+  normalMap.repeat.set(3, 3);
+  normalMap.needsUpdate = true;
+  const water = new THREE.MeshStandardMaterial({
+    color: LEVEL.theme === 'woud' ? 0x1e4a4a : 0x2b6a8a, roughness: 0.06, metalness: 0.1, transparent: true, opacity: 0.88,
+    normalMap, normalScale: new THREE.Vector2(0.35, 0.35), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  for (const [x, z, r] of PONDS) {
+    // Een ronde vijver met een hobbelige rand
+    const geo = new THREE.CircleGeometry(r, 28);
+    const pos = geo.attributes.position;
+    for (let i = 1; i < pos.count; i++) {
+      const k = 1 + Math.sin(i * 2.3 + x) * 0.07 + Math.sin(i * 0.9 + z) * 0.05;
+      pos.setXY(i, pos.getX(i) * k, pos.getY(i) * k);
+    }
+    geo.rotateX(-Math.PI / 2);
+    const mesh = new THREE.Mesh(geo, water);
+    mesh.position.set(x, 0.025, z);
+    mesh.receiveShadow = true;
+    mesh.userData.noAO = true;
+    scene.add(mesh);
+  }
+  // Modderrand: de grond rond de vijver wat donkerder en bruiner
+  const gp = groundGeo.attributes.position;
+  const gc = groundGeo.attributes.color;
+  for (let i = 0; i < gp.count; i++) {
+    for (const [x, z, r] of PONDS) {
+      const d = Math.hypot(gp.getX(i) - x, gp.getZ(i) - z);
+      if (d > r + 1.6) continue;
+      const k = 1 - 0.35 * (1 - THREE.MathUtils.smoothstep(d, r - 0.5, r + 1.6));
+      gc.setXYZ(i, gc.getX(i) * k, gc.getY(i) * k * 0.95, gc.getZ(i) * k * 0.85);
+    }
+  }
+  gc.needsUpdate = true;
+  return water;
 }
 
 // Daken van huizen: verdwijnen als je naar binnen loopt, zodat je het interieur ziet
@@ -649,12 +866,35 @@ function createNature(scene, colliders) {
     trees.push([x, z, 1 + rand() * 0.8, kind, false]);
   }
 
-  const trunkMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.22, 0.3, 1.6, 7), new THREE.MeshStandardMaterial({ color: 0x6b4226, roughness: 0.9 }), trees.length);
+  // Vormen en kleurtjes komen uit een eigen toevalsgenerator, zodat de bomen zelf op dezelfde plek blijven staan
+  const look = seededRandom(777 + LEVEL.subtitle.length);
+  // Stam met een bredere voet (wortels)
+  const trunkMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.2, 0.34, 1.6, 7), addLeafShading(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 })), trees.length);
   const leafColors = { dark: [0x24502c, 0x2d5e33, 0x1f4527], green: [0x3f9b4a, 0x4fae52, 0x2f8a45], pine: [0x3a6b48, 0x46775a] };
   const roundColors = [0x5aa845, 0x6fb84a, 0x4c9a3e, 0x86c24f];
-  // Naaldbomen (3 kegels) en, in de weide, ook ronde loofbomen (bolle bladerdaken); allebei wiegen in de wind
-  const leafMesh = new THREE.InstancedMesh(new THREE.ConeGeometry(1.3, 1.6, 8), addWind(new THREE.MeshStandardMaterial({ roughness: 0.8, flatShading: true }), { strength: 0.045, base: -0.8, speed: 1.3, lift: 0.6 }), trees.length * 3);
-  const roundMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), addWind(new THREE.MeshStandardMaterial({ roughness: 0.85, flatShading: true }), { strength: 0.045, base: -1, speed: 1.1, lift: 0.6 }), trees.length * 4);
+  const layers = kind === 'green' ? 3 : 4; // dennen in het bos en het hoogland krijgen 4 lagen
+  // Dennenlaag met een gekartelde onderrand (om en om een punt naar buiten en omlaag)
+  const coneGeo = new THREE.ConeGeometry(1.3, 1.6, 10);
+  const cp = coneGeo.attributes.position;
+  for (let i = 0; i < cp.count; i++) {
+    if (cp.getY(i) > -0.79) continue;
+    const a = Math.atan2(cp.getZ(i), cp.getX(i));
+    const k = Math.round((a / (Math.PI * 2)) * 10) % 2 === 0 ? 1.15 : 0.95;
+    cp.setXYZ(i, cp.getX(i) * k, cp.getY(i) - (k > 1 ? 0.1 : 0), cp.getZ(i) * k);
+  }
+  coneGeo.computeVertexNormals();
+  // Bobbelige bladerbol: elke hoek een stukje naar binnen of buiten
+  const roundGeo = new THREE.IcosahedronGeometry(1, 1);
+  const rp = roundGeo.attributes.position;
+  const bump = (x, y, z) => 1 + (Math.abs(Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453) % 1 - 0.5) * 0.26;
+  for (let i = 0; i < rp.count; i++) {
+    const k = bump(Math.round(rp.getX(i) * 100), Math.round(rp.getY(i) * 100), Math.round(rp.getZ(i) * 100)); // zelfde hoek = zelfde bobbel
+    rp.setXYZ(i, rp.getX(i) * k, rp.getY(i) * k, rp.getZ(i) * k);
+  }
+  roundGeo.computeVertexNormals();
+  // Naaldbomen (kegels) en, in de weide, ook ronde loofbomen en slanke populieren; ze wiegen allemaal in de wind
+  const leafMesh = new THREE.InstancedMesh(coneGeo, addLeafShading(addWind(new THREE.MeshStandardMaterial({ roughness: 0.8, flatShading: true }), { strength: 0.045, base: -0.8, speed: 1.3, lift: 0.6 })), trees.length * layers);
+  const roundMesh = new THREE.InstancedMesh(roundGeo, addLeafShading(addWind(new THREE.MeshStandardMaterial({ roughness: 0.85, flatShading: true }), { strength: 0.045, base: -1, speed: 1.1, lift: 0.6 })), trees.length * 4);
   trunkMesh.castShadow = true;
   leafMesh.castShadow = roundMesh.castShadow = true;
   leafMesh.receiveShadow = roundMesh.receiveShadow = true;
@@ -663,10 +903,27 @@ function createNature(scene, colliders) {
   const color = new THREE.Color();
   let cones = 0;
   let blobs = 0;
+  const BARK = new THREE.Color(0x6b4226);
+  const BIRCH = new THREE.Color(0xd9d4c7);
   trees.forEach(([x, z, s, k, collide], i) => {
     m.compose(new THREE.Vector3(x, 0.8 * s, z), q.identity(), new THREE.Vector3(s, s, s));
     trunkMesh.setMatrixAt(i, m);
-    if (k === 'green' && rand() < 0.55) {
+    trunkMesh.setColorAt(i, color.copy(BARK).offsetHSL(0, 0, (look() - 0.5) * 0.06));
+    const roundTree = k === 'green' && rand() < 0.55;
+    if (!roundTree && k === 'green' && look() < 0.45) {
+      // Populier: hoge, slanke bladerkruin op een dunne witte (berken)stam
+      for (let j = 0; j < 6; j++) rand(); // net zoveel toevalsgetallen als een den: dan blijven de stenen op hun plek
+      m.compose(new THREE.Vector3(x, 1.1 * s, z), q.identity(), new THREE.Vector3(s * 0.7, s * 1.4, s * 0.7));
+      trunkMesh.setMatrixAt(i, m);
+      trunkMesh.setColorAt(i, BIRCH);
+      const tint = roundColors[Math.floor(look() * roundColors.length)];
+      for (let j = 0; j < 2; j++) {
+        q.setFromEuler(new THREE.Euler(0, look() * 3, 0));
+        m.compose(new THREE.Vector3(x, (2.9 + j * 1.1) * s, z), q, new THREE.Vector3(0.75 * s * (1 - j * 0.25), 1.6 * s, 0.75 * s * (1 - j * 0.25)));
+        roundMesh.setMatrixAt(blobs, m);
+        roundMesh.setColorAt(blobs++, color.set(tint).offsetHSL((look() - 0.5) * 0.04, 0, (look() - 0.5) * 0.08));
+      }
+    } else if (roundTree) {
       // Loofboom: een paar bollen bladeren bovenop de stam
       const tint = roundColors[Math.floor(rand() * roundColors.length)];
       for (let j = 0; j < 4; j++) {
@@ -680,12 +937,14 @@ function createNature(scene, colliders) {
       }
     } else {
       const palette = leafColors[k];
-      for (let j = 0; j < 3; j++) {
-        const layer = 1 - j * 0.25;
-        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI);
-        m.compose(new THREE.Vector3(x, (1.8 + j * 0.85) * s, z), q, new THREE.Vector3(s * layer, s, s * layer));
+      const step = layers === 4 ? 0.7 : 0.85;
+      for (let j = 0; j < layers; j++) {
+        const layer = 1 - j * (layers === 4 ? 0.2 : 0.25);
+        // (rand() blijft één keer per laag, zodat de rest van het level hetzelfde blijft)
+        q.setFromEuler(new THREE.Euler((look() - 0.5) * 0.12, j < 3 ? rand() * Math.PI : look() * Math.PI, (look() - 0.5) * 0.12));
+        m.compose(new THREE.Vector3(x, (1.8 + j * step) * s, z), q, new THREE.Vector3(s * layer, s, s * layer));
         leafMesh.setMatrixAt(cones, m);
-        leafMesh.setColorAt(cones++, color.set(palette[Math.floor(rand() * palette.length)]));
+        leafMesh.setColorAt(cones++, color.set(palette[Math.floor((j < 3 ? rand() : look()) * palette.length)]).offsetHSL((look() - 0.5) * 0.04, (look() - 0.5) * 0.1, (look() - 0.5) * 0.08));
       }
     }
     if (collide) {
@@ -773,6 +1032,7 @@ function createArena(scene, colliders, arena) {
 export function createWorld(scene) {
   if (LEVEL.castle) return createCastleWorld(scene, { tex, texturedBox }); // Omars Gekke Kasteel bouwt zijn eigen wereld (castle.js)
   const sky = createSky(scene);
+  const mountains = createMountains(scene, sky.material.uniforms);
   const fogNear = LEVEL.theme === 'woud' ? 25 : 50;
   scene.fog = new THREE.Fog(0xcdeaff, fogNear, fogNear + 90);
 
@@ -857,6 +1117,7 @@ export function createWorld(scene) {
   createLanterns(scene, colliders);
   for (const arena of ARENAS) createArena(scene, colliders, arena);
   bakeGroundAO(groundGeo, colliders); // pas nu: alles wat op de grond staat is er
+  const pondWater = createPonds(scene, colliders, groundGeo); // ook pas nu: vijvers alleen waar niks staat
 
   return {
     colliders,
@@ -959,6 +1220,10 @@ export function createWorld(scene) {
       this.exposure = look.exposure;
       stars.position.copy(playerPos);
       sky.position.copy(playerPos); // de lucht reist mee, anders valt hij buiten beeld (zwart gat!)
+      mountains.group.position.set(playerPos.x, 0, playerPos.z); // de bergen ook (ze zijn altijd even ver weg)
+      pondWater.normalMap.offset.x += dt * 0.02; // kabbelend water
+      pondWater.normalMap.offset.y += dt * 0.013;
+      mountains.light.value = 0.25 + look.ambient * 0.75 * (1 - look.stars * 0.55); // 's nachts donkere silhouetten
       // Het fotootje van de lucht verversen als de dag een stukje verder is (ongeveer elke 1,5 seconde)
       if (env.on && (env.time < 0 || Math.abs(this.timeOfDay - env.time) > 0.004)) refreshEnv(this.timeOfDay, look);
 

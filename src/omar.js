@@ -739,11 +739,7 @@ export class OmarFlow {
     // Wolken paars kleuren (zodra ze geladen zijn)
     if (!this.cloudsTinted && decor?.clouds?.length) {
       this.cloudsTinted = true;
-      for (const c of decor.clouds) c.mesh.traverse((m) => {
-        if (!m.isMesh) return;
-        m.material.color.set(0x9a6ad0);
-        m.material.opacity = 0.6;
-      });
+      decor.tintClouds(0xc9a0ff, 0.7);
     }
     // Het spel staat stil door een menu of filmpje: dan laten wij Omar en de effecten bewegen
     const cutscene = ['aankomst', 'praten', 'sprong'].includes(this.phase);

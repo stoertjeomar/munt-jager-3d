@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { loadGLB } from './assets.js';
-import { isFree, seededRandom, BOUNDS, addWind } from './world.js';
+import { isFree, seededRandom, BOUNDS, addWind, SKY_UNIFORMS, PONDS } from './world.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { LEVEL, LEVEL_INDEX } from './levels.js';
 
 // Extra aankleding van de wereld met modellen uit de KayKit- en Kenney-pakketten:
@@ -10,8 +11,10 @@ import { LEVEL, LEVEL_INDEX } from './levels.js';
  * Zet heel veel kopieën van een model neer met InstancedMesh (één tekenopdracht per onderdeel = snel).
  * @param {Array<THREE.Matrix4>} transforms
  */
-function scatter(scene, gltf, transforms, { shadows = false, wind = 0 } = {}) {
+function scatter(scene, gltf, transforms, { shadows = false, wind = 0, tint = null } = {}) {
   gltf.scene.updateMatrixWorld(true);
+  // Andere kleur (bijv. de grasplukjes: minder mintgroen, meer echt gras)
+  if (tint) gltf.scene.traverse((c) => c.isMesh && c.material.color?.multiply(tint));
   // Niet te glanzend: met licht uit de lucht zien gladde planten en stenen er anders uit als plastic
   gltf.scene.traverse((c) => {
     if (c.isMesh && c.material.roughness !== undefined) c.material.roughness = Math.max(c.material.roughness, 0.8);
@@ -54,6 +57,57 @@ function spots(rand, count, { regions = null, scaleMin = 1, scaleMax = 1, margin
     list.push(new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI * 2), new THREE.Vector3(s, s, s)));
   }
   return list;
+}
+
+// ---------- Wolken ----------
+
+/** Een bolle wolk: een paar ronde bollen naast elkaar (laag-poly), met een plattere onderkant. */
+function puffyCloudGeometry(rand) {
+  const parts = [];
+  const n = 5 + Math.floor(rand() * 4);
+  for (let i = 0; i < n; i++) {
+    const middle = 1 - Math.abs(i - (n - 1) / 2) / n; // in het midden de grootste bollen
+    const r = 0.45 + rand() * 0.35 + middle * 0.45;
+    const g = new THREE.IcosahedronGeometry(1, 1);
+    g.scale(r * 1.15, r * 0.85, r);
+    g.translate((i - (n - 1) / 2) * 0.72 + (rand() - 0.5) * 0.3, r * 0.35 + rand() * 0.2, (rand() - 0.5) * 0.7);
+    parts.push(g);
+  }
+  const geo = mergeGeometries(parts);
+  // Onderkant plat maken, zoals echte stapelwolken
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) if (pos.getY(i) < 0) pos.setY(i, pos.getY(i) * 0.25);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * Eén materiaal voor alle wolken: wit en zonnig van boven, blauwgrijs van onderen (in de kleur van de lucht),
+ * roze bij zonsondergang en donker 's nachts.
+ */
+function createCloudMaterial() {
+  const sky = SKY_UNIFORMS ?? {
+    // In Omars kasteel is er geen gewone lucht: dan paarse wolken
+    top: { value: new THREE.Color(0x2a1050) }, horizon: { value: new THREE.Color(0x6a3a8a) }, sunColor: { value: new THREE.Color(0xffffff) },
+  };
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    fog: false,
+    uniforms: {
+      top: sky.top, horizon: sky.horizon, sunColor: sky.sunColor,
+      cloudLight: { value: 1 }, tint: { value: new THREE.Color(1, 1, 1) }, opacity: { value: 0.95 },
+    },
+    vertexShader: `varying vec3 vN; void main() { vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform vec3 top; uniform vec3 horizon; uniform vec3 sunColor; uniform float cloudLight; uniform vec3 tint; uniform float opacity; varying vec3 vN;
+      void main() {
+        float up = normalize(vN).y * 0.5 + 0.5;
+        vec3 lit = mix(vec3(1.0), sunColor, 0.25) * 1.05;   // boven: zonnig wit
+        vec3 shade = mix(horizon, top, 0.35) * 0.82;         // onder: in de kleur van de lucht, wat donkerder
+        gl_FragColor = vec4(mix(shade, lit, smoothstep(0.2, 0.9, up)) * cloudLight * tint, opacity);
+        #include <colorspace_fragment>
+      }`,
+  });
 }
 
 // ---------- Dieren die rondscharrelen (doen niks, maken de wereld levendig) ----------
@@ -162,43 +216,55 @@ export class Decor {
   async load() {
     const scene = this.scene;
     const rand = seededRandom(99 + LEVEL_INDEX * 31);
-    const [grass, grassSmall, plantA, plantB, rocksA, rocksB, rocksDesA, rocksDesB, detail, cloud, duck, dog, bear] = await Promise.all(
+    const [grass, grassSmall, plantA, plantB, rocksA, rocksB, rocksDesA, rocksDesB, detail, duck, dog, bear] = await Promise.all(
       [
         'models/kenney/grass.glb', 'models/kenney/grass-small.glb',
         'models/kaykit/plantA_forest.glb', 'models/kaykit/plantB_forest.glb',
         'models/kaykit/rocksA_forest.glb', 'models/kaykit/rocksB_forest.glb',
         'models/kaykit/rocksA_desert.glb', 'models/kaykit/rocksB_desert.glb',
-        'models/kaykit/detail_forest.glb', 'models/kenney/cloud.glb',
+        'models/kaykit/detail_forest.glb',
         'models/kaykit/character_duck.glb', 'models/kaykit/character_dog.glb', 'models/kaykit/character_bear.glb',
       ].map((url) => loadGLB(url).catch(() => null))
     );
 
     const green = ['weide', 'woud'];
-    if (grass) scatter(scene, grass, spots(rand, 900, { regions: green, scaleMin: 1.4, scaleMax: 2.4 }), { wind: 0.35 });
-    if (grassSmall) scatter(scene, grassSmall, spots(rand, 900, { regions: green, scaleMin: 1.4, scaleMax: 2.2 }), { wind: 0.35 });
-    if (plantA) scatter(scene, plantA, spots(rand, 90, { regions: green, scaleMin: 0.9, scaleMax: 1.5 }), { wind: 0.25 });
-    if (plantB) scatter(scene, plantB, spots(rand, 90, { regions: green, scaleMin: 0.8, scaleMax: 1.4 }), { wind: 0.25 });
-    if (detail) scatter(scene, detail, spots(rand, 110, { regions: green, scaleMin: 1, scaleMax: 1.6 }));
+    // Grasplukjes en planten (het dichte gras zelf staat in grass.js)
+    const grassTint = new THREE.Color(0.78, 0.95, 0.55);
+    if (grass) scatter(scene, grass, spots(rand, 550, { regions: green, scaleMin: 1.4, scaleMax: 2.4 }), { wind: 0.35, tint: grassTint });
+    if (grassSmall) scatter(scene, grassSmall, spots(rand, 550, { regions: green, scaleMin: 1.4, scaleMax: 2.2 }), { wind: 0.35, tint: grassTint });
+    if (plantA) scatter(scene, plantA, spots(rand, 120, { regions: green, scaleMin: 0.9, scaleMax: 1.6 }), { wind: 0.25 });
+    if (plantB) scatter(scene, plantB, spots(rand, 120, { regions: green, scaleMin: 0.8, scaleMax: 1.5 }), { wind: 0.25 });
+    if (detail) scatter(scene, detail, spots(rand, 70, { regions: green, scaleMin: 1, scaleMax: 1.6 }));
+    // Riet en planten langs de rand van de vijvers
+    if (plantB && PONDS.length) {
+      const reeds = [];
+      for (const [px, pz, pr] of PONDS) {
+        for (let i = 0; i < 10; i++) {
+          const a = (i / 10) * Math.PI * 2 + rand() * 0.5;
+          const d = pr + 0.1 + rand() * 0.6;
+          const sc = 0.9 + rand() * 0.6;
+          reeds.push(new THREE.Matrix4().compose(new THREE.Vector3(px + Math.sin(a) * d, 0, pz + Math.cos(a) * d), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * 6.28), new THREE.Vector3(sc, sc * 1.3, sc)));
+        }
+      }
+      scatter(scene, plantB, reeds); // (de wind zit al in het materiaal van plantB)
+    }
     if (rocksA) scatter(scene, rocksA, spots(rand, 25, { regions: green, scaleMin: 0.8, scaleMax: 1.5 }), { shadows: true });
     if (rocksB) scatter(scene, rocksB, spots(rand, 25, { regions: green, scaleMin: 0.8, scaleMax: 1.5 }), { shadows: true });
     if (rocksDesA) scatter(scene, rocksDesA, spots(rand, 50, { regions: ['hoogland'], scaleMin: 1, scaleMax: 2 }), { shadows: true });
     if (rocksDesB) scatter(scene, rocksDesB, spots(rand, 50, { regions: ['hoogland'], scaleMin: 1, scaleMax: 2 }), { shadows: true });
 
-    // Wolken die langzaam voorbij drijven
-    if (cloud) {
-      // Eén materiaal voor alle wolken: dan kunnen we ze 's nachts in één keer donkerder maken
-      this.cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92, fog: false });
-      for (let i = 0; i < 28; i++) {
-        const c = cloud.scene.clone();
-        const s = 6 + rand() * 10;
-        c.scale.set(s * (1.2 + rand()), s * 0.5, s);
-        c.position.set((rand() - 0.5) * 300, 38 + rand() * 25, (rand() - 0.5) * 300);
-        c.traverse((m) => {
-          if (m.isMesh) m.material = this.cloudMat;
-        });
-        scene.add(c);
-        this.clouds.push({ mesh: c, speed: 0.6 + rand() * 1.2 });
-      }
+    // Bolle wolken die langzaam voorbij drijven (8 vormen, steeds anders gedraaid en geschaald)
+    this.cloudMat = createCloudMaterial();
+    const cloudShapes = Array.from({ length: 8 }, () => puffyCloudGeometry(rand));
+    for (let i = 0; i < 30; i++) {
+      const c = new THREE.Mesh(cloudShapes[i % cloudShapes.length], this.cloudMat);
+      const s = 4 + rand() * 6;
+      c.scale.set(s * (1 + rand() * 0.6), s * (0.8 + rand() * 0.4), s);
+      c.rotation.y = rand() * Math.PI * 2;
+      c.position.set((rand() - 0.5) * 320, 42 + rand() * 28, (rand() - 0.5) * 320);
+      c.userData.noAO = true;
+      scene.add(c);
+      this.clouds.push({ mesh: c, speed: 0.6 + rand() * 1.2 });
     }
 
     // Dieren: welke en waar staat per level in levels.js
@@ -216,16 +282,20 @@ export class Decor {
     for (const [kind, homes, count] of LEVEL.animals) addAnimals(models[kind][0], count, homes, models[kind][1]);
   }
 
+  /** Alle wolken een andere kleur geven (bijvoorbeeld paars in Omars kasteel). */
+  tintClouds(color, opacity = 0.95) {
+    if (!this.cloudMat) return;
+    this.cloudMat.uniforms.tint.value.set(color);
+    this.cloudMat.uniforms.opacity.value = opacity;
+  }
+
   update(dt, time, playerPos, night = 0) {
     this.updateMotes(dt, time, playerPos, night);
-    // 's Nachts zijn de wolken donker blauwgrijs (anders gloeien ze wit in de donkere lucht)
-    if (this.cloudMat) {
-      this.cloudMat.color.setRGB(1 - night * 0.75, 1 - night * 0.7, 1 - night * 0.55);
-      this.cloudMat.opacity = 0.92 - night * 0.2;
-    }
+    // 's Nachts zijn de wolken donker (anders gloeien ze wit in de donkere lucht)
+    if (this.cloudMat) this.cloudMat.uniforms.cloudLight.value = THREE.MathUtils.lerp(1, 0.22, night);
     for (const c of this.clouds) {
       c.mesh.position.x += c.speed * dt;
-      if (c.mesh.position.x > 160) c.mesh.position.x = -160;
+      if (c.mesh.position.x > 170) c.mesh.position.x = -170;
     }
     for (const a of this.animals) {
       if (a.mesh.position.distanceTo(playerPos) < 60) a.update(dt, time, playerPos);
