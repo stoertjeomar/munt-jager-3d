@@ -2,12 +2,51 @@ import { POWERS, PERKS, SHOP_ITEMS } from './stats.js';
 import { WEAPONS } from './weapons.js';
 import { HELMETS, itemInfo, itemColor } from './gear.js';
 import { BOUNDS, CHECKPOINTS, ARENAS } from './world.js';
-import { LEVEL, LEVELS, LEVEL_INDEX } from './levels.js';
+import { LEVEL, LEVELS, REGIONS, regionOfCheckpoint } from './levels.js';
 import { play, talk } from './audio.js';
 
-// Alles wat je op het scherm ziet (behalve de 3D-wereld): balken, munten, menu's, banners en de minimap.
+// Alles wat je op het scherm ziet (behalve de 3D-wereld): balken, munten, menu's, banners, de minimap en de wereldkaart.
 
 const $ = (id) => document.getElementById(id);
+
+// Kleur van elk soort gebied op de kaart
+const MAP_COLORS = { weide: '#4f8f4e', woud: '#2c4f2c', hoogland: '#7c776a', kasteel: '#3a2348' };
+
+/**
+ * De grond, de paden, de huizen en de arena's tekenen (voor de minimap en de grote wereldkaart).
+ * toMap(x, z) = waar komt een punt uit de wereld op de kaart; scale = pixels per meter.
+ */
+function drawLand(ctx, toMap, scale, bosses) {
+  // Elk gebied in zijn eigen kleur (in het kasteel is er maar één "gebied")
+  const areas = LEVEL.regions ? REGIONS.map((r) => [r.x0, r.x1, r.tint ? '#5c8f45' : MAP_COLORS[r.theme]]) : [[-BOUNDS.x, BOUNDS.x, MAP_COLORS[LEVEL.theme]]];
+  for (const [x0, x1, color] of areas) {
+    const [bx, by] = toMap(x0, -BOUNDS.z);
+    ctx.fillStyle = color;
+    ctx.fillRect(bx, by, (x1 - x0) * scale, BOUNDS.z * 2 * scale);
+  }
+  ctx.strokeStyle = '#c8b58a';
+  ctx.lineWidth = Math.max(2, 3.5 * scale);
+  ctx.lineJoin = ctx.lineCap = 'round';
+  for (const path of LEVEL.paths ?? [LEVEL.path]) {
+    ctx.beginPath();
+    path.forEach(([x, z], i) => (i ? ctx.lineTo(...toMap(x, z)) : ctx.moveTo(...toMap(x, z))));
+    ctx.stroke();
+  }
+  ctx.lineWidth = 2;
+  // Huizen als bruine blokjes
+  ctx.fillStyle = '#8a5a3a';
+  for (const [hx, hz, w, d] of LEVEL.houses ?? []) {
+    const [mx, my] = toMap(hx - w / 2, hz - d / 2);
+    ctx.fillRect(mx, my, w * scale, d * scale);
+  }
+  // Arena's (doodshoofd, of een vinkje als je die boss al versloeg; bij Omar een paarse kroon)
+  for (const a of ARENAS) {
+    const [mx, my] = toMap(a.center.x, a.center.z);
+    const beaten = bosses.includes(a.id);
+    ctx.fillStyle = a.id === 'omar' ? '#c77dff' : beaten ? '#8dff9a' : '#ff5a5a';
+    ctx.fillText(a.id === 'omar' ? '♛' : beaten ? '✔' : '☠', mx, my);
+  }
+}
 
 export class UI {
   constructor(stats) {
@@ -122,9 +161,11 @@ export class UI {
     this.runesGainTimer = 2;
   }
 
-  prompt(text) {
+  /** Tekstje onderin (bijv. "E Praat met Mila"). kind = 'ride': klein, helemaal onderin (op de draak). */
+  prompt(text, kind = '') {
     this.el.prompt.classList.toggle('hidden', !text);
-    if (text) this.el.prompt.innerHTML = text;
+    this.el.prompt.classList.toggle('ride', kind === 'ride');
+    if (text && this.el.prompt.innerHTML !== text) this.el.prompt.innerHTML = text;
   }
 
   /** Grote tekst in het midden. kind: 'gold' | 'death' | 'power' */
@@ -142,7 +183,6 @@ export class UI {
   }
 
   /** Laat de naam van het gebied zien als je een nieuw gebied binnenloopt. */
-  /** Laat de naam van een plek zien (bijv. de naam van het level aan het begin). */
   showRegion(name) {
     this.el.region.textContent = name;
     this.regionTimer = 4;
@@ -296,6 +336,77 @@ export class UI {
 
   // ---------- Minimap ----------
 
+  /** Checkpoints: een vlaggetje (goud als je er al was: daar kun je heen snelreizen). */
+  drawFlags(ctx, toMap) {
+    if (LEVEL.castle) return; // in Omars kasteel zijn er geen vlaggen
+    const d = this.stats.data;
+    for (const c of CHECKPOINTS) {
+      const [mx, my] = toMap(c.position.x, c.position.z);
+      ctx.fillStyle = d.flags.includes(c.id) || c.id === d.checkpoint ? '#ffd76a' : '#e8e8e8';
+      ctx.fillText('⚑', mx, my);
+    }
+  }
+
+  /**
+   * De grote wereldkaart (T): alle gebieden, waar je bent, en knoppen om naar een vlag te snelreizen.
+   * actions = { travel(id) | null (snelreizen kan nu niet), close(), why: waarom het niet kan }
+   */
+  openWorldMap(player, actions) {
+    this.menuOpen = 'map';
+    play('menuOpen');
+    this.el.menu.classList.remove('hidden');
+    this.el.menuTitle.textContent = 'Wereldkaart';
+    const d = this.stats.data;
+    const flags = CHECKPOINTS.filter((c) => d.flags.includes(c.id) || c.id === d.checkpoint);
+    const groups = REGIONS.map((r) => ({ r, flags: flags.filter((c) => regionOfCheckpoint(c.id) === r.index) })).filter((g) => g.flags.length);
+    this.el.menuBody.innerHTML = `<canvas class="world-map" width="608" height="400"></canvas>
+      <p class="menu-info">${actions.travel ? 'Snelreizen: kies een vlag waar je al eens was.' : actions.why}</p>` +
+      groups.map(({ r, flags: list }) => `<h3>${r.name}${d.bosses.includes(r.boss) ? ' ✔' : ''}</h3>` + list.map((c) =>
+        `<button data-flag="${c.id}" ${actions.travel ? '' : 'disabled'}><span>⚑ ${c.name}</span>${c.id === d.checkpoint ? '<small>Hier kom je terug als je doodgaat</small>' : ''}</button>`).join('')).join('') +
+      `<button data-act="close">Sluiten (T)</button>`;
+    // De kaart tekenen
+    const canvas = this.el.menuBody.querySelector('canvas');
+    const ctx = canvas.getContext('2d');
+    const scale = Math.min(canvas.width / (BOUNDS.x * 2), canvas.height / (BOUNDS.z * 2));
+    const toMap = (x, z) => [canvas.width / 2 + x * scale, canvas.height / 2 + z * scale];
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    drawLand(ctx, toMap, scale, d.bosses);
+    this.drawFlags(ctx, toMap);
+    // De naam van elk gebied in het midden (met een donker randje, dan kun je het altijd lezen)
+    ctx.font = 'bold 15px sans-serif';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillStyle = '#fff5d2';
+    for (const r of REGIONS) {
+      ctx.strokeText(r.name, ...toMap(r.ox, 0));
+      ctx.fillText(r.name, ...toMap(r.ox, 0));
+    }
+    // Jij: een rondje met een pijltje
+    const [px, py] = toMap(player.position.x, player.position.z);
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(-player.mesh.rotation.y + Math.PI);
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#000';
+    ctx.beginPath();
+    ctx.moveTo(0, -9);
+    ctx.lineTo(7, 7);
+    ctx.lineTo(0, 3);
+    ctx.lineTo(-7, 7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    this.el.menuBody.onclick = (e) => {
+      const b = e.target.closest('button');
+      if (!b || b.disabled) return;
+      if (b.dataset.act === 'close') actions.close();
+      else if (b.dataset.flag) actions.travel(b.dataset.flag);
+    };
+  }
+
   drawMinimap(player, time) {
     const ctx = this.mapCtx;
     const size = this.el.minimap.width;
@@ -313,46 +424,17 @@ export class UI {
     ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Grond, het pad en de rand van het level
-    const colors = { weide: '#4f8f4e', woud: '#2c4f2c', hoogland: '#7c776a', kasteel: '#3a2348' };
+    // Grond, de paden, huizen en arena's
     ctx.fillStyle = '#2b3326';
     ctx.fillRect(0, 0, size, size);
-    const [bx, by] = toMap(-BOUNDS.x, -BOUNDS.z);
-    ctx.fillStyle = colors[LEVEL.theme];
-    ctx.fillRect(bx, by, BOUNDS.x * 2 * scale, BOUNDS.z * 2 * scale);
-    ctx.strokeStyle = '#c8b58a';
-    ctx.lineWidth = 3.5 * scale;
-    ctx.lineJoin = ctx.lineCap = 'round';
-    ctx.beginPath();
-    LEVEL.path.forEach(([x, z], i) => (i ? ctx.lineTo(...toMap(x, z)) : ctx.moveTo(...toMap(x, z))));
-    ctx.stroke();
-    ctx.lineWidth = 2;
-    // Huizen als bruine blokjes
-    ctx.fillStyle = '#8a5a3a';
-    for (const [hx, hz, w, d] of LEVEL.houses ?? []) {
-      const [mx, my] = toMap(hx - w / 2, hz - d / 2);
-      ctx.fillRect(mx, my, w * scale, d * scale);
-    }
+    drawLand(ctx, toMap, scale, this.stats.data.bosses);
     // NPC's en quest-voorwerpen
     for (const n of this.markers ?? []) {
       const [mx, my] = toMap(n.x, n.z);
       ctx.fillStyle = n.color;
       ctx.fillText(n.icon, mx, my);
     }
-    // Arena's (doodshoofd; bij Omar een paarse kroon)
-    for (const a of ARENAS) {
-      const [mx, my] = toMap(a.center.x, a.center.z);
-      ctx.fillStyle = a.id === 'omar' ? '#c77dff' : '#ff5a5a';
-      ctx.fillText(a.id === 'omar' ? '♛' : '☠', mx, my);
-    }
-    // Checkpoints: een vlaggetje (goud als je er al was)
-    const reached = CHECKPOINTS.findIndex((c) => c.id === this.stats.data.checkpoint);
-    CHECKPOINTS.forEach((c, i) => {
-      if (LEVEL.castle) return; // in Omars kasteel zijn er geen vlaggen
-      const [mx, my] = toMap(c.position.x, c.position.z);
-      ctx.fillStyle = i <= reached ? '#ffd76a' : '#e8e8e8';
-      ctx.fillText('⚑', mx, my);
-    });
+    this.drawFlags(ctx, toMap);
     ctx.restore();
 
     // De speler: pijltje in kijkrichting

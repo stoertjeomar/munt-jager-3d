@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { loadGLB } from './assets.js';
-import { isFree, seededRandom, BOUNDS, addWind, SKY_UNIFORMS, PONDS } from './world.js';
+import { isFree, seededRandom, BOUNDS, addWind, SKY_UNIFORMS, PONDS, regionAt } from './world.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { LEVEL, LEVEL_INDEX } from './levels.js';
+import { LEVEL, REGIONS } from './levels.js';
 
 // Extra aankleding van de wereld met modellen uit de KayKit- en Kenney-pakketten:
 // planten, stenen, grasplukjes, wolken en rondscharrelende dieren.
@@ -45,13 +45,19 @@ function scatter(scene, gltf, transforms, { shadows = false, wind = 0, tint = nu
   });
 }
 
-/** Willekeurige plekken in de wereld (die vrij zijn, en eventueel in een bepaald gebied). */
+/**
+ * Willekeurige plekken in de wereld (die vrij zijn, en eventueel alleen in een bepaald soort gebied).
+ * `count` = hoeveel per gebied: in de open wereld komen er dus meer als er meer van die gebieden zijn.
+ */
 function spots(rand, count, { regions = null, scaleMin = 1, scaleMax = 1, margin = 0 } = {}) {
   const list = [];
-  if (regions && !regions.includes(LEVEL.theme)) return list;
+  const themes = LEVEL.regions ? REGIONS.map((r) => r.theme) : [LEVEL.theme];
+  const matching = regions ? themes.filter((t) => regions.includes(t)).length : themes.length;
+  count *= matching;
   for (let tries = 0; list.length < count && tries < count * 30; tries++) {
     const x = (rand() - 0.5) * (BOUNDS.x * 2 - 4);
     const z = (rand() - 0.5) * (BOUNDS.z * 2 - 4);
+    if (regions && !regions.includes(regionAt(x, z))) continue;
     if (!isFree(x, z, margin)) continue;
     const s = scaleMin + rand() * (scaleMax - scaleMin);
     list.push(new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI * 2), new THREE.Vector3(s, s, s)));
@@ -215,7 +221,7 @@ export class Decor {
 
   async load() {
     const scene = this.scene;
-    const rand = seededRandom(99 + LEVEL_INDEX * 31);
+    const rand = seededRandom(99);
     const [grass, grassSmall, plantA, plantB, rocksA, rocksB, rocksDesA, rocksDesB, detail, duck, dog, bear] = await Promise.all(
       [
         'models/kenney/grass.glb', 'models/kenney/grass-small.glb',
@@ -256,12 +262,14 @@ export class Decor {
     // Bolle wolken die langzaam voorbij drijven (8 vormen, steeds anders gedraaid en geschaald)
     this.cloudMat = createCloudMaterial();
     const cloudShapes = Array.from({ length: 8 }, () => puffyCloudGeometry(rand));
-    for (let i = 0; i < 30; i++) {
+    this.cloudSpan = Math.max(170, BOUNDS.x + 60); // wolken drijven van -cloudSpan naar +cloudSpan (en beginnen dan opnieuw)
+    const cloudCount = Math.round(this.cloudSpan / 5.5);
+    for (let i = 0; i < cloudCount; i++) {
       const c = new THREE.Mesh(cloudShapes[i % cloudShapes.length], this.cloudMat);
       const s = 4 + rand() * 6;
       c.scale.set(s * (1 + rand() * 0.6), s * (0.8 + rand() * 0.4), s);
       c.rotation.y = rand() * Math.PI * 2;
-      c.position.set((rand() - 0.5) * 320, 42 + rand() * 28, (rand() - 0.5) * 320);
+      c.position.set((rand() - 0.5) * 2 * this.cloudSpan, 42 + rand() * 28, (rand() - 0.5) * 320);
       c.userData.noAO = true;
       scene.add(c);
       this.clouds.push({ mesh: c, speed: 0.6 + rand() * 1.2 });
@@ -295,7 +303,7 @@ export class Decor {
     if (this.cloudMat) this.cloudMat.uniforms.cloudLight.value = THREE.MathUtils.lerp(1, 0.22, night);
     for (const c of this.clouds) {
       c.mesh.position.x += c.speed * dt;
-      if (c.mesh.position.x > 170) c.mesh.position.x = -170;
+      if (c.mesh.position.x > this.cloudSpan) c.mesh.position.x = -this.cloudSpan;
     }
     for (const a of this.animals) {
       if (a.mesh.position.distanceTo(playerPos) < 60) a.update(dt, time, playerPos);

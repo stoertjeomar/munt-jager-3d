@@ -18,7 +18,13 @@ import { seededRandom } from './world.js';
 //   contactDamage = schade als je ze alleen aanraakt (noContact = aanraken doet geen pijn)
 //   ai            = gedraagt zich als deze vijand (bijv. 'spierbonk' = aanloop nemen en op je af stormen)
 //   modelYaw      = het 3D-model een stukje draaien (als het niet naar voren kijkt)
+//   tint / glow   = het 3D-model een andere kleur geven (en laten gloeien)
 export const ENEMY_TYPES = {
+  // Omars schaduwkrijgers: ze komen alleen bij een Omar-invasie (zie invasions.js)
+  schaduw: {
+    name: 'Schaduwkrijger', hp: 120, radius: 0.5, height: 1.95, color: 0x7a2ab0, model: 'models/extra/schaduw.glb', ai: 'zombie',
+    tint: 0x120418, glow: 0x5a10a0, patrolSpeed: 1.6, chaseSpeed: 3.8, sight: 26, knockback: 0.6, damage: 20, noContact: true, stompable: false, runes: 25,
+  },
   bigfoot: {
     name: 'Bigfoot', hp: 280, radius: 0.8, height: 2.7, color: 0xb9ab90, model: 'models/extra/bigfoot.glb', ai: 'spierbonk',
     patrolSpeed: 1.2, chaseSpeed: 2.9, sight: 14, knockback: 0.25, damage: 34, contactDamage: 14, stompable: false, runes: 110,
@@ -125,7 +131,10 @@ export function levelSpawns(level, seed = 7) {
     }
   });
 }
-export const SPAWNS = levelSpawns(LEVEL, 7 + LEVEL_INDEX);
+// In de open wereld: de vijanden van elk gebied, op hun plek in de wereld gezet
+export const SPAWNS = LEVEL.regions
+  ? LEVEL.regions.flatMap((r) => levelSpawns(r.level, 7 + r.index).map(([kind, x1, z1, x2, z2]) => [kind, ...r.t(x1, z1), ...r.t(x2, z2)]))
+  : levelSpawns(LEVEL, 7 + LEVEL_INDEX);
 
 // Golem-aanval: opladen en dan op de grond slaan
 const SLAM_RANGE = 2.6; // binnen deze afstand begint hij op te laden
@@ -381,6 +390,13 @@ class Enemy {
       c.castShadow = true;
       if (c.isSkinnedMesh) c.frustumCulled = false;
       c.material = Array.isArray(c.material) ? c.material.map((m) => m.clone()) : c.material.clone();
+      for (const m of Array.isArray(c.material) ? c.material : [c.material]) {
+        if (type.tint !== undefined) m.color?.set(type.tint);
+        if (type.glow !== undefined && m.emissive) {
+          m.emissive.set(type.glow);
+          m.emissiveIntensity = 0.9;
+        }
+      }
       materials.push(...(Array.isArray(c.material) ? c.material : [c.material]));
     });
     this.body.add(obj);
@@ -594,7 +610,7 @@ class Enemy {
     if (['zombie', 'spierbonk', 'mecha'].includes(this.type.ai ?? this.typeKey)) {
       this.attackCooldown -= dt;
       if (this.specialAttack(dt, ctx, distToPlayer, flatToPlayer)) {
-        // Terugstoot meteen (niet bewaren tot na de aanval), en niet in muren of buiten het level
+        // Terugstoot meteen (niet bewaren tot na de aanval), en niet in muren of buiten de wereld
         this.position.addScaledVector(this.knockback, dt);
         this.knockback.multiplyScalar(Math.exp(-8 * dt));
         this.pushOutOfBlocks(ctx.colliders);
@@ -725,7 +741,7 @@ class Enemy {
     else this.animateSlime(dt, ctx.time);
   }
 
-  /** Patrouille-punten niet in (of achter) bomen, stenen, muren, of buiten het level. Gebeurt één keer. */
+  /** Patrouille-punten niet in (of achter) bomen, stenen, muren, of buiten de wereld. Gebeurt één keer. */
   fitPatrol(colliders, bounds) {
     this.patrolChecked = true;
     const r = this.type.radius + 0.3; // een beetje ruimte over
@@ -955,7 +971,7 @@ class Enemy {
         const before = this.position.clone();
         this.position.addScaledVector(this.chargeDir, 15 * dt);
         this.pushOutOfBlocks(ctx.colliders);
-        this.clampToBounds(ctx.bounds); // tegen de rand van het level aan rennen telt ook als botsen
+        this.clampToBounds(ctx.bounds); // tegen de rand van de wereld aan rennen telt ook als botsen
         const blocked = before.distanceTo(this.position) < 15 * dt * 0.5;
         if (Math.random() < 0.5) ctx.effects.burst(this.position.clone().setY(0.2), 0xb8a58c, { count: 2, speed: 2, size: 0.15, life: 0.4, up: 1 });
         const touch = ctx.player.position.clone().setY(0).distanceTo(this.position.clone().setY(0)) < this.type.radius + 0.7;
@@ -1150,7 +1166,7 @@ class Enemy {
     }
   }
 
-  /** Binnen de rand van het level blijven. */
+  /** Binnen de rand van de wereld blijven. */
   clampToBounds(bounds) {
     const r = this.type.radius;
     this.position.x = THREE.MathUtils.clamp(this.position.x, -bounds.x + r, bounds.x - r);

@@ -116,7 +116,8 @@ export class CameraRig {
     // Omhoog kijken: de camera zakt tot vlak boven de grond en kantelt daarna verder omhoog
     const orbitPitch = Math.max(this.pitch, ORBIT_MIN);
     const tilt = orbitPitch - this.pitch; // > 0 als je verder omhoog kijkt dan de camera kan zakken
-    const d = Math.min(this.distance, follow.maxDistance ?? Infinity); // binnen in een huis: dichterbij
+    // Binnen in een huis: dichterbij. Op de draak: verder weg (anders zie je alleen zijn rug)
+    const d = Math.max(follow.minDistance ?? 0, Math.min(this.distance, follow.maxDistance ?? Infinity));
     const offset = new THREE.Vector3(
       Math.sin(this.yaw) * Math.cos(orbitPitch) * d,
       Math.sin(orbitPitch) * d,

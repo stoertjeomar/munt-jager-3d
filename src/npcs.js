@@ -11,8 +11,8 @@ import { CHARACTERS, otherPlayable } from './player.js';
 
 // NPC's: personages die in de wereld wonen. Praat met ze (E) en ze geven je een zij-quest.
 // Welke NPC waar staat, staat per level in levels.js (npcs = [personage, x, z, quest]).
-// Koopman Kobus staat met zijn kraampje bij het begin van elk level: bij hem geef je je munten uit.
-// Omar staat ook in elk level: hij geeft geen quest, maar daagt je uit voor een gevecht (zie omar.js).
+// Koopman Kobus staat met zijn kraampje bij het begin van elk gebied: bij hem geef je je munten uit.
+// Omar woont in Muntdorp: hij geeft geen quest, maar daagt je uit voor een gevecht (zie omar.js).
 
 const PEOPLE = {
   mila: { name: 'Mila', file: 'models/personages/mila.glb', height: 1.45 },
@@ -345,7 +345,7 @@ class OmarNPC extends NPC {
     this.omar = true;
     this.stats = stats;
     this.costume = otherPlayable(stats.data.character);
-    // Kijk naar het begin van het level: daar komt de speler vandaan
+    // Kijk naar het begin van de wereld (Muntdorp): daar komt de speler vandaan
     const [, , sx, sz] = LEVEL.checkpoints[0];
     this.mesh.rotation.y = Math.atan2(sx - def[1], sz + 2.5 - def[2]);
     this.markerText = '♛';
@@ -510,14 +510,21 @@ export class NPCs {
     this.omar = this.list.find((n) => n.omar) ?? null;
     this.koopman = null;
     if (!LEVEL.castle) {
-      // De koopman met zijn kraampje, vlak bij het begin van het level
-      this.list.push(new NPC(scene, ['koopman', gx + 3.6, gz - 3], colliders));
-      const stall = buildStall();
-      stall.position.set(gx + 3.6 + 1.9, 0, gz - 3);
-      stall.rotation.y = -Math.PI / 2; // voorkant naar de koopman en het pad
-      scene.add(stall);
-      colliders.push(new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(gx + 5.5, 0.6, gz - 2.75), new THREE.Vector3(1.0, 1.2, 2.9)));
-      this.koopman = this.list[this.list.length - 1];
+      // Een koopman met zijn kraampje vlak bij het begin van elk gebied.
+      // (lx, lz = plek in het gebied zelf; r.t zet dat op de goede plek in de wereld, ook als het gebied omgedraaid ligt)
+      for (const r of LEVEL.regions) {
+        const [, , lx, lz] = r.level.checkpoints[0];
+        const koopman = new NPC(scene, ['koopman', ...r.t(lx + 3.6, lz - 3)], colliders);
+        this.list.push(koopman);
+        this.koopman ??= koopman;
+        const stall = buildStall();
+        const [sx, sz] = r.t(lx + 5.5, lz - 3);
+        stall.position.set(sx, 0, sz);
+        stall.rotation.y = r.flip ? Math.PI / 2 : -Math.PI / 2; // voorkant naar de koopman en het pad
+        scene.add(stall);
+        const [cx, cz] = r.t(lx + 5.5, lz - 2.75);
+        colliders.push(new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(cx, 0.6, cz), new THREE.Vector3(1.0, 1.2, 2.9)));
+      }
     }
     this.items = []; // quest-voorwerpen in de wereld
     loadGLB('models/kaykit/star.glb').catch(() => null).then((star) => {

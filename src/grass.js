@@ -10,7 +10,7 @@ import { WIND } from './world.js';
 const BLADE_HEIGHT = 0.32; // hoogte van één sprietje (wordt nog 0.6 tot 1.4 keer zo groot)
 const BLADE_WIDTH = 0.05;
 
-// Kleuren van het gras per soort level: [donker, licht] (en hoeveel gras er is)
+// Kleuren van het gras per soort gebied: [donker, licht] (en hoeveel gras er is)
 const THEMES = {
   weide: { dark: [0.12, 0.28, 0.07], light: [0.26, 0.42, 0.1], amount: 1, flowers: 0.03 },
   woud: { dark: [0.08, 0.2, 0.07], light: [0.16, 0.3, 0.1], amount: 1, flowers: 0.008 },
@@ -20,10 +20,13 @@ const THEMES = {
 export class GrassField {
   /**
    * @param {THREE.Scene} scene
-   * @param {object} opts  { theme, mask: { texture, min: [x, z], size: [w, d] }, max: hoeveel sprietjes er maximaal kunnen zijn }
+   * @param {object} opts  { regions, mask: { texture, min: [x, z], size: [w, d] }, max: hoeveel sprietjes er maximaal kunnen zijn }
+   *   regions = { themes: ['weide', 'woud', ...], width, halfX }: de gebieden van de open wereld, van west naar oost.
+   *   Het gras krijgt vanzelf de kleur van het gebied waar het groeit (en aan de grens lopen de kleuren in elkaar over).
    */
-  constructor(scene, { theme = 'weide', mask, max = 50000 }) {
-    this.theme = THEMES[theme] ?? THEMES.weide;
+  constructor(scene, { regions, mask, max = 50000 }) {
+    const themes = regions.themes.map((t) => THEMES[t] ?? THEMES.weide);
+    const N = themes.length;
     // Eén sprietje: 5 punten, 3 driehoekjes (smal en spits naar boven)
     const w = BLADE_WIDTH;
     const blade = new THREE.BufferGeometry();
@@ -55,9 +58,12 @@ export class GrassField {
       uMask: { value: mask.texture },
       uMaskMin: { value: new THREE.Vector2(...mask.min) },
       uMaskSize: { value: new THREE.Vector2(...mask.size) },
-      uDark: { value: new THREE.Vector3(...this.theme.dark) },
-      uLight: { value: new THREE.Vector3(...this.theme.light) },
-      uFlowers: { value: this.theme.flowers },
+      // Per gebied: kleuren, hoeveel bloemetjes en hoeveel gras (x = gras, y = bloemetjes)
+      uDark: { value: themes.map((t) => new THREE.Vector3(...t.dark)) },
+      uLight: { value: themes.map((t) => new THREE.Vector3(...t.light)) },
+      uAmount: { value: themes.map((t) => new THREE.Vector2(t.amount, t.flowers)) },
+      uRegionWidth: { value: regions.width },
+      uHalfX: { value: regions.halfX },
     };
 
     const material = new THREE.MeshStandardMaterial({ roughness: 0.9, side: THREE.DoubleSide });
@@ -70,7 +76,8 @@ export class GrassField {
           attribute vec4 offset;
           uniform float uTime; uniform vec2 uCenter; uniform vec2 uPlayer; uniform float uRadius;
           uniform sampler2D uMask; uniform vec2 uMaskMin; uniform vec2 uMaskSize;
-          uniform vec3 uDark; uniform vec3 uLight; uniform float uFlowers;
+          uniform vec3 uDark[${N}]; uniform vec3 uLight[${N}]; uniform vec2 uAmount[${N}];
+          uniform float uRegionWidth; uniform float uHalfX;
           varying vec3 vGrassCol; varying float vTip;
           float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
           float gNoise(vec2 p) {
@@ -90,7 +97,14 @@ export class GrassField {
           vec2 world = uCenter + rel;
           float fade = 1.0 - smoothstep(0.65, 1.0, length(rel) / uRadius); // aan de rand worden ze kleiner
           float mask = texture2D(uMask, (world - uMaskMin) / uMaskSize).r;  // geen gras op het pad e.d.
-          float h = offset.w * fade * mask;
+          // In welk gebied groeit dit sprietje? (dezelfde golvende grens als regionIndexAt in levels.js)
+          float wob = sin(world.y * 0.08) * 4.0 + sin(world.y * 0.21) * 2.0;
+          float rt = (world.x + wob + uHalfX) / uRegionWidth - 0.5;
+          int r0 = int(clamp(floor(rt), 0.0, ${N - 1}.0));
+          int r1 = int(clamp(floor(rt) + 1.0, 0.0, ${N - 1}.0));
+          float rk = smoothstep(0.38, 0.62, fract(rt)); // vlak bij de grens: half het ene, half het andere gebied
+          vec2 amount = mix(uAmount[r0], uAmount[r1], rk);
+          float h = offset.w * fade * mask * step(gHash(offset.xy * 31.0), amount.x); // in het hoogland groeit minder gras
           vec3 transformed = position * vec3(1.0, h, 1.0);
           transformed.x *= mix(0.6, 1.0, h);
           float c = cos(offset.z); float s = sin(offset.z);
@@ -108,9 +122,9 @@ export class GrassField {
           transformed.xz += world;
           // Kleur: grote vlekken lichter en donkerder gras (zoals de grond), soms een bloemetje bovenop
           float n = gNoise(world / 2.5 * 0.09) * 0.7 + gHash(offset.xy * 91.0) * 0.3;
-          vGrassCol = mix(uDark, uLight, n);
+          vGrassCol = mix(mix(uDark[r0], uDark[r1], rk), mix(uLight[r0], uLight[r1], rk), n);
           float fl = gHash(offset.xy * 53.0);
-          if (fl < uFlowers && tip > 0.6) {
+          if (fl < amount.y && tip > 0.6) {
             float k = gHash(offset.xy * 17.0);
             vGrassCol = k < 0.25 ? vec3(0.9, 0.3, 0.5) : k < 0.5 ? vec3(0.95, 0.8, 0.2) : k < 0.75 ? vec3(0.9, 0.9, 0.9) : vec3(0.55, 0.35, 0.9);
           }`
@@ -132,7 +146,7 @@ export class GrassField {
 
   /** Hoeveel sprietjes (0 = geen gras) en hoe ver om je heen (meter). */
   setCount(count, radius) {
-    const n = Math.min(this.max, Math.round(count * this.theme.amount));
+    const n = Math.min(this.max, Math.round(count));
     this.geometry.instanceCount = n;
     this.uniforms.uRadius.value = radius || 1;
     this.mesh.visible = n > 0;

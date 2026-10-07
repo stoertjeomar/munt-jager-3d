@@ -1,35 +1,40 @@
 import * as THREE from 'three';
-import { LEVEL } from './levels.js';
+import { LEVEL, REGIONS, REGION_WIDTH, regionIndexAt } from './levels.js';
 import { createCastleWorld } from './castle.js';
 
-// De wereld van het huidige level: grond, pad, huizen (waar je in kunt!), ruïnes, natuur,
-// de boss-arena, de checkpoints en de kisten. Wat er in elk level staat, staat in levels.js.
+// De open wereld: grond, paden, huizen (waar je in kunt!), ruïnes, natuur,
+// de boss-arena's, de checkpoints en de kisten. Wat er in elk gebied staat, staat in levels.js.
 
-export const BOUNDS = LEVEL.half; // het level loopt van -BOUNDS.x tot BOUNDS.x (en z)
+export const BOUNDS = LEVEL.half; // de wereld loopt van -BOUNDS.x tot BOUNDS.x (en z)
 export const WALKABLE = { x: BOUNDS.x - 1.5, z: BOUNDS.z - 1.5 }; // verder kun je niet lopen
 
 const v3 = (x, z, y = 0) => new THREE.Vector3(x, y, z);
 
-// Checkpoints: de eerste is het begin van het level, de tweede een vlag halverwege
+// Checkpoints: per gebied één aan het begin en een vlag halverwege
 export const CHECKPOINTS = LEVEL.checkpoints.map(([id, name, x, z]) => ({ id, name, position: v3(x, z) }));
 
-// De boss-arena staat altijd aan het eind (noorden) van het level
-export const ARENAS = [{ id: LEVEL.boss, center: v3(0, -78), radius: 18 }];
-if (LEVEL.arena) Object.assign(ARENAS[0], { center: v3(LEVEL.arena.x, LEVEL.arena.z), radius: LEVEL.arena.radius }); // Omars kasteel: arena in het midden
+// De boss-arena's: aan het eind van het pad van elk gebied één. `open` = aan welke kant de ingang is (+z of -z).
+// In Omars kasteel staat er één arena midden op de binnenplaats.
+export const ARENAS = LEVEL.arenas
+  ? LEVEL.arenas.map((a) => ({ id: a.id, center: v3(a.x, a.z), radius: a.radius, open: a.open, region: a.region }))
+  : [{ id: LEVEL.boss, center: v3(LEVEL.arena.x, LEVEL.arena.z), radius: LEVEL.arena.radius, open: 1 }];
 
 export const CHESTS = LEVEL.chests.map(([id, x, y, z, item]) => ({ id, position: v3(x, z, y), item }));
 
 export const VILLAGE_CENTER = LEVEL.village ? v3(LEVEL.village.center[0], LEVEL.village.center[1]) : null;
 
-// Het pad als losse lijnstukken
-const PATHS = LEVEL.path.slice(1).map((p, i) => [LEVEL.path[i], p]);
+// Alle paden (en de verbindingspaden tussen de gebieden) als losse lijnstukken
+const PATHS = (LEVEL.paths ?? [LEVEL.path]).flatMap((path) => path.slice(1).map((p, i) => [path[i], p]));
 
-/** In welk "gebied" ligt dit punt? In een level is dat overal hetzelfde thema. */
-export function regionAt() {
-  return LEVEL.theme;
+/** In welk gebied ligt dit punt? (het hele gebied-object uit levels.js, of null in Omars kasteel) */
+export function regionInfoAt(x, z) {
+  return LEVEL.regions ? REGIONS[regionIndexAt(x, z)] : null;
 }
 
-export const REGION_NAMES = { weide: LEVEL.name, woud: LEVEL.name, hoogland: LEVEL.name };
+/** Welk soort land is het hier? 'weide', 'woud' of 'hoogland' (in het kasteel: 'kasteel'). */
+export function regionAt(x, z) {
+  return regionInfoAt(x, z)?.theme ?? LEVEL.theme;
+}
 
 // Voorspelbare "random" getallen, zodat bomen elke keer op dezelfde plek staan
 export function seededRandom(seed) {
@@ -372,7 +377,7 @@ function createSky(scene) {
 }
 
 /**
- * Bergen in de verte: twee ringen van bergsilhouetten rond het level (alleen voor de sier, je kunt er niet komen).
+ * Bergen in de verte: twee ringen van bergsilhouetten rond de wereld (alleen voor de sier, je kunt er niet komen).
  * Ze lopen mee met de speler (net als de lucht) en krijgen de kleur van de horizon: hoe verder weg, hoe blauwer.
  * In het hoogland zijn ze hoger en hebben ze sneeuw op de toppen.
  */
@@ -445,15 +450,26 @@ function createGround(scene) {
   const colors = [];
   const blends = [];
   const rand = seededRandom(7);
-  const base = { weide: [1.76, 1.63, 1.05], woud: [0.88, 0.99, 0.64], hoogland: [1.18, 1.06, 0.78] }[LEVEL.theme]; // wat warmer: geen blauwgroen gras
-  const tint = new THREE.Color(...(LEVEL.tint ? base.map((v, i) => v * LEVEL.tint[i]) : base));
+  // Kleur en textuur-mengsel van elk gebied (wat warmer: geen blauwgroen gras)
+  const BASE = { weide: [1.76, 1.63, 1.05], woud: [0.88, 0.99, 0.64], hoogland: [1.18, 1.06, 0.78] };
+  const looks = REGIONS.map((r) => ({
+    tint: BASE[r.theme].map((v, i) => v * (r.tint?.[i] ?? 1)),
+    wgt: r.theme === 'hoogland' ? [0.35, 0, 0.65, 0] : [1, 0, 0, 0], // gewicht per textuur: [gras, aarde, rots, stenen vloer]
+  }));
+  // Bij de grens tussen twee gebieden lopen de kleuren zacht in elkaar over (we middelen een paar punten links en rechts)
+  const SAMPLES = [-9, -4.5, 0, 4.5, 9];
   const c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const z = pos.getZ(i);
-    c.copy(tint).offsetHSL(0, 0, (rand() - 0.5) * 0.06);
-    // gewicht per textuur: [gras, aarde, rots, stenen vloer]
-    let wgt = LEVEL.theme === 'hoogland' ? [0.35, 0, 0.65, 0] : [1, 0, 0, 0];
+    const mix = [0, 0, 0];
+    let wgt = [0, 0, 0, 0];
+    for (const dx of SAMPLES) {
+      const look = looks[regionIndexAt(x + dx, z)];
+      look.tint.forEach((v, j) => (mix[j] += v / SAMPLES.length));
+      wgt = wgt.map((v, j) => v + look.wgt[j] / SAMPLES.length);
+    }
+    c.setRGB(...mix).offsetHSL(0, 0, (rand() - 0.5) * 0.06);
     let p = distToPath(x, z);
     if (VILLAGE_CENTER) p = Math.min(p, Math.hypot(x - VILLAGE_CENTER.x, z - VILLAGE_CENTER.z) - 7);
     if (p < 2.6) {
@@ -565,16 +581,21 @@ function bakeGroundAO(geo, colliders) {
  * Geeft het water-materiaal terug (de golfjes bewegen in updateSun).
  */
 function createPonds(scene, colliders, groundGeo) {
-  const rand = seededRandom(4242 + LEVEL.subtitle.length * 13);
-  const wanted = LEVEL.theme === 'hoogland' ? 1 : 2;
-  for (let tries = 0; PONDS.length < wanted && tries < 600; tries++) {
-    const r = 3 + rand() * 2;
-    const x = (rand() * 2 - 1) * (WALKABLE.x - r - 3);
-    const z = (rand() * 2 - 1) * (WALKABLE.z - r - 10);
-    if (!isFree(x, z, r + 2)) continue;
-    const clear = colliders.every((b) => b.distanceToPoint(new THREE.Vector3(x, Math.min(Math.max(0, b.min.y), b.max.y), z)) > r + 1.5);
-    if (!clear || PONDS.some(([px, pz, pr]) => Math.hypot(x - px, z - pz) < pr + r + 15)) continue;
-    PONDS.push([x, z, r]);
+  const rand = seededRandom(4242);
+  // In elk gebied een paar vijvers (in het hoogland maar één)
+  for (const region of REGIONS) {
+    const wanted = region.theme === 'hoogland' ? 1 : 2;
+    let found = 0;
+    for (let tries = 0; found < wanted && tries < 600; tries++) {
+      const r = 3 + rand() * 2;
+      const x = region.ox + (rand() * 2 - 1) * (REGION_WIDTH / 2 - r - 6);
+      const z = (rand() * 2 - 1) * (WALKABLE.z - r - 10);
+      if (!isFree(x, z, r + 2)) continue;
+      const clear = colliders.every((b) => b.distanceToPoint(new THREE.Vector3(x, Math.min(Math.max(0, b.min.y), b.max.y), z)) > r + 1.5);
+      if (!clear || PONDS.some(([px, pz, pr]) => Math.hypot(x - px, z - pz) < pr + r + 15)) continue;
+      PONDS.push([x, z, r]);
+      found++;
+    }
   }
   // Golfjes: een klein "normal map"-plaatje met zachte ruis (getekend in code)
   const N = 128;
@@ -603,9 +624,11 @@ function createPonds(scene, colliders, groundGeo) {
   normalMap.repeat.set(3, 3);
   normalMap.needsUpdate = true;
   const water = new THREE.MeshStandardMaterial({
-    color: LEVEL.theme === 'woud' ? 0x1e4a4a : 0x2b6a8a, roughness: 0.06, metalness: 0.1, transparent: true, opacity: 0.88,
+    color: 0x2b6a8a, roughness: 0.06, metalness: 0.1, transparent: true, opacity: 0.88,
     normalMap, normalScale: new THREE.Vector2(0.35, 0.35), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
   });
+  const darkWater = water.clone(); // in het Spookwoud is het water donker
+  darkWater.color.set(0x1e4a4a);
   for (const [x, z, r] of PONDS) {
     // Een ronde vijver met een hobbelige rand
     const geo = new THREE.CircleGeometry(r, 28);
@@ -615,7 +638,7 @@ function createPonds(scene, colliders, groundGeo) {
       pos.setXY(i, pos.getX(i) * k, pos.getY(i) * k);
     }
     geo.rotateX(-Math.PI / 2);
-    const mesh = new THREE.Mesh(geo, water);
+    const mesh = new THREE.Mesh(geo, regionAt(x, z) === 'woud' ? darkWater : water);
     mesh.position.set(x, 0.025, z);
     mesh.receiveShadow = true;
     mesh.userData.noAO = true;
@@ -806,10 +829,7 @@ function createLanterns(scene, colliders) {
   glowingLamps.push(glassMat);
   // Een zacht lichtvlekje rond elke lamp ('s nachts zie je dan van ver waar het pad loopt)
   lanternHaloMat = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffb347, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0, fog: false });
-  const pts = LEVEL.path;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const [ax, az] = pts[i];
-    const [bx, bz] = pts[i + 1];
+  PATHS.forEach(([[ax, az], [bx, bz]], i) => {
     const len = Math.hypot(bx - ax, bz - az);
     for (let s = 6; s < len; s += 16) {
       const k = s / len;
@@ -818,7 +838,8 @@ function createLanterns(scene, colliders) {
       const side = (i + Math.floor(s / 16)) % 2 ? 1 : -1;
       const x = ax + (bx - ax) * k + nx * 3.3 * side;
       const z = az + (bz - az) * k + nz * 3.3 * side;
-      if (Math.hypot(x - ARENAS[0].center.x, z - ARENAS[0].center.z) < ARENAS[0].radius + 3) continue;
+      if (ARENAS.some((a) => Math.hypot(x - a.center.x, z - a.center.z) < a.radius + 3)) continue;
+      if (lanternSpots.some((l) => Math.hypot(x - l.x, z - l.z) < 6)) continue; // waar paden samenkomen niet twee vlak naast elkaar
       const post = texturedBox(0.16, 2.6, 0.16, wood, 1);
       post.position.set(x, 1.3, z);
       const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.42, 0.34), glassMat);
@@ -833,24 +854,33 @@ function createLanterns(scene, colliders) {
       lanternSpots.push(new THREE.Vector3(x, 2.6, z));
       colliders.push(new THREE.Box3(new THREE.Vector3(x - 0.12, 0, z - 0.12), new THREE.Vector3(x + 0.12, 2.6, z + 0.12)));
     }
-  }
+  });
 }
 
-/** Bomen (met InstancedMesh), rotsblokken, een bosrand rondom het level, bloemen en paddenstoelen. */
+/** Bomen (met InstancedMesh), rotsblokken, een bosrand rondom de wereld, bloemen en paddenstoelen. */
 function createNature(scene, colliders) {
-  const rand = seededRandom(42 + LEVEL.subtitle.length);
-  const kind = { weide: 'green', woud: 'dark', hoogland: 'pine' }[LEVEL.theme];
+  const rand = seededRandom(42);
+  const KIND = { weide: 'green', woud: 'dark', hoogland: 'pine' }; // welke bomen in welk soort gebied
   const trees = []; // [x, z, size, kind, collide]
-  for (let i = 0, tries = 0; i < LEVEL.trees && tries < LEVEL.trees * 30; tries++) {
-    const x = (rand() * 2 - 1) * WALKABLE.x;
-    const z = (rand() * 2 - 1) * WALKABLE.z;
-    if (!isFree(x, z)) continue;
-    if (trees.some((t) => Math.hypot(t[0] - x, t[1] - z) < 3.2)) continue;
-    trees.push([x, z, (LEVEL.theme === 'woud' ? 1.1 : 0.8) + rand() * 0.6, kind, true]);
-    i++;
+  // Een willekeurige plek in een gebied (en echt in dat gebied: de grens golft een beetje)
+  const inRegion = (region, edge = 0) => {
+    for (;;) {
+      const x = region.ox + (rand() * 2 - 1) * (REGION_WIDTH / 2 - edge);
+      const z = (rand() * 2 - 1) * (WALKABLE.z - edge);
+      if (regionIndexAt(x, z) === region.index) return [x, z];
+    }
+  };
+  for (const region of REGIONS) {
+    for (let i = 0, tries = 0; i < region.trees && tries < region.trees * 30; tries++) {
+      const [x, z] = inRegion(region);
+      if (!isFree(x, z)) continue;
+      if (trees.some((t) => Math.hypot(t[0] - x, t[1] - z) < 3.2)) continue;
+      trees.push([x, z, (region.theme === 'woud' ? 1.1 : 0.8) + rand() * 0.6, KIND[region.theme], true]);
+      i++;
+    }
   }
-  // Bosrand buiten het level (alleen voor de sier: je kunt er toch niet komen)
-  const borderCount = LEVEL.theme === 'hoogland' ? 90 : 320;
+  // Bosrand buiten de wereld (alleen voor de sier: je kunt er toch niet komen). In het hoogland minder bomen.
+  const borderCount = Math.round((BOUNDS.x + BOUNDS.z) * 1.2);
   for (let i = 0; i < borderCount; i++) {
     const sideX = rand() < BOUNDS.z / (BOUNDS.x + BOUNDS.z);
     const out = 3 + rand() * 22;
@@ -863,16 +893,18 @@ function createNature(scene, colliders) {
       z = (rand() < 0.5 ? -1 : 1) * (BOUNDS.z + out);
       x = (rand() * 2 - 1) * (BOUNDS.x + 20);
     }
-    trees.push([x, z, 1 + rand() * 0.8, kind, false]);
+    const theme = regionAt(THREE.MathUtils.clamp(x, -BOUNDS.x, BOUNDS.x), z);
+    if (theme === 'hoogland' && rand() < 0.7) continue;
+    trees.push([x, z, 1 + rand() * 0.8, KIND[theme], false]);
   }
 
   // Vormen en kleurtjes komen uit een eigen toevalsgenerator, zodat de bomen zelf op dezelfde plek blijven staan
-  const look = seededRandom(777 + LEVEL.subtitle.length);
+  const look = seededRandom(777);
   // Stam met een bredere voet (wortels)
   const trunkMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.2, 0.34, 1.6, 7), addLeafShading(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 })), trees.length);
   const leafColors = { dark: [0x24502c, 0x2d5e33, 0x1f4527], green: [0x3f9b4a, 0x4fae52, 0x2f8a45], pine: [0x3a6b48, 0x46775a] };
   const roundColors = [0x5aa845, 0x6fb84a, 0x4c9a3e, 0x86c24f];
-  const layers = kind === 'green' ? 3 : 4; // dennen in het bos en het hoogland krijgen 4 lagen
+  const layersOf = (k) => (k === 'green' ? 3 : 4); // dennen in het bos en het hoogland krijgen 4 lagen
   // Dennenlaag met een gekartelde onderrand (om en om een punt naar buiten en omlaag)
   const coneGeo = new THREE.ConeGeometry(1.3, 1.6, 10);
   const cp = coneGeo.attributes.position;
@@ -893,7 +925,7 @@ function createNature(scene, colliders) {
   }
   roundGeo.computeVertexNormals();
   // Naaldbomen (kegels) en, in de weide, ook ronde loofbomen en slanke populieren; ze wiegen allemaal in de wind
-  const leafMesh = new THREE.InstancedMesh(coneGeo, addLeafShading(addWind(new THREE.MeshStandardMaterial({ roughness: 0.8, flatShading: true }), { strength: 0.045, base: -0.8, speed: 1.3, lift: 0.6 })), trees.length * layers);
+  const leafMesh = new THREE.InstancedMesh(coneGeo, addLeafShading(addWind(new THREE.MeshStandardMaterial({ roughness: 0.8, flatShading: true }), { strength: 0.045, base: -0.8, speed: 1.3, lift: 0.6 })), trees.length * 4);
   const roundMesh = new THREE.InstancedMesh(roundGeo, addLeafShading(addWind(new THREE.MeshStandardMaterial({ roughness: 0.85, flatShading: true }), { strength: 0.045, base: -1, speed: 1.1, lift: 0.6 })), trees.length * 4);
   trunkMesh.castShadow = true;
   leafMesh.castShadow = roundMesh.castShadow = true;
@@ -937,6 +969,7 @@ function createNature(scene, colliders) {
       }
     } else {
       const palette = leafColors[k];
+      const layers = layersOf(k);
       const step = layers === 4 ? 0.7 : 0.85;
       for (let j = 0; j < layers; j++) {
         const layer = 1 - j * (layers === 4 ? 0.2 : 0.25);
@@ -956,15 +989,17 @@ function createNature(scene, colliders) {
   roundMesh.count = blobs;
   scene.add(trunkMesh, leafMesh, roundMesh);
 
-  // Rotsblokken (in het hoogland veel, elders een paar) en een rotsrand langs de kant van het level
+  // Rotsblokken (in het hoogland veel, elders een paar) en een rotsrand langs de rand van de wereld
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x8f8a80, roughness: 0.95, flatShading: true });
   const boulders = [];
-  const boulderCount = LEVEL.theme === 'hoogland' ? 40 : 10;
-  for (let tries = 0; boulders.length < boulderCount && tries < 2000; tries++) {
-    const x = (rand() * 2 - 1) * WALKABLE.x;
-    const z = (rand() * 2 - 1) * WALKABLE.z;
-    if (!isFree(x, z, 1)) continue;
-    boulders.push([x, z, 1 + rand() * 1.6, true]);
+  for (const region of REGIONS) {
+    const wanted = region.theme === 'hoogland' ? 40 : 10;
+    for (let n = 0, tries = 0; n < wanted && tries < 2000; tries++) {
+      const [x, z] = inRegion(region, 2);
+      if (!isFree(x, z, 1)) continue;
+      boulders.push([x, z, 1 + rand() * 1.6, true]);
+      n++;
+    }
   }
   for (let a = -BOUNDS.z; a <= BOUNDS.z; a += 4.5) for (const sx of [-1, 1]) boulders.push([sx * (BOUNDS.x + 1.5), a, 1.6 + rand() * 1.4, false]);
   for (let a = -BOUNDS.x; a <= BOUNDS.x; a += 4.5) for (const sz of [-1, 1]) boulders.push([a, sz * (BOUNDS.z + 1.5), 1.6 + rand() * 1.4, false]);
@@ -982,23 +1017,28 @@ function createNature(scene, colliders) {
   boulderMesh.receiveShadow = true;
   scene.add(boulderMesh);
 
-  // Bloemetjes (weide) of paddenstoelen (woud)
-  if (LEVEL.theme === 'weide') {
+  // Bloemetjes (in de weides) en paddenstoelen (in het woud)
+  const weides = REGIONS.filter((r) => r.theme === 'weide');
+  const wouden = REGIONS.filter((r) => r.theme === 'woud');
+  if (weides.length) {
     const flowerColors = [0xff6b9d, 0xffe066, 0xffffff, 0x9d7bff, 0xff8c42].map((cc) => new THREE.Color(cc));
-    const flowers = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.06, 0), new THREE.MeshStandardMaterial({ roughness: 0.6 }), 700);
-    for (let n = 0; n < 700; n++) {
-      m.makeTranslation((rand() * 2 - 1) * WALKABLE.x, 0.06, (rand() * 2 - 1) * WALKABLE.z);
+    const count = 700 * weides.length;
+    const flowers = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.06, 0), new THREE.MeshStandardMaterial({ roughness: 0.6 }), count);
+    for (let n = 0; n < count; n++) {
+      const [x, z] = inRegion(weides[n % weides.length], 1.5);
+      m.makeTranslation(x, 0.06, z);
       flowers.setMatrixAt(n, m);
       flowers.setColorAt(n, flowerColors[Math.floor(rand() * flowerColors.length)]);
     }
     scene.add(flowers);
-  } else if (LEVEL.theme === 'woud') {
-    const caps = new THREE.InstancedMesh(new THREE.SphereGeometry(0.2, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xd93b3b, roughness: 0.5, emissive: 0x330000 }), 140);
-    const stems = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.06, 0.08, 0.25, 6), new THREE.MeshStandardMaterial({ color: 0xf2e8d5 }), 140);
+  }
+  if (wouden.length) {
+    const count = 140 * wouden.length;
+    const caps = new THREE.InstancedMesh(new THREE.SphereGeometry(0.2, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xd93b3b, roughness: 0.5, emissive: 0x330000 }), count);
+    const stems = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.06, 0.08, 0.25, 6), new THREE.MeshStandardMaterial({ color: 0xf2e8d5 }), count);
     let n = 0;
-    for (let tries = 0; n < 140 && tries < 3000; tries++) {
-      const x = (rand() * 2 - 1) * WALKABLE.x;
-      const z = (rand() * 2 - 1) * WALKABLE.z;
+    for (let tries = 0; n < count && tries < count * 20; tries++) {
+      const [x, z] = inRegion(wouden[n % wouden.length], 1.5);
       if (!isFree(x, z)) continue;
       const s = 0.7 + rand() * 0.8;
       m.compose(new THREE.Vector3(x, 0.24 * s, z), q.identity(), new THREE.Vector3(s, s, s));
@@ -1020,7 +1060,7 @@ function createArena(scene, colliders, arena) {
     const a = (i / count) * Math.PI * 2;
     const x = arena.center.x + Math.sin(a) * (arena.radius + 1.5);
     const z = arena.center.z + Math.cos(a) * (arena.radius + 1.5);
-    if (Math.cos(a) > 0.95) continue; // opening aan de kant van het pad
+    if (Math.cos(a) * (arena.open ?? 1) > 0.95) continue; // opening aan de kant van het pad
     const h = i % 3 === 0 ? 2 : 5 + (i % 2) * 1.5; // sommige zijn afgebroken
     const pillar = texturedBox(1.4, h, 1.4, mat, 1.4);
     pillar.position.set(x, h / 2, z);
@@ -1033,8 +1073,8 @@ export function createWorld(scene) {
   if (LEVEL.castle) return createCastleWorld(scene, { tex, texturedBox }); // Omars Gekke Kasteel bouwt zijn eigen wereld (castle.js)
   const sky = createSky(scene);
   const mountains = createMountains(scene, sky.material.uniforms);
-  const fogNear = LEVEL.theme === 'woud' ? 25 : 50;
-  scene.fog = new THREE.Fog(0xcdeaff, fogNear, fogNear + 90);
+  // Mist: in het Spookwoud dikker (main.js verandert hem als je een ander gebied in loopt, zie setFog)
+  scene.fog = new THREE.Fog(0xcdeaff, 50, 140);
 
   const hemi = new THREE.HemisphereLight(0xffffff, 0x556b2f, 0.9);
   scene.add(hemi);
@@ -1135,6 +1175,13 @@ export function createWorld(scene) {
     isMoon: false,
     look: dayLook(0.3), // alle kleuren van dit moment (voor wolken, bergen, ...)
     lightTuning: LIGHT_TUNING,
+
+    /** Mist van het gebied waar je bent: in het Spookwoud dikker. Schuift langzaam mee (geen sprong). */
+    updateFog(theme, dt) {
+      const near = theme === 'woud' ? 25 : 50;
+      scene.fog.near += (near - scene.fog.near) * Math.min(1, dt * 0.6);
+      scene.fog.far = scene.fog.near + 90;
+    },
 
     /** Licht uit de lucht klaarzetten (heeft de renderer nodig om het "fotootje" van de lucht te maken). */
     initEnvironment(renderer) {

@@ -1,10 +1,11 @@
 # Munt Jager 3D
 
-Een **actie-RPG met levels** in de browser, gemaakt met **JavaScript** en **[Three.js](https://threejs.org/)**.
-Kies je held, volg het pad door 4 levels, versla vijanden voor munten en XP, help de dorpelingen met zij-quests,
-koop spullen bij de koopman en versla aan het eind van elk level de boss.
+Een **open-wereld actie-RPG** in de browser, gemaakt met **JavaScript** en **[Three.js](https://threejs.org/)**.
+Kies je held en trek door één grote wereld met 4 gebieden: versla vijanden voor munten en XP, help de dorpelingen
+met zij-quests, koop spullen bij de koopman, vlieg op je **draak**, vecht samen met je **Boks-Dinootje** en versla de
+boss van elk gebied. Pas op: Omar stuurt soms zijn **schaduwleger** op je af!
 
-> 👑 **Ikzelf, Omar, zit ook in de game!** Ik heb dit spel gemaakt en ik sta in elk level.
+> 👑 **Ikzelf, Omar, zit ook in de game!** Ik heb dit spel gemaakt en ik woon in Muntdorp.
 > Daag me uit en ik neem je mee naar mijn Gekke Kasteel. Niemand heeft mij ooit verslagen...
 > **dus probeer me maar eens te verslaan!**
 
@@ -48,42 +49,59 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 | V | Wervelslag |
 | X | Vuurzwaard |
 | I of Tab | Uitrusting (wapens, helmen, krachten) |
+| T | Wereldkaart + snelreizen naar een vlag waar je al was |
+| B | Vuurtand de draak roepen / afstappen (na de eerste boss) |
 | M | Geluid aan/uit |
 | N | Muziek aan/uit (wordt onthouden) |
 | G | Graphics: Laag / Normaal / Hoog (wordt onthouden) |
 | Scrollen | In- en uitzoomen (je begint helemaal ingezoomd) |
 | Esc | Pauze / muis vrij |
 
+**Op de draak:** WASD = vliegen · Spatie = omhoog · kijk omlaag met de muis = dalen · Shift = extra snel ·
+klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, dat doet geen pijn).
+
 ## Wat zit erin
 
-- **4 levels**, elk een pad van het begin naar de boss-arena, met halverwege een checkpoint:
+- **Eén grote open wereld** met 4 gebieden naast elkaar (geen losse levels meer: je kunt overal heen lopen).
+  Elk gebied heeft een pad naar zijn boss-arena, met een vlag aan het begin en halverwege, en paden die de gebieden verbinden:
   1. **Groene Weide** met het dorp Muntdorp → boss **Budget Mario**
   2. **Ruïnevallei** met een parkour-ruïne → boss **Koning Slijm**
   3. **Spookwoud** (donker en mistig) → boss **De Gevallen Ridder**
   4. **Rotshoogland** (de finale) → boss **Steenreus Gorath**
 
-  Versla de boss → *LEVEL VOLTOOID* → door naar het volgende level. Op het startscherm kies je elk level dat je al hebt vrijgespeeld.
+  Loop je een ander gebied in, dan zie je de naam en veranderen de muziek, de mist, het gras en de geluiden.
+  Te vroeg in een moeilijk gebied? Dan krijg je een waarschuwing. Versla een boss → *GEBIED VEILIG* → het volgende gebied gaat open.
+- **Wereldkaart en snelreizen (T)**: elke vlag waar je langs liep wordt goud. Op de kaart zie je de hele wereld en reis je
+  in één keer naar een gouden vlag. Op het startscherm kies je in welk (open) gebied je begint
+- **Vuurtand de draak (B)**: versla Budget Mario en je krijgt een eigen draak! Hij komt aanvliegen, jij springt op zijn rug
+  en je vliegt over de hele wereld. Hij spuwt vuur, maar durft niet in een boss-arena, en vijanden die hij verbrandt
+  geven wel munten maar tellen niet mee voor je level (sterker worden doe je zelf)
+- **Knokkie het Boks-Dinootje**: koop een **Dino-ei** bij de koopman. Knokkie loopt overal met je mee, stoot vijanden
+  met zijn bokshandschoenen en wordt sterker (en groter) van elke 5 vijanden die hij verslaat, tot level 10
+- **Omar-invasies**: af en toe valt Omars schaduwleger Muntdorp of een ander kamp aan (volg de paarse lichtstraal!).
+  Versla drie golven schaduwkrijgers op tijd en je krijgt een flinke beloning
 - **Kies je held**: Eve of Soldaat (Mixamo-personages met een echt skelet: knieën, ellebogen, rennen, uitvalspas bij het slaan)
-- **NPC's met zij-quests**: Mila, Strohoed, Robot B-0P en Sir Roestbout wonen in de levels. Praat met ze (E) als er een **!** boven
+- **NPC's met zij-quests**: Mila, Strohoed, Robot B-0P en Sir Roestbout wonen in de wereld. Praat met ze (E) als er een **!** boven
   hun hoofd staat, doe de quest (vijanden verslaan of sterren/batterijen zoeken) en haal je beloning op bij het **?**
 - **Huizen waar je in kunt**: loop door de deur naar binnen — met meubels, een haardvuur en het dak verdwijnt zodat je binnen kunt kijken
 - **Een levende wereld**: dicht gras dat wuift in de wind en opzij buigt als je erdoorheen loopt, bergen in de verte,
   bolle wolken die meekleuren met de zonsondergang, vijvers met riet, populieren, dennen met gekartelde takken en
   bladeren waar de zon doorheen schijnt, zwevend stuifmeel overdag en vuurvliegjes 's nachts, een zon en maan aan de hemel
 - Levendige vijanden: glanzende slijmpjes die knipperen en je met hun ogen volgen, spoken met een gloed, golems met gloeiende scheuren
-- Lantaarns langs het pad, een bos rond elk level, minimap met het pad, **dag-en-nachtritme** met sterren en een zachte **gloed** (bloom)
+- Lantaarns langs de paden, een bos rond de wereld, minimap met de paden, **dag-en-nachtritme** met sterren en een zachte **gloed** (bloom)
 - 's Nachts is het donkerblauw maanlicht in plaats van pikzwart: de lantaarns verlichten de grond en een warm lichtje bij jou laat je de weg en de vijanden zien
 - **Mooiere graphics**: gladde randjes, licht uit de lucht (glanzende dingen weerspiegelen de lucht), schaduwen die niet kriebelen,
   zachte schaduw-vlekjes onder iedereen, nevel laag bij de grond en een zon die een beetje schittert.
   Met **G** kies je *Laag* (snel, voor oudere laptops), *Normaal* of *Hoog* (met extra donkere hoekjes, "ambient occlusion")
 - Vijanden (ook spoken) lopen niet meer door muren, bomen of stenen heen
-- **Levelen door te vechten**: elke verslagen vijand telt mee (een boss telt voor 10). Elk level geeft meer leven,
+- **Levelen door te vechten**: elke verslagen vijand telt mee (een boss telt voor 10). Elk level geeft wat meer leven,
   stamina en schade, en op sommige levels speel je een kracht of bonus vrij (meer leven, sneller lopen, minder schade).
+  Je leven groeit expres niet te snel (anders wordt het te makkelijk): +6 per level, en je hebt steeds meer vijanden nodig.
   Je voortgang staat onder je levensbalk en in het menu *Level & krachten*.
-- **Checkpoint-vlaggen**: halverwege elk level staat een vlag. Loop erlangs en hij wordt goud: als je doodgaat kom je daar terug
-  (je munten houd je gewoon)
-- **Koopman Kobus** staat met zijn kraampje bij het begin van elk level: Herstel-soep, Gouden Zaadje (flesjes helen meer),
-  Hartversterker (+20 leven) en Wapen slijpen (+10% schade)
+- **Checkpoint-vlaggen**: aan het begin en halverwege elk gebied staat een vlag. Loop erlangs en hij wordt goud: als je
+  doodgaat kom je bij de laatste vlag terug (je munten houd je gewoon), en je kunt er later heen snelreizen
+- **Koopman Kobus** staat met zijn kraampje bij het begin van elk gebied: Herstel-soep, Gouden Zaadje (flesjes helen meer),
+  Hartversterker (+10 leven), Wapen slijpen (+10% schade) en het Dino-ei
 - **Gevechten**: leven en stamina, rollen met onkwetsbaarheid, lock-on, flesjes (maximaal 3 in het hele spel), zwaard-windje,
   vonken, schade-getallen, camera-schok en hitstop
 - **5 krachten**: Dash, Dubbele sprong, Wervelslag, Grondslag en Vuurzwaard (vrijspelen door te levelen en bosses te verslaan)
@@ -91,12 +109,12 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
   Zonnezwaard, het diamanten zwaard, het **Demonenzwaard** (in een kist in het Rotshoogland) en de **Zeis van de Dood**
   (die krijg je als je Omar verslaat) — plus 3 helmen. Te vinden in kisten, bij quests en bij bosses
 - **Vijanden**: slijmpjes, slijmballen, spoken, rotsgolems, zombies, Spierbonken, Mecha-Wachters, **Boks-Dino's**
-  (spring op hun hoofd: BOING!) en **Bigfoots**. Alle vijanden zijn een stuk sterker geworden
+  (spring op hun hoofd: BOING!), **Bigfoots** en Omars **schaduwkrijgers**. Alle vijanden zijn een stuk sterker geworden
 - **4 bosses** met een mistmuur, boss-balk en een tweede fase: Koning Slijm, De Gevallen Ridder,
   Steenreus Gorath en Budget Mario. Ze hebben meer leven, doen meer schade en zijn sneller
 - In Muntdorp staan een **oefenpop** (sla erop om je schade te zien, hij valt nooit om) en **Zorp de Alien** (praat met hem!)
-- 3 verstopte **diamanten** per level, hartjes, munten die naar je toe vliegen
-- **Omar, de maker van het spel**, staat in elk level. Daag hem uit (E) en hij neemt je mee naar zijn **Gekke Kasteel**:
+- 3 verstopte **diamanten** per gebied, hartjes, munten die naar je toe vliegen
+- **Omar, de maker van het spel**, woont in Muntdorp. Daag hem uit (E) en hij neemt je mee naar zijn **Gekke Kasteel**:
   eerst een filmpje op zijn troon, dan een gevecht in de arena tussen duistere ritueel-altaren en samoerai-wachters.
   Hij draagt het personage dat jij níet koos, heeft **gloeiende rode ogen**, een duistere aura, de **Zeis van de Dood** en
   álle krachten: dash, wervelslag, dubbele sprong met grondslag, vuurzwaard, rollen en zelf flesjes drinken. Hij kan
@@ -104,9 +122,11 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
   af stormen. Verlies je? Dan ben je niks kwijt. Win je? Dan krijg je de **Kroon van Omar**, zijn **Zeis** en een gek feest
 - **Muziek** (zie Credits): bij **alle boss-gevechten** speelt *Where Is Your God Now*, tegen **Omar** zijn eigen epische
   boss-muziek, die al zachtjes opkomt terwijl hij praat en sneller gaat als hij boos wordt. In het Spookwoud en het
-  Rotshoogland speelt duistere muziek, en de Weide en de Ruïnevallei hebben een zelfgemaakt deuntje (gemaakt in de code)
-- **Geluidseffecten** (lekker hard!): zwaarden, een anime-teleport bij het dashen, BOING als je op een vijand springt, een
-  anime-punch als je een vijand verslaat, WOW bij een nieuw level, FAAAH als je doodgaat, glitter bij een kist, donder bij
+  Rotshoogland speelt duistere muziek, en de Weide en de Ruïnevallei hebben een zelfgemaakt deuntje (gemaakt in de code).
+  De muziek wisselt vanzelf als je een ander gebied in loopt
+- **Geluidseffecten** (lekker hard!): zwaarden, een anime-teleport bij het dashen en snelreizen, BOING als je op een vijand
+  springt, een (zachte) anime-punch als je een vijand verslaat, een brullende draak met vleugelslagen en vuur,
+  WOW bij een nieuw level, FAAAH als je doodgaat, glitter bij een kist, donder bij
   Omars bliksem, praatgeluidjes als iemand iets zegt, vogeltjes overdag, krekels 's nachts, een uil en wind in de bergen
 - Maximaal **3 flesjes** in het hele spel (net als Omar), dus drink ze slim
 - **Opslaan** in de browser (verder spelen waar je was)
@@ -128,8 +148,8 @@ munt-jager-3d/
     ├── graphics.js   → hoe het getekend wordt: gloed, kleuren, gladde randjes, de standen Laag/Normaal/Hoog (G)
     ├── blobs.js      → zachte schaduw-vlekjes onder de speler, vijanden en mensen
     ├── grass.js      → dicht, wuivend gras rond de speler (alleen op Normaal en Hoog)
-    ├── levels.js     → de 4 levels: pad, vijanden, kisten, NPC's, huizen (pas hier je levels aan!)
-    ├── world.js      → bouwt het level: grond, pad, huizen, ruïnes, natuur, arena, dag en nacht
+    ├── levels.js     → de 4 gebieden: pad, vijanden, kisten, NPC's, huizen (pas hier je gebieden aan!) en hoe ze samen de open wereld vormen
+    ├── world.js      → bouwt de wereld: grond, paden, huizen, ruïnes, natuur, arena's, mist, dag en nacht
     ├── npcs.js       → NPC's en hun zij-quests
     ├── decor.js      → planten, stenen, bolle wolken, riet bij de vijvers en dieren
     ├── player.js     → speler: bewegen, rollen, krachten, flesjes, personages
@@ -140,10 +160,13 @@ munt-jager-3d/
     ├── sword.js      → het wapen in de hand · trail.js → het zwaard-windje
     ├── projectiles.js→ energie- en vuurballen van vijanden
     ├── enemies.js    → vijanden en hun aanvallen · bosses.js → de vier bosses
+    ├── dragon.js     → Vuurtand de draak: gebouwd van simpele vormen, vliegen en vuur spuwen
+    ├── pet.js        → Knokkie het Boks-Dinootje dat met je meevecht
+    ├── invasions.js  → Omar-invasies: golven schaduwkrijgers bij een kamp
     ├── sites.js      → checkpoint-vlaggen en kisten
     ├── pickups.js    → munten, hartjes, diamanten
     ├── stats.js      → level (door vijanden te verslaan), bonussen, krachten, opslaan
-    ├── ui.js         → balken, menu's, banners, minimap
+    ├── ui.js         → balken, menu's, banners, minimap en de wereldkaart
     ├── effects.js    → deeltjes, schokgolven, waarschuwingscirkels
     ├── omar.js       → alles rond Omar: uitdagen, het kasteel-filmpje, winnen (feest!) en verliezen
     ├── omarFighter.js→ Omar zelf in het gevecht: zijn brein, aanvallen, teleporteren en praatjes
@@ -154,7 +177,8 @@ munt-jager-3d/
 
 ## Zelf aanpassen
 
-- **Levels** → `LEVELS` in `src/levels.js` (welke vijanden, kisten, NPC's, huizen en welke boss). Test een level met `?level=3` achter de link
+- **Gebieden** → `LEVELS` in `src/levels.js` (welke vijanden, kisten, NPC's, huizen en welke boss). Begin in een gebied met `?level=3` achter de link
+- **Draak, huisdier en invasies** → `DRAGON` in `src/dragon.js`, `PET` in `src/pet.js` en `INVASION` in `src/invasions.js`
 - **Quests** → `QUESTS` bovenaan `src/npcs.js`
 - **Vijanden** → `ENEMY_TYPES` bovenaan `src/enemies.js`. Alle vijanden sterker of zwakker: `ENEMY_POWER` (en voor de
   bosses `BOSS_POWER` in `src/bosses.js`)

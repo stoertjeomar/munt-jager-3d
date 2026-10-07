@@ -171,25 +171,25 @@ export class Sites {
   }
 
   /**
-   * Kom je langs een checkpoint dat verder is dan je laatste? Dan wordt dat je nieuwe terugkom-plek.
-   * Geeft het nieuwe checkpoint terug (of null).
+   * Kom je langs een vlag (die niet al je terugkom-plek is)? Dan wordt dat je nieuwe terugkom-plek,
+   * en kun je er later heen snelreizen. Geeft { checkpoint, first } terug (first = nieuwe vlag), of null.
    */
   reachCheckpoint(pos) {
-    const current = this.checkpoints.findIndex((c) => c.id === this.stats.data.checkpoint);
-    for (let i = current + 1; i < this.checkpoints.length; i++) {
-      const c = this.checkpoints[i];
-      if (Math.hypot(c.position.x - pos.x, c.position.z - pos.z) < 4) {
-        this.stats.data.checkpoint = c.id;
-        this.stats.save();
-        return c;
-      }
+    const d = this.stats.data;
+    for (const c of this.checkpoints) {
+      if (c.id === d.checkpoint || Math.hypot(c.position.x - pos.x, c.position.z - pos.z) >= 4) continue;
+      const first = !d.flags.includes(c.id);
+      if (first) d.flags.push(c.id);
+      d.checkpoint = c.id;
+      this.stats.save();
+      return { checkpoint: c, first };
     }
     return null;
   }
 
   update(dt, time) {
-    const current = this.checkpoints.findIndex((c) => c.id === this.stats.data.checkpoint);
-    this.checkpoints.forEach((c, i) => c.update(time, i <= current));
+    const flags = this.stats.data.flags;
+    this.checkpoints.forEach((c) => c.update(time, flags.includes(c.id) || c.id === this.stats.data.checkpoint));
     for (const c of this.chests) c.update(dt, time);
   }
 }

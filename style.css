@@ -222,6 +222,13 @@ canvas {
   color: #ffd76a;
 }
 
+/* Op de draak: klein en helemaal onderin, dan zie je jezelf en de draak goed */
+#prompt.ride {
+  bottom: 12px;
+  padding: 5px 12px;
+  font-size: 14px;
+}
+
 #toast {
   position: fixed;
   top: 30%;
@@ -643,4 +650,13 @@ canvas {
 
 #dialog-hint b {
   color: #ffd76a;
+}
+
+/* ---------- Wereldkaart (T) ---------- */
+.world-map {
+  display: block;
+  width: 100%;
+  border: 1px solid rgba(201, 185, 138, 0.5);
+  border-radius: 4px;
+  background: #2b3326;
 }

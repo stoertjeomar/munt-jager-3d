@@ -1,5 +1,6 @@
-// De levels van Munt Jager. Elk level is een pad van het begin (zuiden) naar de boss-arena (noorden),
-// met halverwege een checkpoint-vlag. Versla de boss om het volgende level te openen.
+// De gebieden van Munt Jager. Elk gebied is een pad van het begin naar de boss-arena,
+// met halverwege een checkpoint-vlag. Samen vormen ze één grote OPEN WERELD (zie onderaan):
+// ze liggen naast elkaar als een slang, en paden verbinden ze. Je kunt overal heen lopen.
 //
 // Pas deze lijsten aan om je eigen levels te maken!
 //   half      = hoe groot het level is: x van -half.x tot half.x, z van -half.z tot half.z
@@ -126,14 +127,92 @@ export const LEVELS = [
   },
 ];
 
-/** Welk level is nu gekozen? (staat in de save; of ?level=2 in de adresbalk om te testen) */
+// ======================================================================
+// De open wereld: alle gebieden aan elkaar
+// ======================================================================
+// De gebieden liggen naast elkaar (van west naar oost). Elk tweede gebied is omgedraaid, zodat het eind van
+// het ene gebied naast het begin van het volgende ligt (een slang):
+//
+//    noord   [Weide: boss]  [Vallei: start]   [Woud: boss]  [Hoogland: start]
+//              ↑ pad           ↓ pad            ↑ pad          ↓ pad
+//    zuid    [Weide: start] [Vallei: boss]    [Woud: start] [Hoogland: boss]
+//
+// Paden verbinden het eind van elk gebied met het begin van het volgende. Alles uit LEVELS hierboven
+// (vlaggen, kisten, vijanden, mensen, huizen...) wordt gewoon op de goede plek in de wereld gezet.
+export const REGION_WIDTH = 76; // zo breed is één gebied (meter)
+
+function buildOpenWorld() {
+  const regions = LEVELS.map((level, i) => {
+    const flip = i % 2 === 1; // omgedraaid: het pad loopt van noord naar zuid
+    const ox = (i - (LEVELS.length - 1) / 2) * REGION_WIDTH; // midden van het gebied (x)
+    const t = (x, z) => [ox + (flip ? -x : x), flip ? -z : z]; // plek in het level → plek in de wereld
+    return {
+      index: i, level, name: level.name, subtitle: level.subtitle, theme: level.theme, music: level.music,
+      tint: level.tint, boss: level.boss, trees: level.trees, flip, ox, t,
+      x0: ox - REGION_WIDTH / 2, x1: ox + REGION_WIDTH / 2, start: level.checkpoints[0][0],
+    };
+  });
+  const world = {
+    name: 'De wereld van Munt Jager', subtitle: 'Open wereld', open: true, theme: 'weide', music: 'weide', boss: null,
+    half: { x: (REGION_WIDTH * LEVELS.length) / 2, z: 100 },
+    regions, paths: [], arenas: [], checkpoints: [], chests: [], diamonds: [], npcs: [], dummies: [],
+    questItems: {}, houses: [], blocks: [], animals: [], village: null, trees: 0, path: [],
+  };
+  for (const r of regions) {
+    const L = r.level;
+    const t = r.t;
+    world.paths.push(L.path.map(([x, z]) => t(x, z)));
+    const [ax, az] = t(0, -78);
+    world.arenas.push({ id: L.boss, x: ax, z: az, radius: 18, open: r.flip ? -1 : 1, region: r.index });
+    world.checkpoints.push(...L.checkpoints.map(([id, name, x, z]) => [id, name, ...t(x, z)]));
+    world.chests.push(...L.chests.map(([id, x, y, z, item]) => { const [X, Z] = t(x, z); return [id, X, y, Z, item]; }));
+    world.diamonds.push(...L.diamonds.map(([id, x, y, z]) => { const [X, Z] = t(x, z); return [id, X, y, Z]; }));
+    // Omar staat maar één keer in de wereld: in Muntdorp
+    world.npcs.push(...L.npcs.filter((n) => n[0] !== 'omar' || r.index === 0).map(([who, x, z, q]) => [who, ...t(x, z), q]));
+    world.dummies.push(...(L.dummies ?? []).map(([x, z]) => t(x, z)));
+    for (const [q, spots] of Object.entries(L.questItems ?? {})) world.questItems[q] = spots.map(([x, z]) => t(x, z));
+    world.houses.push(...(L.houses ?? []).map(([x, z, ...rest]) => [...t(x, z), ...rest]));
+    world.blocks.push(...(L.blocks ?? []).map(([x, y, z, ...rest]) => { const [X, Z] = t(x, z); return [X, y, Z, ...rest]; }));
+    world.animals.push(...(L.animals ?? []).map(([kind, homes, n]) => [kind, homes.map(([x, z]) => t(x, z)), n]));
+    if (L.village) world.village = { center: t(...L.village.center) };
+  }
+  // Verbindingspaden: van vlak voor de boss-arena van het ene gebied naar het begin van het volgende
+  for (let i = 0; i < regions.length - 1; i++) {
+    const a = world.paths[i];
+    const b = world.paths[i + 1];
+    world.paths.push([a[a.length - 2], b[0]]);
+  }
+  return world;
+}
+
+export const WORLD = buildOpenWorld();
+export const REGIONS = WORLD.regions;
+
+/** In welk gebied (0, 1, 2, 3) ligt dit punt? (de grens is een beetje golvend, dat ziet er natuurlijker uit) */
+export function regionIndexAt(x, z) {
+  const wobble = Math.sin(z * 0.08) * 4 + Math.sin(z * 0.21) * 2;
+  const i = Math.floor((x + wobble + WORLD.half.x) / REGION_WIDTH);
+  return Math.min(REGIONS.length - 1, Math.max(0, i));
+}
+
+/** In welk gebied ligt deze vlag? */
+export function regionOfCheckpoint(id) {
+  const i = LEVELS.findIndex((l) => l.checkpoints.some((c) => c[0] === id));
+  return i < 0 ? 0 : i;
+}
+
+/** ?level=2 in de adresbalk (om te testen): begin aan het begin van dat gebied. Anders null. */
+export const URL_REGION = (() => {
+  const n = Number(new URLSearchParams(location.search).get('level'));
+  return n >= 1 && n <= LEVELS.length ? n - 1 : null;
+})();
+
+/** In welk gebied ben je nu? (waar je laatste vlag staat, of ?level=... om te testen) */
 export function currentLevelIndex() {
-  const fromUrl = Number(new URLSearchParams(location.search).get('level'));
-  if (fromUrl >= 1 && fromUrl <= LEVELS.length) return fromUrl - 1;
+  if (URL_REGION !== null) return URL_REGION;
   try {
     const save = JSON.parse(localStorage.getItem(SAVE_KEY));
-    const i = save?.currentLevel ?? 0;
-    return Math.min(Math.max(0, i), LEVELS.length - 1);
+    return save?.checkpoint ? regionOfCheckpoint(save.checkpoint) : 0;
   } catch {
     return 0;
   }
@@ -166,6 +245,6 @@ export const CASTLE = {
 /** Zitten we in het kasteel van Omar? (?level=omar in de adresbalk) */
 export const IN_CASTLE = new URLSearchParams(location.search).get('level') === 'omar';
 
-// In het kasteel blijft LEVEL_INDEX het level waar je vandaan kwam (dat staat nog in de save)
+// LEVEL_INDEX = het gebied waar je (bij het laden) bent. In het kasteel: waar je vandaan kwam.
 export const LEVEL_INDEX = currentLevelIndex();
-export const LEVEL = IN_CASTLE ? CASTLE : LEVELS[LEVEL_INDEX];
+export const LEVEL = IN_CASTLE ? CASTLE : WORLD;
