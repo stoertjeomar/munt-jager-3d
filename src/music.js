@@ -5,7 +5,7 @@ import { getAudio } from './audio.js';
 //
 //   Noten:  'C5' = de C in octaaf 5, 'F#4' = Fis, 'Bb3' = Bes.   '-' = noot langer aanhouden   '.' = stilte
 //   Akkoordpatronen (bas, arpeggio's): R = grondtoon (laag), O = grondtoon een octaaf hoger, 5 = kwint,
-//   1 3 5 8 7 = tonen van het akkoord, c = het hele akkoord tegelijk
+//   1 3 5 8 7 = tonen van het akkoord, b2 en b6 = een halve toon boven de grondtoon/kwint (eng!), c = het hele akkoord tegelijk
 //   Drums: x = slaan, . = stil
 //   div = hoeveel tekens er in één maat staan (8 = achtste noten, 16 = zestiende noten)
 //
@@ -89,18 +89,21 @@ const SONGS = {
     ],
   },
 
-  // Gewone bosses: spannend en snel
+  // Gewone bosses: gevaarlijk en eng (spookkoor, grommende bas, zware drums)
   boss: {
-    bpm: 144, gain: 0.6,
-    chords: ['Em', 'Em', 'C', 'D', 'Em', 'Em', 'C', 'B'],
+    bpm: 138, gain: 0.7,
+    chords: ['Em', 'F', 'Em', 'D#dim', 'Em', 'F', 'C', 'B'],
     tracks: [
-      { inst: 'saw', vol: 0.09, div: 8, fx: true, notes: `
-        E5 - B4 - E5 F#5 G5 - | F#5 - E5 - D5 - B4 - | C5 - E5 - G5 - E5 C5 | D5 - F#5 - A5 - F#5 D5 |
-        E5 - G5 - B5 - A5 G5 | F#5 - G5 - A5 - B5 - | C6 - B5 - A5 - G5 E5 | D#5 - F#5 - B5 - - .` },
-      { inst: 'bass', vol: 0.24, div: 8, pattern: 'R R O R R R O R' },
-      { inst: 'drums', vol: 0.55, div: 16, kit: {
-        kick: 'x...x...x...x...', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.',
-        crash: 'x...............|................|................|................' } },
+      { inst: 'brass', vol: 0.11, div: 8, fx: true, notes: `
+        E5 - - - F5 - E5 - | A5 - - - C6 - B5 - | G5 - F#5 - E5 - - - | D#5 - F#5 - A5 - C6 - |
+        B5 - - - C6 - B5 - | A5 - G5 - F5 - E5 - | G5 - E5 - C5 - E5 - | D#5 - - - - - . .` },
+      { inst: 'choir', vol: 0.06, div: 1, oct: 4, pattern: 'c', fx: true },
+      { inst: 'growl', vol: 0.15, div: 16, pattern: 'R . R R R . R R R . R R O . R R' },
+      { inst: 'strings', vol: 0.022, div: 16, oct: 5, pattern: '5 b6 5 b6 5 b6 5 b6 5 b6 5 b6 5 b6 5 b6' },
+      { inst: 'drums', vol: 0.6, div: 16, kit: {
+        boom: 'x.....x.x.....x.', bigsnare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.',
+        crash: 'x...............|................|................|................',
+        tom: `${'.'.repeat(112)}........x.x.x.xx` } },
     ],
   },
 
@@ -117,29 +120,33 @@ const SONGS = {
     ],
   },
 
-  // GEKKE BOSS-MUZIEK tegen Omar! Op stand 1 (als hij boos wordt) gaat alles sneller en harder.
+  // ENGE BOSS-MUZIEK tegen Omar: een spookkoor, een grommende bas, kerkklokken en zware drums.
+  // Op stand 1 (als hij boos wordt) gaat alles sneller en harder: dubbele bassdrum, gillende violen en een tweede stem.
   omar: {
-    bpm: 156, faster: 1.12, gain: 0.65,
-    chords: ['Cm', 'Cm', 'Ab', 'G', 'Cm', 'Cm', 'Fm', 'G', 'Ab', 'Bb', 'Gm', 'Cm', 'Ab', 'Bb', 'G', 'G7'],
+    bpm: 150, faster: 1.12, gain: 0.72,
+    chords: ['Cm', 'Db', 'Cm', 'Bdim', 'Cm', 'Db', 'Ab', 'G', 'Fm', 'Db', 'Ab', 'G', 'Fm', 'Db', 'Bdim', 'G7'],
     tracks: [
-      { inst: 'lead', vol: 0.11, div: 8, fx: true, notes: `
-        C5 - G5 - C6 - B5 C6 | G5 Eb5 C5 Eb5 G5 - Ab5 G5 | Ab5 - C6 - Eb6 - C6 Ab5 | B5 - D6 - G6 - F6 D6 |
-        C6 - G5 - Eb5 - C5 Eb5 | G5 - C6 - Eb6 - D6 C6 | Ab5 - F5 - C5 - F5 Ab5 | G5 F5 Eb5 D5 B4 - G4 - |
-        C5 - Eb5 - Ab5 - G5 Ab5 | D5 - F5 - Bb5 - A5 Bb5 | G5 - Bb5 - D6 - C6 Bb5 | C6 - - - G5 - Eb5 - |
-        Eb6 D6 C6 D6 Eb6 - C6 - | F6 Eb6 D6 Eb6 F6 - D6 - | G6 F6 D6 B5 G5 F5 D5 B4 | G4 - B4 - D5 - F5 -` },
-      // Als hij boos is: een tweede stem eronder
-      { inst: 'saw', vol: 0.06, div: 8, min: 1, shift: -12, fx: true, sameAs: 0 },
-      { inst: 'bass', vol: 0.24, div: 8, max: 0, pattern: 'R O R O R O 5 O' },
-      { inst: 'bass', vol: 0.24, div: 16, min: 1, pattern: 'R R O R R O R R R O R R 5 5 O O' },
-      // Hoempapa-orgel: daar wordt het gek van
-      { inst: 'organ', vol: 0.05, div: 8, oct: 4, pattern: '. c . c . c . c' },
-      { inst: 'drums', vol: 0.6, div: 16, max: 0, kit: {
-        kick: 'x...x...x...x...', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.',
-        crash: 'x...............|................|................|................' } },
-      { inst: 'drums', vol: 0.65, div: 16, min: 1, kit: {
-        kick: 'x.x.x...x.x.x...', snare: '....x.......x..x', hat: 'xxxxxxxxxxxxxxxx',
-        crash: 'x...............|................|x...............|................',
-        tom: '................|................|................|........x.x.xxxx' } },
+      { inst: 'brass', vol: 0.12, div: 8, fx: true, notes: `
+        C5 - - - Db5 - C5 - | F5 - - - Ab5 - G5 - | Eb5 - D5 - C5 - - - | B4 - D5 - F5 - Ab5 - |
+        G5 - - - Ab5 - G5 - | F5 - Eb5 - Db5 - C5 - | Eb5 - C5 - Ab4 - C5 - | B4 - - - - - . . |
+        C6 - - - Db6 - C6 - | Ab5 - - - G5 - F5 - | Eb6 - - - D6 - C6 - | B5 - D6 - F6 - - - |
+        Ab5 - G5 - F5 - Eb5 - | F5 - Eb5 - Db5 - C5 - | D5 - F5 - Ab5 - B5 - | G5 F5 D5 B4 G4 - - -` },
+      // Als hij boos is: een gillende tweede stem, een octaaf hoger
+      { inst: 'lead', vol: 0.05, div: 8, min: 1, shift: 12, fx: true, sameAs: 0 },
+      { inst: 'choir', vol: 0.07, div: 1, oct: 4, pattern: 'c', fx: true },
+      { inst: 'drone', vol: 0.12, div: 1, pattern: 'R' },
+      { inst: 'toll', vol: 0.1, div: 1, pattern: 'O', fx: true },
+      { inst: 'growl', vol: 0.16, div: 16, max: 0, pattern: 'R . R R R . R R R . R R O . R R' },
+      { inst: 'growl', vol: 0.16, div: 16, min: 1, pattern: 'R R R R R R R R O R R R R R b2 R' },
+      { inst: 'strings', vol: 0.03, div: 16, min: 1, oct: 5, pattern: '5 b6 5 b6 5 b6 5 b6 5 b6 5 b6 5 b6 5 b6' },
+      { inst: 'drums', vol: 0.62, div: 16, max: 0, kit: {
+        boom: 'x.....x.x.....x.', bigsnare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.',
+        crash: 'x...............|................|................|................',
+        tom: `${'.'.repeat(112)}........x.x.x.xx` } },
+      { inst: 'drums', vol: 0.66, div: 16, min: 1, kit: {
+        dbl: 'xxxxxxxxxxxxxxxx', boom: 'x.......x.......', bigsnare: '....x.......x...', open: '..x...x...x...x.',
+        crash: 'x...............|................',
+        tom: `${'.'.repeat(48)}....x.x.x.x.xxxx` } },
     ],
   },
 
@@ -241,7 +248,105 @@ function hiss(a, t, dur, vol, out, type, f, q = 1) {
   src.stop(t + dur + 0.05);
 }
 
+// Vervorming: maakt een geluid ruw en grommend (voor de enge bas en het brullende koper)
+const curves = {};
+function distortion(a, amount) {
+  if (!curves[amount]) {
+    const c = new Float32Array(1024);
+    for (let i = 0; i < c.length; i++) c[i] = Math.tanh((i / 511.5 - 1) * amount);
+    curves[amount] = c;
+  }
+  const ws = a.ctx.createWaveShaper();
+  ws.curve = curves[amount];
+  return ws;
+}
+
+/** Omhullende: zacht beginnen, aanhouden en uitsterven. Geeft de volumeknop terug. */
+function envelope(a, t, dur, vol, attack, release) {
+  const g = a.ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(vol, t + attack);
+  g.gain.setValueAtTime(vol, t + Math.max(attack, dur - release));
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur + release);
+  return g;
+}
+
+/** Een paar zaagtand-golven (een beetje ontstemd: dan klinkt het voller) die allemaal naar `into` gaan. */
+function saws(a, f, t, stop, into, detunes, type = 'sawtooth') {
+  for (const d of detunes) {
+    const o = a.ctx.createOscillator();
+    o.type = type;
+    o.frequency.value = f;
+    o.detune.value = d;
+    o.connect(into);
+    o.start(t);
+    o.stop(stop);
+  }
+}
+
+function filter(a, type, f, q = 1) {
+  const node = a.ctx.createBiquadFilter();
+  node.type = type;
+  node.frequency.value = f;
+  node.Q.value = q;
+  return node;
+}
+
 const INSTRUMENTS = {
+  // Brullend koper: ruw, en het "gaat open" aan het begin van elke noot
+  brass: (a, f, t, d, v, out) => {
+    const g = envelope(a, t, d, v, 0.02, 0.1);
+    const lp = filter(a, 'lowpass', 300, 3);
+    lp.frequency.setValueAtTime(300, t);
+    lp.frequency.exponentialRampToValueAtTime(2600, t + 0.06);
+    lp.frequency.exponentialRampToValueAtTime(1300, t + 0.3);
+    const ws = distortion(a, 2.5);
+    saws(a, f, t, t + d + 0.2, ws, [-9, 9]);
+    ws.connect(lp).connect(g).connect(out);
+  },
+  // Grommende bas: vervormd en laag
+  growl: (a, f, t, d, v, out) => {
+    const g = envelope(a, t, d, v, 0.004, 0.04);
+    const ws = distortion(a, 6);
+    saws(a, f, t, t + d + 0.1, ws, [-12, 12]);
+    ws.connect(filter(a, 'lowpass', 900, 2)).connect(g).connect(out);
+  },
+  // Diep brommen onder alles (het filter beweegt langzaam heen en weer)
+  drone: (a, f, t, d, v, out) => {
+    const g = envelope(a, t, d, v, 0.4, 0.6);
+    const lp = filter(a, 'lowpass', 260, 8);
+    const lfo = a.ctx.createOscillator();
+    const depth = a.ctx.createGain();
+    lfo.frequency.value = 0.35;
+    depth.gain.value = 120;
+    lfo.connect(depth).connect(lp.frequency);
+    lfo.start(t);
+    lfo.stop(t + d + 0.7);
+    saws(a, f, t, t + d + 0.7, lp, [-6, 6]);
+    lp.connect(g).connect(out);
+  },
+  // Spookkoor: "aaah" (zaagtanden door twee filters die klinken als een mond)
+  choir: (a, f, t, d, v, out) => {
+    const g = envelope(a, t, d, v * 3, 0.5, 0.8);
+    const mouth = a.ctx.createGain();
+    const f1 = filter(a, 'bandpass', 700, 4);
+    const f2 = filter(a, 'bandpass', 1150, 5);
+    const f2gain = a.ctx.createGain();
+    f2gain.gain.value = 0.6;
+    mouth.connect(f1).connect(g);
+    mouth.connect(f2).connect(f2gain).connect(g);
+    saws(a, f, t, t + d + 0.9, mouth, [-14, 0, 14]);
+    g.connect(out);
+  },
+  // Een diepe kerkklok (de tonen van een klok passen niet precies bij elkaar: daarom klinkt het zo spookachtig)
+  toll: (a, f, t, d, v, out) => {
+    for (const [ratio, vol, decay] of [[1, 1, 3.5], [2, 0.45, 2.5], [2.76, 0.35, 1.8], [5.4, 0.18, 0.9], [8.9, 0.08, 0.4]]) {
+      pling(a, 'sine', f * ratio, t, decay, v * vol, out);
+    }
+    hiss(a, t, 0.08, v * 0.4, out, 'bandpass', 3000, 1);
+  },
+  // Gillende violen (heel snel heen en weer tussen twee noten)
+  strings: (a, f, t, d, v, out) => osc(a, 'sawtooth', f, t, d, v, out, { attack: 0.005, release: 0.03, filter: 3000 }),
   lead: (a, f, t, d, v, out) => {
     osc(a, 'square', f, t, d, v * 0.6, out, { detune: -7, filter: 2600 });
     osc(a, 'square', f, t, d, v * 0.6, out, { detune: 7, filter: 2600 });
@@ -271,6 +376,37 @@ const INSTRUMENTS = {
 };
 
 const DRUMS = {
+  // Zware bassdrum: BOEM (met een tikje erbovenop)
+  boom: (a, t, v, out) => {
+    const o = a.ctx.createOscillator();
+    const g = a.ctx.createGain();
+    o.frequency.setValueAtTime(120, t);
+    o.frequency.exponentialRampToValueAtTime(32, t + 0.3);
+    g.gain.setValueAtTime(v, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+    o.connect(g).connect(out);
+    o.start(t);
+    o.stop(t + 0.6);
+    hiss(a, t, 0.015, v * 0.3, out, 'highpass', 3000);
+  },
+  // Snelle, strakke bassdrum (voor de dubbele bassdrum als Omar boos is)
+  dbl: (a, t, v, out) => {
+    const o = a.ctx.createOscillator();
+    const g = a.ctx.createGain();
+    o.frequency.setValueAtTime(130, t);
+    o.frequency.exponentialRampToValueAtTime(55, t + 0.06);
+    g.gain.setValueAtTime(v * 0.6, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    o.connect(g).connect(out);
+    o.start(t);
+    o.stop(t + 0.15);
+  },
+  // Grote, harde snaredrum
+  bigsnare: (a, t, v, out) => {
+    hiss(a, t, 0.32, v * 0.6, out, 'bandpass', 1600, 0.5);
+    hiss(a, t, 0.12, v * 0.25, out, 'highpass', 5000);
+    pling(a, 'triangle', 170, t, 0.15, v * 0.5, out);
+  },
   kick: (a, t, v, out) => {
     const o = a.ctx.createOscillator();
     const g = a.ctx.createGain();
@@ -453,7 +589,7 @@ export class Music {
         continue;
       }
       const base = ch.root + 12 * ((track.oct ?? 3) - 3);
-      const tones = { 1: 0, 3: ch.third, 5: ch.fifth, 7: ch.seventh ?? 12, 8: 12 };
+      const tones = { 1: 0, 3: ch.third, 5: ch.fifth, 7: ch.seventh ?? 12, 8: 12, b2: 1, b6: 8 };
       if (token === 'c') {
         for (const k of [0, ch.third, ch.fifth]) play(a, freq(base + k), t, dur, track.vol, out);
       } else if (token === 'R') play(a, freq(ch.root - 12), t, dur, track.vol, out);

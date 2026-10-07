@@ -687,7 +687,7 @@ function updateTrail(dt) {
 // ---------- Muziek ----------
 const music = new Music();
 
-/** Welk liedje past nu? Elk level heeft zijn eigen deuntje, bosses hebben spannende muziek en Omar heeft GEKKE muziek. */
+/** Welk liedje past nu? Elk level heeft zijn eigen deuntje, bosses hebben enge muziek en Omar de engste. */
 function updateMusic() {
   const boss = state.activeBoss;
   if (!gameStarted) music.play(null);
