@@ -7,10 +7,12 @@ import { buildCharacter } from './character.js';
 import { Sword } from './sword.js';
 import { createHelmetMesh } from './gear.js';
 import { LEVEL } from './levels.js';
+import { CHARACTERS, otherPlayable } from './player.js';
 
 // NPC's: personages die in de wereld wonen. Praat met ze (E) en ze geven je een zij-quest.
 // Welke NPC waar staat, staat per level in levels.js (npcs = [personage, x, z, quest]).
 // Koopman Kobus staat met zijn kraampje bij het begin van elk level: bij hem geef je je munten uit.
+// Omar de Baas staat ook in elk level: hij geeft geen quest, maar daagt je uit voor een gevecht (zie omar.js).
 
 const PEOPLE = {
   mila: { name: 'Mila', file: 'models/personages/mila.glb', height: 1.45 },
@@ -21,7 +23,19 @@ const PEOPLE = {
     name: 'Koopman Kobus', file: null, height: 1.6, shop: true,
     colors: { shirt: 0x2f7a4a, shorts: 0x6b4a2b, sash: 0xffd23a, straw: 0x5b3a8a, band: 0xffd23a, hair: 0x8a5a2b, cuff: 0x6b4a2b },
   },
+  // Omar draagt het personage dat jij NIET koos (file wordt ingevuld in NPCs), met de kroon en het Diamanten zwaard
+  omar: { name: 'Omar', file: null, height: 1.75, weapon: 'diamant', helmet: 'kroon', omar: true },
 };
+
+// Wat Omar roept als je in de buurt bent
+const OMAR_TAUNTS = [
+  'Hé mannetje! Durf je?',
+  'Ik ben Omar. De BAAS!',
+  'Druk op E als je durft!',
+  'Wat een klein zwaardje, hehe!',
+  'Ik heb ALLE krachten. Jij niet!',
+  'Mijn kasteel is véél gaver dan hier.',
+];
 
 // Wat de koopman zegt als je bij hem komt
 const SHOP_GREETINGS = [
@@ -189,6 +203,8 @@ class NPC {
   }
 
   async load() {
+    // Elke keer laden krijgt een nummer: is er intussen opnieuw geladen (Omar wisselt van kostuum)? Dan niks doen.
+    const token = (this.loadToken = (this.loadToken ?? 0) + 1);
     const height = this.person.height;
     if (!this.person.file) {
       const c = buildCharacter(this.person.colors);
@@ -202,6 +218,7 @@ class NPC {
     } catch {
       return;
     }
+    if (token !== this.loadToken) return;
     const model = cloneModel(gltf.scene);
     model.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(model);
@@ -261,6 +278,181 @@ class NPC {
   }
 }
 
+/** Een tekstwolkje boven Omars hoofd (zoals in een stripboek). Ook gebruikt door Omar in zijn arena (omarFighter.js). */
+export function makeBubble() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, toneMapped: false }));
+  sprite.scale.set(3.4, 0.85, 1);
+  sprite.renderOrder = 6;
+  sprite.visible = false;
+  sprite.userData.draw = (text) => {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, 512, 128);
+    // Wit wolkje met een zwarte rand en een puntje naar beneden
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#111111';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.roundRect(8, 8, 496, 92, 26);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(234, 97);
+    ctx.lineTo(256, 122);
+    ctx.lineTo(278, 97);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillRect(237, 90, 38, 10); // de rand onder het puntje weg
+    // Tekst: kleiner maken als hij niet past
+    let size = 36;
+    ctx.font = `bold ${size}px system-ui, sans-serif`;
+    while (ctx.measureText(text).width > 460 && size > 16) {
+      size -= 2;
+      ctx.font = `bold ${size}px system-ui, sans-serif`;
+    }
+    ctx.fillStyle = '#2a0a3a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 256, 55);
+    texture.needsUpdate = true;
+  };
+  return sprite;
+}
+
+/**
+ * Omar de Baas in een level: hij doet stoer, laat zijn zwaard zien, roept dingen en wacht tot je hem uitdaagt (E).
+ * Het uitdagen, de reis naar zijn kasteel en het gevecht staan in omar.js.
+ */
+class OmarNPC extends NPC {
+  constructor(scene, def, colliders, stats) {
+    super(scene, def, colliders);
+    this.omar = true;
+    this.stats = stats;
+    this.costume = otherPlayable(stats.data.character);
+    // Kijk naar het begin van het level: daar komt de speler vandaan
+    const [, , sx, sz] = LEVEL.checkpoints[0];
+    this.mesh.rotation.y = Math.atan2(sx - def[1], sz + 2.5 - def[2]);
+    this.markerText = '♛';
+    this.marker.userData.draw('♛', '#c77dff');
+    this.bubble = makeBubble();
+    this.bubble.position.y = this.person.height + 1.25;
+    this.mesh.add(this.bubble);
+    this.bubbleTimer = 0;
+    this.tauntTimer = 3;
+    this.lastTaunt = null;
+    this.time = 0;
+    this.nextFlourish = 5; // dan zwaait hij met zijn zwaard
+    this.nextSpin = 11; // dan doet hij een wervelslag (om op te scheppen)
+    this.flourish = null; // 0 → 1 tijdens de zwaardzwaai
+    this.spin = null; // 0 → 1 tijdens de wervelslag
+    this.cheer = false; // true als hij je meeneemt naar zijn kasteel: zwaard omhoog en lachen
+  }
+
+  /** Laat Omar iets zeggen in een tekstwolkje. */
+  say(text, seconds = 2.5) {
+    this.bubble.userData.draw(text);
+    this.bubble.visible = true;
+    this.bubbleTimer = seconds;
+  }
+
+  /** Ander personage aantrekken (als de speler van held wisselt, wisselt Omar mee). */
+  reloadCostume(file) {
+    PEOPLE.omar.file = file;
+    this.inner.clear();
+    this.rig = this.animator = this.sword = null;
+    this.load();
+  }
+
+  /** Een plagerige zin kiezen (niet twee keer dezelfde achter elkaar). */
+  randomTaunt() {
+    const d = this.stats.data.omar ?? {};
+    const pool = [...OMAR_TAUNTS];
+    if (d.wins > 0) pool.push('Revanche! Ik wil revanche!', 'Dat was gewoon geluk, hoor!');
+    if (d.losses > 0) pool.push('Hahaha, kom je weer verliezen?');
+    let text = this.lastTaunt;
+    while (text === this.lastTaunt) text = pool[Math.floor(Math.random() * pool.length)];
+    this.lastTaunt = text;
+    return text;
+  }
+
+  update(dt, time, playerPos) {
+    this.time += dt;
+    // Heeft de speler een ander personage gekozen? Dan trekt Omar het andere aan.
+    const want = otherPlayable(this.stats.data.character);
+    if (want !== this.costume) {
+      this.costume = want;
+      this.reloadCostume(CHARACTERS.find((c) => c.id === want).file);
+    }
+    const to = playerPos.clone().sub(this.position).setY(0);
+    const dist = to.length();
+    if (dist < 12 && dist > 0.01) {
+      let diff = Math.atan2(to.x, to.z) - this.mesh.rotation.y;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      this.mesh.rotation.y += diff * Math.min(1, 4 * dt);
+    }
+    this.marker.position.y = this.person.height + 0.55 + Math.sin(time * 3) * 0.08;
+
+    // Tekstwolkje, en af en toe iets roepen als je in de buurt bent
+    if (this.bubbleTimer > 0) {
+      this.bubbleTimer -= dt;
+      if (this.bubbleTimer <= 0) this.bubble.visible = false;
+    }
+    this.marker.visible = !this.bubble.visible;
+    this.tauntTimer -= dt;
+    if (this.tauntTimer <= 0) {
+      this.tauntTimer = 6 + Math.random() * 3;
+      if (dist > 4 && dist < 18 && !this.bubble.visible && !this.cheer) this.say(this.randomTaunt());
+    }
+
+    if (!this.rig || (dist > 30 && !this.cheer)) return;
+
+    // Opscheppen: om de paar seconden een zwaardzwaai, en af en toe een wervelslag
+    const idle = this.flourish === null && this.spin === null && !this.cheer;
+    if (idle && this.time >= this.nextSpin) {
+      this.spin = 0;
+      this.nextSpin = this.time + 11;
+      this.nextFlourish = this.time + 3;
+    } else if (idle && this.time >= this.nextFlourish) {
+      this.flourish = 0;
+      this.nextFlourish = this.time + 5;
+    }
+    if (this.flourish !== null) {
+      this.flourish += dt / 0.45;
+      if (this.flourish >= 1) this.flourish = null;
+    }
+    if (this.spin !== null) {
+      this.spin += dt / 0.55;
+      this.inner.rotation.y = Math.min(1, this.spin) * Math.PI * 4;
+      if (this.spin >= 1) {
+        this.spin = null;
+        this.inner.rotation.y = 0;
+      }
+    }
+
+    const wave = !this.cheer && this.flourish === null && this.spin === null && dist > 2.5 && dist < 10;
+    this.animator.update(dt, { moving: false, onGround: true, attack: this.flourish, pickup: null, wave, spin: this.spin !== null });
+    const r = this.rig;
+    if (this.cheer) {
+      // Zwaard recht omhoog en schudden van het lachen
+      r.armR.rotation.set(-2.9, 0, -0.15);
+      r.elbowR.rotation.x = -0.1;
+      r.handR.rotation.x = 0.2;
+      r.armL.rotation.set(-0.2, 0, 0.5);
+      r.hips.rotation.x = -0.15 + Math.sin(this.time * 30) * 0.05;
+    } else if (!wave && this.flourish === null && this.spin === null) {
+      // Stoere houding: linkerarm opzij met een dikke spierbal, borst vooruit
+      r.armL.rotation.set(-0.2, 0, 1.45);
+      r.elbowL.rotation.set(0, 0, 1.7);
+      r.hips.rotation.x -= 0.06;
+    }
+    r.apply?.();
+  }
+}
+
 /** Dingen om op te rapen voor een quest (sterren, batterijen). */
 function buildQuestItem(kind, starModel) {
   if (kind === 'star' && starModel) {
@@ -296,16 +488,25 @@ export class NPCs {
   constructor(scene, stats, colliders) {
     this.scene = scene;
     this.stats = stats;
-    this.list = LEVEL.npcs.map((def) => new NPC(scene, def, colliders));
-    // De koopman met zijn kraampje, vlak bij het begin van het level
+    // Omar draagt het personage dat jij niet koos
+    PEOPLE.omar.file = CHARACTERS.find((c) => c.id === otherPlayable(stats.data.character)).file;
+    const defs = [...LEVEL.npcs];
     const [, , gx, gz] = LEVEL.checkpoints[0];
-    this.list.push(new NPC(scene, ['koopman', gx + 3.6, gz - 3], colliders));
-    const stall = buildStall();
-    stall.position.set(gx + 3.6 + 1.9, 0, gz - 3);
-    stall.rotation.y = -Math.PI / 2; // voorkant naar de koopman en het pad
-    scene.add(stall);
-    colliders.push(new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(gx + 5.5, 0.6, gz - 2.75), new THREE.Vector3(1.0, 1.2, 2.9)));
-    this.koopman = this.list[this.list.length - 1];
+    // Vergeten Omar in levels.js te zetten? Dan staat hij gewoon vlak bij het begin.
+    if (!LEVEL.castle && !defs.some((d) => d[0] === 'omar')) defs.push(['omar', gx - 4, gz - 9]);
+    this.list = defs.map((def) => (def[0] === 'omar' ? new OmarNPC(scene, def, colliders, stats) : new NPC(scene, def, colliders)));
+    this.omar = this.list.find((n) => n.omar) ?? null;
+    this.koopman = null;
+    if (!LEVEL.castle) {
+      // De koopman met zijn kraampje, vlak bij het begin van het level
+      this.list.push(new NPC(scene, ['koopman', gx + 3.6, gz - 3], colliders));
+      const stall = buildStall();
+      stall.position.set(gx + 3.6 + 1.9, 0, gz - 3);
+      stall.rotation.y = -Math.PI / 2; // voorkant naar de koopman en het pad
+      scene.add(stall);
+      colliders.push(new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(gx + 5.5, 0.6, gz - 2.75), new THREE.Vector3(1.0, 1.2, 2.9)));
+      this.koopman = this.list[this.list.length - 1];
+    }
     this.items = []; // quest-voorwerpen in de wereld
     loadGLB('models/kaykit/star.glb').catch(() => null).then((star) => {
       for (const [questId, spots] of Object.entries(LEVEL.questItems ?? {})) {
@@ -401,6 +602,7 @@ export class NPCs {
   /** Markeringen voor de minimap. */
   mapMarkers() {
     const marks = this.list.map((n) => {
+      if (n.omar) return { x: n.position.x, z: n.position.z, icon: '♛', color: '#c77dff' };
       if (n.shop) return { x: n.position.x, z: n.position.z, icon: '€', color: '#ffd23a' };
       const s = this.state(n.questId);
       return { x: n.position.x, z: n.position.z, icon: s === 'nieuw' ? '!' : s === 'klaar' ? '?' : '●', color: s === 'beloond' || s === 'actief' ? '#cfcfcf' : '#ffd23a' };

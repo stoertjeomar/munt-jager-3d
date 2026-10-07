@@ -8,13 +8,15 @@ const MAX_MOUSE_JUMP = 250; // grotere sprongen in één muisbeweging zijn een b
 const PITCH_MIN = -0.95; // zo ver kun je omhoog kijken (negatief = camera onder je hoofd, kijkt omhoog)
 const PITCH_MAX = 1.3; // zo ver kun je van bovenaf kijken
 const ORBIT_MIN = -0.08; // lager dan dit gaat de camera niet (anders zakt hij door de grond); daarna kantelt hij alleen nog omhoog
+export const ZOOM_MIN = 4; // zo dichtbij kan de camera komen (scrollen = zoomen)
+export const ZOOM_MAX = 20; // zo ver kan hij weg
 
 export class CameraRig {
   constructor(camera, domElement) {
     this.camera = camera;
     this.yaw = 0; // horizontale hoek (radialen)
     this.pitch = 0.45; // verticale hoek (radialen)
-    this.distance = 7.5;
+    this.distance = ZOOM_MIN; // bij het begin van het spel helemaal ingezoomd; met scrollen zoom je uit
     this.target = new THREE.Vector3();
     this.domElement = domElement;
     this.ray = new THREE.Ray();
@@ -40,7 +42,7 @@ export class CameraRig {
       'wheel',
       (e) => {
         e.preventDefault();
-        this.distance = THREE.MathUtils.clamp(this.distance + e.deltaY * 0.01, 4, 20);
+        this.distance = THREE.MathUtils.clamp(this.distance + e.deltaY * 0.01, ZOOM_MIN, ZOOM_MAX);
       },
       { passive: false }
     );

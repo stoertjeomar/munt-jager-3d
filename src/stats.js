@@ -83,6 +83,15 @@ function freshSave() {
     chests: [], // geopende kisten
     diamonds: [], // gevonden diamanten
     shop: {}, // hoe vaak je iets in de winkel kocht: { zaadje: 1, hart: 2, ... }
+    // Omar de Baas (zie omar.js): hoe vaak je van hem won of verloor, en waar je vandaan kwam
+    omar: {
+      wins: 0, // zo vaak heb jij Omar verslagen
+      losses: 0, // zo vaak won Omar
+      visits: 0, // zo vaak was je in zijn kasteel (0 = je krijgt het lange filmpje)
+      seen: false, // heb je de uitleg over Omar al gezien?
+      trip: null, // { level, checkpoint }: waar je was toen Omar je meenam
+      back: null, // { level, checkpoint, result }: zo kom je terug in je level
+    },
     victory: false,
   };
 }

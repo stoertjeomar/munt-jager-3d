@@ -303,7 +303,7 @@ export class UI {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     // Grond, het pad en de rand van het level
-    const colors = { weide: '#4f8f4e', woud: '#2c4f2c', hoogland: '#7c776a' };
+    const colors = { weide: '#4f8f4e', woud: '#2c4f2c', hoogland: '#7c776a', kasteel: '#3a2348' };
     ctx.fillStyle = '#2b3326';
     ctx.fillRect(0, 0, size, size);
     const [bx, by] = toMap(-BOUNDS.x, -BOUNDS.z);
@@ -328,15 +328,16 @@ export class UI {
       ctx.fillStyle = n.color;
       ctx.fillText(n.icon, mx, my);
     }
-    // Arena's (doodshoofd)
+    // Arena's (doodshoofd; bij Omar een paarse kroon)
     for (const a of ARENAS) {
       const [mx, my] = toMap(a.center.x, a.center.z);
-      ctx.fillStyle = '#ff5a5a';
-      ctx.fillText('☠', mx, my);
+      ctx.fillStyle = a.id === 'omar' ? '#c77dff' : '#ff5a5a';
+      ctx.fillText(a.id === 'omar' ? '♛' : '☠', mx, my);
     }
     // Checkpoints: een vlaggetje (goud als je er al was)
     const reached = CHECKPOINTS.findIndex((c) => c.id === this.stats.data.checkpoint);
     CHECKPOINTS.forEach((c, i) => {
+      if (LEVEL.castle) return; // in Omars kasteel zijn er geen vlaggen
       const [mx, my] = toMap(c.position.x, c.position.z);
       ctx.fillStyle = i <= reached ? '#ffd76a' : '#e8e8e8';
       ctx.fillText('⚑', mx, my);
