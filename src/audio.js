@@ -7,16 +7,27 @@ let master = null;
 let noiseBuffer = null;
 let muted = false;
 
-// Echte geluiden uit het Kenney Starter Kit (sounds/). Als ze geladen zijn, worden ze gebruikt
-// in plaats van het zelfgemaakte geluid met dezelfde naam.
-const SAMPLE_FILES = { jump: 'jump', coin: 'coin', land: 'land', defeat: 'break', lose: 'fall', steps: 'walking' };
+// Echte geluiden uit het Kenney Starter Kit (sounds/) en een paar extra (sounds/extra/, zie de Credits).
+// Als ze geladen zijn, worden ze gebruikt in plaats van het zelfgemaakte geluid met dezelfde naam.
+const SAMPLE_FILES = {
+  jump: 'jump.ogg', coin: 'coin.ogg', land: 'land.ogg', defeat: 'break.ogg', lose: 'fall.ogg', steps: 'walking.ogg',
+  boing: 'extra/boing.mp3', // op een vijand springen
+  punch: 'extra/punch.mp3', // een vijand verslaan
+  wow: 'extra/wow.mp3', // een level omhoog
+  faaah: 'extra/faaah.mp3', // doodgaan
+  shine: 'extra/shine.mp3', // een kist openen
+  donder: 'extra/donder.mp3', // Omars bliksem
+};
+// Hoe hard elk geluidje klinkt (0 tot 1)
+const SAMPLE_VOLUME = { lose: 0.8, boing: 1, punch: 0.45, wow: 0.7, faaah: 0.6, shine: 0.7, donder: 0.9 };
+const MASTER = 0.9; // hoofdvolume (hoger = harder)
 const samples = {};
 let footsteps = null;
 
 async function loadSamples() {
   for (const [name, file] of Object.entries(SAMPLE_FILES)) {
     try {
-      const data = await (await fetch(`sounds/${file}.ogg`)).arrayBuffer();
+      const data = await (await fetch(`sounds/${file}`)).arrayBuffer();
       samples[name] = await ctx.decodeAudioData(data);
     } catch {
       // geen probleem: dan gebruiken we het zelfgemaakte geluid
@@ -58,8 +69,15 @@ export function unlockAudio() {
   if (!ctx) {
     ctx = new (window.AudioContext || window.webkitAudioContext)();
     master = ctx.createGain();
-    master.gain.value = 0.5;
-    master.connect(ctx.destination);
+    master.gain.value = MASTER;
+    // Een begrenzer: alles mag hard, maar het gaat nooit kraken (ook niet als er veel tegelijk klinkt)
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -8;
+    limiter.knee.value = 6;
+    limiter.ratio.value = 12;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.25;
+    master.connect(limiter).connect(ctx.destination);
 
     // Een seconde witte ruis, voor zwiep- en klap-geluiden
     noiseBuffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
@@ -72,7 +90,7 @@ export function unlockAudio() {
 
 export function toggleMute() {
   muted = !muted;
-  if (master) master.gain.value = muted ? 0 : 0.5;
+  if (master) master.gain.value = muted ? 0 : MASTER;
   return muted;
 }
 
@@ -185,8 +203,13 @@ const SOUNDS = {
     tone({ type: 'square', from: f, duration: i === 4 ? 0.5 : 0.12, volume: 0.1, delay: i * 0.09 });
     tone({ type: 'triangle', from: f / 2, duration: i === 4 ? 0.5 : 0.12, volume: 0.12, delay: i * 0.09 });
   }),
-  // Dash: snelle windvlaag
-  dash: () => noise({ from: 400, to: 4000, duration: 0.22, volume: 0.3, q: 0.9 }),
+  // Dash: een anime-teleport! "Sjwiep... tsjing" (een hoge zwiep, een flits en een korte echo)
+  dash: () => {
+    noise({ from: 6000, to: 900, duration: 0.14, volume: 0.35, q: 1.2 });
+    tone({ type: 'sine', from: 2600, to: 500, duration: 0.09, volume: 0.18 });
+    tone({ type: 'triangle', from: 1800, to: 3200, duration: 0.07, volume: 0.1, delay: 0.06 });
+    tone({ type: 'sine', from: 900, to: 300, duration: 0.18, volume: 0.08, delay: 0.1 });
+  },
   // Vuurzwaard: vlammen die opflakkeren
   fire: () => {
     noise({ from: 300, to: 1500, duration: 0.6, volume: 0.35, q: 0.6 });
@@ -274,6 +297,6 @@ export function updateAmbience(dt, { theme, night = 0 }) {
 /** Speel een geluid, bijvoorbeeld play('hit'). */
 export function play(name) {
   if (!ready()) return;
-  if (samples[name]) playSample(name, name === 'lose' ? 0.8 : 0.6);
+  if (samples[name]) playSample(name, SAMPLE_VOLUME[name] ?? 0.6);
   else SOUNDS[name]?.();
 }

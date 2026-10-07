@@ -482,6 +482,42 @@ export function createCastleWorld(scene, { tex, texturedBox }) {
   }
 
   // ---------- Gouden standbeelden van Omar (optioneel, zodra zijn personage geladen is) ----------
+  // ---------- Twee duistere ritueel-altaren naast de arena en twee samoerai-wachters bij de ingang ----------
+  // (3D-modellen uit models/extra; ze komen erbij zodra ze geladen zijn)
+  const placeModel = (file, height, x, z, rotY, solid = true) => {
+    loadGLB(file).then((gltf) => {
+      const model = gltf.scene.clone(true);
+      model.rotation.y = rotY;
+      model.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(model);
+      const scale = height / (box.max.y - box.min.y);
+      model.scale.multiplyScalar(scale);
+      model.updateMatrixWorld(true);
+      box.setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      model.position.set(x - center.x, -box.min.y, z - center.z);
+      model.traverse((c) => {
+        if (!c.isMesh) return;
+        c.castShadow = true;
+        c.receiveShadow = true;
+      });
+      scene.add(model);
+      if (solid) {
+        model.updateMatrixWorld(true);
+        colliders.push(new THREE.Box3().setFromObject(model));
+      }
+    }).catch(() => {});
+  };
+  for (const side of [-1, 1]) {
+    placeModel('models/extra/ritueel.glb', 5, side * 23, 0, -side * Math.PI / 2); // naar de arena gedraaid
+    placeModel('models/extra/samoerai.glb', 2.6, side * 5, 20, 0); // kijken naar jou als je binnenkomt
+    // Blauw vuur van het altaar
+    const glow = new THREE.PointLight(0x5aa8ff, 25, 14, 2);
+    glow.position.set(side * 23, 5, 0);
+    scene.add(glow);
+    flickerLights.push({ light: glow, base: 25 });
+  }
+
   let statuesAdded = false;
   /** Zet twee gouden Omar-beelden op de sokkels. `file` = het personage dat Omar draagt. */
   function addStatues(file) {

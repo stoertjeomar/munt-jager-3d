@@ -9,7 +9,7 @@ import { createWorld, CHECKPOINTS, ARENAS, CHESTS, grassMask } from './world.js'
 import { LEVELS, LEVEL, LEVEL_INDEX, IN_CASTLE } from './levels.js';
 import { NPCs } from './npcs.js';
 import { createEnemies, spawnEnemy } from './enemies.js';
-import { createBosses, BOSS_INFO } from './bosses.js';
+import { createBosses, BOSS_INFO, BOSS_POWER } from './bosses.js';
 import { Sites } from './sites.js';
 import { Decor } from './decor.js';
 import { Stats, POWERS, PERKS, BOSS_KILLS, SHOP_ITEMS } from './stats.js';
@@ -137,6 +137,7 @@ function giveKills(amount, announce = true) {
   player.health = player.maxHealth;
   player.stamina = player.maxStamina;
   play('levelUp');
+  play('wow');
   effects.burst(player.position.clone().setY(player.position.y + 1.2), 0xffd76a, { count: 40, speed: 5, size: 0.12, life: 1, up: 4 });
   if (announce) {
     ui.banner(`LEVEL ${stats.level}`, 'Je bent sterker geworden! Meer leven, stamina en schade.', 'gold', 3.5);
@@ -190,6 +191,7 @@ function onDefeated(target) {
     return;
   }
   play('defeat');
+  play('punch');
   effects.burst(target.center, target.type.color, { count: 26, speed: 7, size: 0.16, life: 0.8, up: 3 });
   effects.burst(target.center, 0xffd700, { count: 8, speed: 3, size: 0.08, life: 0.6, up: 4 });
   const finished = target.typeKey ? npcs.onKill(target.typeKey) : null;
@@ -401,6 +403,7 @@ function enemyContact() {
     if (type.stompable && player.velocity.y < 0 && feet > bottom + type.height * 0.5) {
       // Erop gesprongen!
       enemy.stomp();
+      play('boing');
       player.bounce();
       effects.shake(0.15);
       onDefeated(enemy);
@@ -423,6 +426,7 @@ function onGolemSlam(enemy, radius, damage) {
 // ---------- Doodgaan, rusten, reizen ----------
 
 function die() {
+  play('faaah');
   if (omar.onDeath()) return; // in Omars kasteel ga je niet echt dood: Omar lacht je uit en je mag terug
   state.deathTimer = 4;
   play('lose');
@@ -454,6 +458,7 @@ function openChest(chest) {
     stats.data.chests.push(chest.id);
     stats.save();
     play('chest');
+    play('shine');
     effects.burst(chest.position.clone().setY(chest.position.y + 1), 0xffd76a, { count: 24, speed: 4, size: 0.1, life: 0.8, up: 3 });
     const info = itemInfo(chest.item);
     ui.toast(`Gevonden: <b style="color:${info.rarity === 'legendarisch' ? '#ffb340' : '#f3d27a'}">${info.name}</b><br><small>${info.info}${chest.item.kind === 'flask' ? '' : ' — open je uitrusting met I'}</small>`, 5);
@@ -686,6 +691,7 @@ function updateTrail(dt) {
 
 // ---------- Muziek ----------
 const music = new Music();
+music.preload(IN_CASTLE ? 'omar' : 'boss');
 
 /** Welk liedje past nu? Elk level heeft zijn eigen deuntje, bosses hebben enge muziek en Omar de engste. */
 function updateMusic() {
@@ -728,6 +734,12 @@ function updateBossFights() {
 // ---------- Game loop ----------
 const clock = new THREE.Clock();
 const bossCtx = { player, effects, hurtPlayer, spawnEnemy: addSummon, camera, projectiles };
+// Gewone bosses doen meer schade (ook met vuurballen) en zijn sneller: zie BOSS_POWER in bosses.js
+const strongBossCtx = {
+  ...bossCtx,
+  hurtPlayer: (from, damage) => hurtPlayer(from, Math.round(damage * BOSS_POWER.damage)),
+  projectiles: { spawn: (shot) => projectiles.spawn({ ...shot, damage: Math.round(shot.damage * BOSS_POWER.damage) }) },
+};
 // Omar staat in elk level en neemt je mee naar zijn Gekke Kasteel (alles daarover staat in omar.js)
 const omar = new OmarFlow({ scene, camera, cameraRig, input, state, stats, ui, player, bosses, npcs, sites, world, effects, pickups, decor, giveKills, giveRunes, announceNewPowers });
 
@@ -799,7 +811,10 @@ function gameLoop() {
     night: world.night ?? 0, // 0 = dag, 1 = nacht (vijanden kunnen dan wat gloeien)
   };
   for (const enemy of enemies) enemy.update(dt, enemyCtx);
-  for (const boss of bosses) boss.update(dt, bossCtx);
+  for (const boss of bosses) {
+    if (boss.id === 'omar') boss.update(dt, bossCtx);
+    else boss.update(dt * BOSS_POWER.speed, strongBossCtx);
+  }
   projectiles.update(dt, {
     player, hurtPlayer, colliders: world.colliders, effects,
   });

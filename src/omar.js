@@ -11,7 +11,7 @@ import { OMAR } from './omarFighter.js'; // (dit laadt ook Omar zelf, zodat hij 
 //  2. Ja? Dan neemt hij je mee (paarse wervelwind) naar zijn Gekke Kasteel (index.html?level=omar).
 //  3. In het kasteel: een filmpje. De camera vliegt over het kasteel naar Omar op zijn troon, hij schept op,
 //     springt met een salto de arena in en trekt jou erbij. Dan begint het gevecht.
-//  4. Winnen: vuurwerk, munten, de Kroon van Omar. Verliezen: Omar lacht je uit, je mag meteen opnieuw.
+//  4. Winnen: vuurwerk, munten, de Kroon van Omar en zijn Zeis van de Dood. Verliezen: Omar lacht je uit, je mag meteen opnieuw.
 //     Daarna (of met "Opgeven" in het pauzescherm) ga je terug naar je level, naast Omar.
 //
 // Je raakt nooit iets kwijt als je verliest. Omar zelf (hoe hij vecht) staat in omarFighter.js,
@@ -62,7 +62,7 @@ body.omar-kasteel #lock-hint h1 { font-size: clamp(28px, 5.5vw, 58px); letter-sp
 const CHALLENGE_LINES = {
   eerste: [
     'Hé! Jij daar! Ja, jij, met dat kleine zwaardje!',
-    'Ik ben <b>OMAR</b>. Ik heb dit hele spel gemaakt! Ik heb <b>álle krachten</b> én het <b>Diamanten zwaard</b>.',
+    'Ik ben <b>OMAR</b>. Ik heb dit hele spel gemaakt! Ik heb <b>álle krachten</b> én de <b>Zeis van de Dood</b>.',
     'En weet je wat? <b>Niemand</b> heeft mij ooit verslagen. Niemand!',
     'Ik woon in mijn <b>Gekke Kasteel</b>. Wie durft, mag daar tegen mij vechten. Hehe.',
   ],
@@ -83,7 +83,7 @@ const THRONE_LINES = {
       'Hehe! Hehehe! Welkom in mijn <b>Gekke Kasteel</b>!',
       'Ik ben <b>OMAR</b>. Ik heb <b>deze game gemaakt</b>. Alles hier is van mij!',
       'En <b>niemand</b>... NIEMAND heeft mij ooit verslagen. Nog nooit!',
-      'Ik kan <b>dashen</b>, <b>rollen</b>, een <b>wervelslag</b>, een <b>dubbele sprong</b>, een <b>grondslag</b>... en kijk: mijn <b>Diamanten zwaard</b>!',
+      'Ik kan <b>dashen</b>, <b>teleporteren</b>, de <b>bliksem</b> laten inslaan, <b>schaduwen</b> oproepen... en kijk: mijn <b>Zeis van de Dood</b>!',
       'En jij? Jij miezerig mannetje durft MIJ uit te dagen? Hahaha! Mijn goudvis is nog sterker dan jij!',
       'Oké dan. Kom maar op als je durft!',
     ],
@@ -267,7 +267,7 @@ export class OmarFlow {
     this.phase = 'kiezen';
     document.exitPointerLock?.();
     const html = `Omar neemt je mee naar zijn <b>Gekke Kasteel</b>. Daar vecht je tegen hem in de arena.
-      <br><small>Omar is héél sterk: hij kan dashen, rollen, een wervelslag, een dubbele sprong met grondslag én zijn zwaard in brand zetten. En hij drinkt ook helende flesjes!
+      <br><small>Omar is héél sterk en eng: hij kan dashen, teleporteren, de bliksem laten inslaan, schaduwen oproepen, een wervelslag en een grondslag doen én zijn zeis in brand zetten. En hij drinkt ook helende flesjes!
       Verlies je? Geen probleem: je komt gewoon hier terug en je raakt niks kwijt.</small>
       <br><br>Jij: level <b>${stats.level}</b> · Omar: level <b>${OMAR.level}</b> · Gewonnen <b>${d.wins}</b> · Verloren <b>${d.losses}</b>`;
     ui.openLevelComplete('DAAG OMAR UIT?', html, [
@@ -591,7 +591,7 @@ export class OmarFlow {
     if (this.phase === 'gevecht') return ['omar', this.fighter.phase2 ? 1 : 0]; // boos = sneller en harder
     if (this.phase === 'gewonnen') return ['feest', 0];
     if (this.phase === 'verloren') return [null, 0];
-    return ['kasteel', 0];
+    return ['omar', -1]; // terwijl hij praat komt zijn muziek al zachtjes op
   }
 
   /** Omar verslagen (via onBossDefeated in main.js). */
@@ -610,7 +610,10 @@ export class OmarFlow {
     this.newPerks = this.giveKills(first ? 25 : 6, false) ?? [];
     this.giveRunes(first ? 3000 : 500);
     this.pickups.coinBurst(boss.center, 100);
-    if (first) stats.addItem({ kind: 'helmet', key: 'kroon' });
+    if (first) {
+      stats.addItem({ kind: 'helmet', key: 'kroon' });
+      stats.addItem({ kind: 'weapon', key: 'zeis' });
+    }
     d.wins++;
     this.wonThisVisit = true;
     this.firstWin = first;
@@ -736,7 +739,7 @@ export class OmarFlow {
           'Wat?! Nee... dat kan niet...',
           'Jij bent de <b>eerste</b> die mij ooit heeft verslagen!',
           'Eindelijk... eindelijk heb ik een <b>waardige tegenstander</b> gevonden.',
-          'Je hebt me <b>eerlijk</b> verslagen. Hier, ik geef je dit cadeau: mijn eigen <b>Kroon van Omar</b>!',
+          'Je hebt me <b>eerlijk</b> verslagen. Hier, ik geef je dit cadeau: mijn eigen <b>Kroon van Omar</b>... én mijn <b>Zeis van de Dood</b>!',
         ]
         : ['Wát? Alweer?!', 'Jij bent echt mijn waardigste tegenstander ooit.', 'Hier, nog een cadeautje voor jou. Maar de volgende keer win ík!'];
       ui.openDialog('Omar', lines, () => {
@@ -750,7 +753,7 @@ export class OmarFlow {
     const { stats, ui, cameraRig } = this;
     document.exitPointerLock?.();
     const html = `Jij hebt <b>Omar</b> verslagen. Nu ben JIJ de baas!
-      <br>Beloning: ${this.firstWin ? '<b>+3000 munten</b> en de <b>Kroon van Omar</b> (35% bescherming, zet hem op met <b>I</b>)' : '<b>+500 munten</b>'}
+      <br>Beloning: ${this.firstWin ? '<b>+3000 munten</b>, de <b>Kroon van Omar</b> (35% bescherming) en de <b>Zeis van de Dood</b> (het sterkste wapen!). Pak ze met <b>I</b>' : '<b>+500 munten</b>'}
       ${stats.level > this.levelBefore ? `<br>⬆ Je bent nu <b>level ${stats.level}</b>!` : ''}
       <br><small>Overwinningen op Omar: ${this.d.wins}</small>`;
     ui.openLevelComplete('OMAR VERSLAGEN!', html, [

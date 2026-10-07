@@ -34,9 +34,12 @@ function chord(name) {
 // De liedjes
 // ======================================================================
 
-// Echte boss-muziek: "The Last Demon King – Epic Final Boss Battle Music" door Lo-fi Music Ai (gratis te gebruiken).
-// Hij speelt bij alle boss-gevechten en bij Omar. Lukt het laden niet? Dan speelt de zelfgemaakte boss-muziek hieronder.
-const BOSS_FILE = 'music/boss-battle.mp3';
+// Echte muziek (mp3, zie de Credits in de README). Lukt het laden niet? Dan speelt de zelfgemaakte muziek hieronder.
+//   fileStart = hier begint het nummer (seconden)   fileLoop = [van, tot]: aan het eind springt hij terug naar 'van'
+//   fightAt   = (Omar) als het gevecht begint en het nummer is nog niet zo ver, dan springt hij hierheen
+const BOSS_FILE = 'music/boss-battle.mp3'; // "Where Is Your God Now" door RokNardin: alle gewone bosses
+const OMAR_FILE = 'music/omar-boss.mp3'; // "EPIC Boss Fight music" door Carameii: alleen tegen Omar
+const DARK_FILE = 'music/black-ops.mp3'; // "Black Ops: Resurrection" door Garzehar: Spookwoud en Rotshoogland
 
 const SONGS = {
   // Groene Weide: vrolijk wandelen door het gras
@@ -69,6 +72,7 @@ const SONGS = {
 
   // Spookwoud: griezelig en mysterieus
   woud: {
+    file: DARK_FILE, fileGain: 0.75,
     bpm: 84, gain: 0.6,
     chords: ['Am', 'F', 'Dm', 'E', 'Am', 'F', 'E7', 'E'],
     tracks: [
@@ -83,6 +87,7 @@ const SONGS = {
 
   // Rotshoogland: groots en stoer, hoog in de bergen
   hoogland: {
+    file: DARK_FILE, fileGain: 0.75,
     bpm: 116, gain: 0.55,
     chords: ['Dm', 'C', 'Bb', 'C', 'Dm', 'C', 'Bb', 'A'],
     tracks: [
@@ -97,7 +102,7 @@ const SONGS = {
 
   // Gewone bosses: zwaar en dreigend. Eerst een grote klap als je de arena in komt, dan het gevecht.
   boss: {
-    file: BOSS_FILE, fileGain: 1,
+    file: BOSS_FILE, fileGain: 1, fileStart: 20, fileLoop: [34, 168], // (de eerste 20 seconden slaan we over)
     bpm: 128, gain: 0.72, intro: 2,
     chords: ['Em', 'Em', 'Em', 'Em', 'Cm', 'Cm', 'Am', 'Am', 'F#dim', 'B7'],
     tracks: [
@@ -143,7 +148,9 @@ const SONGS = {
   // Op stand 1 (als hij boos wordt) gaat alles sneller en harder: snelle strijkers en trommels,
   // een hoog vrouwenkoor, krassende violen, gefluister... en Omar die lacht.
   omar: {
-    file: BOSS_FILE, fileGain: 1, fileFaster: 1.07, // (als hij boos is speelt het bestand 7% sneller)
+    // Tijdens het filmpje (stand -1) komt het nummer al zachtjes op; als het gevecht begint gaat hij vol.
+    // Als hij boos is (stand 1) speelt het bestand 7% sneller.
+    file: OMAR_FILE, fileGain: 1, fileFaster: 1.07, fileLoop: [22, 169], fightAt: 19.5,
     bpm: 132, faster: 1.15, gain: 0.74, intro: 4,
     chords: [
       'Cm', 'Cm', 'Abm', 'Cm', // het begin
@@ -771,8 +778,13 @@ export class Music {
     // De boss-muziek alvast laden, dan speelt hij meteen als het gevecht begint
     setTimeout(() => {
       const a = getAudio();
-      if (a) loadFile(a, BOSS_FILE);
+      for (const name of this.preloads ?? []) if (a && SONGS[name]?.file) loadFile(a, SONGS[name].file);
     }, 1500);
+  }
+
+  /** Dit liedje alvast laden (als het een muziekbestand is), zodat het meteen kan spelen. */
+  preload(name) {
+    (this.preloads ??= []).push(name);
   }
 
   /** Wisselt zo nodig van liedje en plant de volgende noten in. */
@@ -790,7 +802,7 @@ export class Music {
     const now = a.ctx.currentTime;
     if (s.file) {
       if (s.file.ok !== false) {
-        s.file.el.playbackRate = this.level > 0 ? s.def.fileFaster ?? 1 : 1; // Omar boos: sneller
+        this.tickFile(a, s);
         return;
       }
       // Het bestand lukte niet: dan toch de zelfgemaakte muziek
@@ -811,7 +823,7 @@ export class Music {
   setup(a) {
     // Muziek gaat via een eigen volumeknop, met een echo voor de melodie (dat klinkt ruimtelijker)
     this.out = a.ctx.createGain();
-    this.out.gain.value = 0.55;
+    this.out.gain.value = 0.75; // muziek-volume (hoger = harder)
     this.out.connect(a.master);
     this.fx = a.ctx.createGain();
     const delay = a.ctx.createDelay(1);
@@ -841,15 +853,80 @@ export class Music {
   /** Het mp3-bestand vanaf het begin laten spelen (in plaats van de bladmuziek). */
   startFile(a, s) {
     const f = loadFile(a, s.def.file);
+    const def = s.def;
     f.source.disconnect();
     f.source.connect(s.gain);
-    s.gain.gain.cancelScheduledValues(a.ctx.currentTime);
-    s.gain.gain.setValueAtTime(0.0001, a.ctx.currentTime);
-    s.gain.gain.linearRampToValueAtTime(s.def.fileGain ?? 1, a.ctx.currentTime + 0.3);
-    f.el.currentTime = 0;
+    const now = a.ctx.currentTime;
+    s.gain.gain.cancelScheduledValues(now);
+    s.gain.gain.setValueAtTime(0.0001, now);
+    f.el.loop = !def.fileLoop;
+    f.el.currentTime = def.fileStart ?? 0;
     f.el.playbackRate = 1;
     f.el.play().catch(() => { f.ok = false; });
     s.file = f;
+    s.fileLevel = this.level;
+    // Moet hij later beginnen? Dan stil blijven tot hij daarheen kan springen (als het bestand nog laadt kan dat niet meteen)
+    s.seekTo = def.fileStart || null;
+    s.seekWait = 0;
+    if (!s.seekTo) this.fadeInFile(a, s);
+  }
+
+  /** Bestand aanzetten: bij stand -1 (Omar praat nog) heel langzaam zachtjes opkomen, anders snel vol. */
+  fadeInFile(a, s) {
+    const now = a.ctx.currentTime;
+    const full = s.def.fileGain ?? 1;
+    s.gain.gain.cancelScheduledValues(now);
+    s.gain.gain.setValueAtTime(0.0001, now);
+    if (this.level < 0) s.gain.gain.linearRampToValueAtTime(full * 0.45, now + 10);
+    else s.gain.gain.linearRampToValueAtTime(full, now + 0.3);
+  }
+
+  /** Naar een plek in het bestand springen, zodra dat kan. Geeft true als het gelukt is. */
+  seekFile(el, time) {
+    const r = el.seekable;
+    for (let i = 0; i < r.length; i++) {
+      if (r.start(i) <= time && r.end(i) >= time) {
+        el.currentTime = time;
+        return true;
+      }
+    }
+    return Math.abs(el.currentTime - time) < 0.5;
+  }
+
+  /** Elke tik: herhalen, sneller als Omar boos is, en vol als het gevecht begint. */
+  tickFile(a, s) {
+    const { el } = s.file;
+    const def = s.def;
+    if (s.seekTo != null) {
+      s.seekWait += 0.04;
+      if (this.seekFile(el, s.seekTo) || s.seekWait > 6) {
+        s.seekTo = null;
+        this.fadeInFile(a, s);
+      }
+      return;
+    }
+    if (s.jumpTo != null) {
+      // Naar het spannende stuk springen (opnieuw proberen tot het bestand ver genoeg geladen is)
+      s.jumpWait += 0.04;
+      if (el.currentTime >= s.jumpTo || this.seekFile(el, s.jumpTo) || s.jumpWait > 8) s.jumpTo = null;
+    }
+    el.playbackRate = this.level > 0 ? def.fileFaster ?? 1 : 1; // Omar boos: sneller
+    if (def.fileLoop && (el.currentTime >= def.fileLoop[1] || el.ended)) {
+      if (!this.seekFile(el, def.fileLoop[0])) el.currentTime = 0; // (kan hij niet springen? dan gewoon opnieuw)
+      if (el.paused) el.play().catch(() => {});
+    }
+    if (this.level !== s.fileLevel) {
+      // Van "zachtjes opkomen" naar het gevecht: nu vol (en meteen naar het spannende stuk)
+      const now = a.ctx.currentTime;
+      s.gain.gain.cancelScheduledValues(now);
+      s.gain.gain.setValueAtTime(Math.max(0.0001, s.gain.gain.value), now);
+      s.gain.gain.linearRampToValueAtTime((def.fileGain ?? 1) * (this.level < 0 ? 0.45 : 1), now + 1.2);
+      if (s.fileLevel < 0 && this.level >= 0 && def.fightAt && el.currentTime < def.fightAt) {
+        s.jumpTo = def.fightAt;
+        s.jumpWait = 0;
+      }
+      s.fileLevel = this.level;
+    }
   }
 
   /** Huidige liedje zacht laten wegsterven. */
@@ -884,7 +961,8 @@ export class Music {
     const ch = def.chordInfo[chordBar];
     for (const track of def.tracks) {
       if (!!track.intro !== inIntro) continue;
-      if (this.level < (track.min ?? 0) || this.level > (track.max ?? 9)) continue;
+      const level = Math.max(0, this.level);
+      if (level < (track.min ?? 0) || level > (track.max ?? 9)) continue;
       const every = STEPS / track.div;
       if (inBar % every) continue;
       const out = track.fx ? s.send : s.gain;

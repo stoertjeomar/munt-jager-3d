@@ -23,8 +23,18 @@ const PEOPLE = {
     name: 'Koopman Kobus', file: null, height: 1.6, shop: true,
     colors: { shirt: 0x2f7a4a, shorts: 0x6b4a2b, sash: 0xffd23a, straw: 0x5b3a8a, band: 0xffd23a, hair: 0x8a5a2b, cuff: 0x6b4a2b },
   },
-  // Omar draagt het personage dat jij NIET koos (file wordt ingevuld in NPCs), met de kroon en het Diamanten zwaard
-  omar: { name: 'Omar', file: null, height: 1.75, weapon: 'diamant', helmet: 'kroon', omar: true },
+  // Omar draagt het personage dat jij NIET koos (file wordt ingevuld in NPCs), met de kroon en de Zeis van de Dood
+  omar: { name: 'Omar', file: null, height: 1.75, weapon: 'zeis', helmet: 'kroon', omar: true },
+  // Een alien op bezoek in Muntdorp: geen quest, gewoon gezellig kletsen (en hij zweeft een beetje)
+  alien: {
+    name: 'Zorp de Alien', file: 'models/extra/alien.glb', height: 1.35, float: true,
+    lines: [
+      ['Bliep bloep! Ik ben Zorp. Ik kom in vrede! ✌✌', 'Mijn ruimteschip is kapot. Ik wacht hier op de sleepdienst van Mars.'],
+      ['Jullie planeet is zo groen! Bij ons is alles paars.', 'Pas op voor die Omar. Zelfs op mijn planeet kennen ze hem...'],
+      ['Wist je dat slijmpjes op mijn planeet huisdieren zijn?', 'Hier versla je ze gewoon. Wat een rare planeet. Bliep!'],
+      ['Ik heb een Boks-Dino gezien. Hij had bokshandschoenen aan!', 'Spring op zijn hoofd: BOING! Dat vindt hij niet leuk.'],
+    ],
+  },
 };
 
 // Wat Omar roept als je in de buurt bent
@@ -261,9 +271,11 @@ class NPC {
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       this.mesh.rotation.y += diff * Math.min(1, 4 * dt);
     }
+    // Zweven (de alien)
+    if (this.person.float) this.inner.position.y = 0.15 + Math.sin(time * 2.2) * 0.1;
     // Teken boven het hoofd (de koopman: een muntje)
-    const state = this.shop ? 'winkel' : quests.state(this.questId);
-    const [text, color] = state === 'winkel' ? ['€', '#ffd23a'] : state === 'nieuw' ? ['!', '#ffd23a'] : state === 'klaar' ? ['?', '#ffd23a'] : state === 'actief' ? ['…', '#cfcfcf'] : [null, null];
+    const state = this.shop ? 'winkel' : this.person.lines ? 'kletsen' : quests.state(this.questId);
+    const [text, color] = state === 'kletsen' ? ['…', '#9fe8ff'] : state === 'winkel' ? ['€', '#ffd23a'] : state === 'nieuw' ? ['!', '#ffd23a'] : state === 'klaar' ? ['?', '#ffd23a'] : state === 'actief' ? ['…', '#cfcfcf'] : [null, null];
     if (text !== this.markerText) {
       this.markerText = text;
       this.marker.userData.draw(text, color);
@@ -546,6 +558,12 @@ export class NPCs {
    * Praten met een NPC. Geeft { lines, reward } terug: de tekst die de NPC zegt, en eventueel een beloning.
    */
   talk(npc) {
+    // Iemand zonder quest (de alien): gewoon een praatje
+    if (npc.person.lines) {
+      const list = npc.person.lines;
+      npc.talkIndex = ((npc.talkIndex ?? -1) + 1) % list.length;
+      return { lines: list[npc.talkIndex] };
+    }
     const id = npc.questId;
     const quest = QUESTS[id];
     const data = this.stats.data.quests;

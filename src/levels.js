@@ -11,6 +11,7 @@
 //   chests    = [id, x, y, z, voorwerp]
 //   npcs      = [personage, x, z, quest]  (zie quests.js)
 //               ['omar', x, z] is Omar zelf: hij geeft geen quest, maar daagt je uit (zie omar.js).
+//   dummies   = [x, z]  oefenpoppen: daar kun je op slaan om je schade te zien (ze vallen nooit om)
 //               Hij staat in elk level vlak bij het begin.
 //   blocks    = losse stenen blokken / platforms [x, y, z, breedte, hoogte, diepte, kleur]
 //   houses    = huizen (alleen in level 1: Muntdorp)
@@ -27,14 +28,15 @@ export const LEVELS = [
     boss: 'mario',
     path: [[4, 92], [8, 72], [6, 44], [-6, 16], [-10, -14], [0, -40], [0, -62]],
     checkpoints: [['l1-start', 'Muntdorp', 6, 88], ['l1-mid', 'Weidepoort', -9, 0]],
-    spawns: [['slijmpje', 10], ['slijmbal', 5], ['zombie', 2]],
+    spawns: [['slijmpje', 10], ['slijmbal', 5], ['boksdino', 2], ['zombie', 2]],
     chests: [
       ['l1-dorp', -11, 0, 74, { kind: 'weapon', key: 'dolk' }], // binnen in het grote huis in Muntdorp!
       ['l1-boog', 26, 0, 20, { kind: 'weapon', key: 'bijl' }],
       ['l1-fles', -28, 0, -30, { kind: 'flask' }],
     ],
     diamonds: [['l1-d1', 30, 0, 80], ['l1-d2', -30, 0, 10], ['l1-d3', 28, 0, -50]],
-    npcs: [['mila', -4, 76, 'mila-tuin'], ['strohoed', 18, 52, 'strohoed-sterren'], ['omar', 11, 77]],
+    npcs: [['mila', -4, 76, 'mila-tuin'], ['strohoed', 18, 52, 'strohoed-sterren'], ['omar', 11, 77], ['alien', -8, 64]],
+    dummies: [[-2, 88]], // een oefenpop bij het begin: sla erop om je schade te zien
     questItems: { 'strohoed-sterren': [[-26, 40], [24, -6], [-24, -52], [30, 34]] },
     village: { center: [-14, 62] },
     houses: [
@@ -58,7 +60,7 @@ export const LEVELS = [
     boss: 'koning',
     path: [[-4, 92], [-14, 66], [-16, 36], [0, 22], [14, -10], [6, -40], [0, -62]],
     checkpoints: [['l2-start', 'Valleipoort', -4, 88], ['l2-mid', 'Oude Ruïne', 16, -18]],
-    spawns: [['slijmbal', 8], ['slijmpje', 4], ['spierbonk', 2], ['golem', 1]],
+    spawns: [['slijmbal', 8], ['slijmpje', 4], ['boksdino', 3], ['spierbonk', 2], ['golem', 1]],
     chests: [
       ['l2-platform', -3, 7.25, -14 + 24, { kind: 'weapon', key: 'katana' }], // bovenop het hoogste platform!
       ['l2-knots', 28, 0, 60, { kind: 'weapon', key: 'club' }],
@@ -87,7 +89,7 @@ export const LEVELS = [
     boss: 'ridder',
     path: [[0, 92], [14, 70], [10, 40], [-14, 18], [-12, -12], [8, -38], [0, -62]],
     checkpoints: [['l3-start', 'Rand van het Woud', 0, 88], ['l3-mid', 'Woudruïne', -14, 4]],
-    spawns: [['spook', 6], ['zombie', 7], ['slijmbal', 3]],
+    spawns: [['spook', 6], ['zombie', 7], ['slijmbal', 3], ['bigfoot', 2]],
     chests: [
       ['l3-sluip', 28, 0, 22, { kind: 'weapon', key: 'ijszwaard' }],
       ['l3-fles', -28, 0, 60, { kind: 'flask' }],
@@ -109,11 +111,11 @@ export const LEVELS = [
     boss: 'reus',
     path: [[0, 92], [-14, 64], [-8, 34], [14, 10], [14, -20], [0, -44], [0, -60]],
     checkpoints: [['l4-start', 'Voet van het Hoogland', 0, 88], ['l4-mid', 'Rotsentop', 16, 0]],
-    spawns: [['golem', 4], ['mecha', 3], ['spierbonk', 3], ['spook', 2]],
+    spawns: [['golem', 4], ['mecha', 3], ['spierbonk', 3], ['bigfoot', 2], ['spook', 2]],
     chests: [
       ['l4-sluip', -30, 0, 10, { kind: 'weapon', key: 'zonnezwaard' }],
       ['l4-fles', 30, 0, 50, { kind: 'flask' }],
-      ['l4-fles2', -30, 0, -44, { kind: 'flask' }],
+      ['l4-fles2', -30, 0, -44, { kind: 'weapon', key: 'demonenzwaard' }],
     ],
     diamonds: [['l4-d1', 32, 0, 88], ['l4-d2', -32, 0, 44], ['l4-d3', 32, 0, -30]],
     npcs: [['mila', -20, 80, 'mila-mecha'], ['omar', -0.5, 80]],

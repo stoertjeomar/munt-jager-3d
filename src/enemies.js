@@ -16,7 +16,21 @@ import { seededRandom } from './world.js';
 //   runes         = hoeveel munten je krijgt als je ze verslaat
 //   model         = 3D-model (.glb) in plaats van een zelfgebouwd poppetje
 //   contactDamage = schade als je ze alleen aanraakt (noContact = aanraken doet geen pijn)
+//   ai            = gedraagt zich als deze vijand (bijv. 'spierbonk' = aanloop nemen en op je af stormen)
+//   modelYaw      = het 3D-model een stukje draaien (als het niet naar voren kijkt)
 export const ENEMY_TYPES = {
+  bigfoot: {
+    name: 'Bigfoot', hp: 280, radius: 0.8, height: 2.7, color: 0xb9ab90, model: 'models/extra/bigfoot.glb', ai: 'spierbonk',
+    patrolSpeed: 1.2, chaseSpeed: 2.9, sight: 14, knockback: 0.25, damage: 34, contactDamage: 14, stompable: false, runes: 110,
+  },
+  oefenpop: {
+    name: 'Oefenpop', hp: 5000, radius: 0.45, height: 1.85, color: 0xc8a882, model: 'models/extra/oefenpop.glb', dummy: true,
+    patrolSpeed: 0, chaseSpeed: 0, sight: 0, knockback: 0, damage: 0, noContact: true, stompable: false, runes: 0,
+  },
+  boksdino: {
+    name: 'Boks-Dino', hp: 110, radius: 0.6, height: 1.7, color: 0x7ccf4a, model: 'models/extra/boks-dino.glb', ai: 'zombie', modelYaw: Math.PI / 2,
+    patrolSpeed: 1.4, chaseSpeed: 3.6, sight: 10, knockback: 0.7, damage: 18, noContact: true, stompable: true, runes: 30,
+  },
   zombie: {
     name: 'Zombie', hp: 90, radius: 0.5, height: 1.7, color: 0x86a86b, model: 'models/zombie.glb', skinned: true,
     patrolSpeed: 1, chaseSpeed: 3.2, sight: 11, knockback: 0.8, damage: 22, noContact: true, stompable: false, runes: 32,
@@ -46,6 +60,16 @@ export const ENEMY_TYPES = {
     patrolSpeed: 1.1, chaseSpeed: 2.3, sight: 9, knockback: 0.15, damage: 30, contactDamage: 15, stompable: false, runes: 80,
   },
 };
+
+// Alle vijanden een stuk sterker: meer leven, meer schade en sneller achter je aan.
+// (Maak deze getallen kleiner als je het spel makkelijker wilt maken.)
+export const ENEMY_POWER = { hp: 1.35, damage: 1.3, speed: 1.12 };
+for (const type of Object.values(ENEMY_TYPES)) {
+  type.hp = Math.round(type.hp * ENEMY_POWER.hp);
+  type.damage = Math.round(type.damage * ENEMY_POWER.damage);
+  if (type.contactDamage) type.contactDamage = Math.round(type.contactDamage * ENEMY_POWER.damage);
+  type.chaseSpeed *= ENEMY_POWER.speed;
+}
 
 // Verder dan dit van huis geeft een vijand het op en loopt hij terug naar huis.
 // Pas als hij weer thuis is, let hij weer op jou (anders staat hij te trillen bij een onzichtbare muur).
@@ -331,40 +355,53 @@ class Enemy {
     const type = this.type;
     loadGLB(type.model).then((gltf) => {
       const obj = type.skinned ? cloneSkinned(gltf.scene) : gltf.scene.clone(true);
-      obj.updateMatrixWorld(true);
-      const box = new THREE.Box3().setFromObject(obj);
-      const s = type.height / (box.max.y - box.min.y);
-      const center = box.getCenter(new THREE.Vector3());
-      obj.scale.multiplyScalar(s);
-      obj.position.set(-center.x * s, -box.min.y * s, -center.z * s);
-      const materials = [];
-      obj.traverse((c) => {
-        if (!c.isMesh) return;
-        c.castShadow = true;
-        if (c.isSkinnedMesh) c.frustumCulled = false;
-        c.material = Array.isArray(c.material) ? c.material.map((m) => m.clone()) : c.material.clone();
-        materials.push(...(Array.isArray(c.material) ? c.material : [c.material]));
-      });
-      this.body.add(obj);
-      this.model.materials = materials.filter((m) => m.emissive);
-      this.baseGlow = this.model.materials.map((m) => ({ color: m.emissive.clone(), intensity: m.emissiveIntensity }));
-      if (gltf.animations.length) {
-        this.mixer = new THREE.AnimationMixer(obj);
-        this.actions = {};
-        for (const clip of gltf.animations) this.actions[clip.name] = this.mixer.clipAction(clip);
-        this.playAnim('Idle');
+      if (type.modelYaw) {
+        // Eerst draaien (in een groepje), dan meten en neerzetten
+        const turned = new THREE.Group();
+        turned.add(obj);
+        obj.rotation.y = type.modelYaw;
+        return this.placeModel(turned, gltf, scene);
       }
-      if (this.typeKey === 'mecha') {
-        // Rode richtstraal voordat hij schiet
-        this.laser = new THREE.Line(
-          new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
-          new THREE.LineBasicMaterial({ color: 0xff2a2a, transparent: true, opacity: 0.8, toneMapped: false })
-        );
-        this.laser.visible = false;
-        this.laser.frustumCulled = false;
-        scene.add(this.laser);
-      }
+      return this.placeModel(obj, gltf, scene);
     });
+  }
+
+  /** Het geladen model even groot maken als in ENEMY_TYPES staat en op de grond zetten. */
+  placeModel(obj, gltf, scene) {
+    const type = this.type;
+    obj.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(obj);
+    const s = type.height / (box.max.y - box.min.y);
+    const center = box.getCenter(new THREE.Vector3());
+    obj.scale.multiplyScalar(s);
+    obj.position.set(-center.x * s, -box.min.y * s, -center.z * s);
+    const materials = [];
+    obj.traverse((c) => {
+      if (!c.isMesh) return;
+      c.castShadow = true;
+      if (c.isSkinnedMesh) c.frustumCulled = false;
+      c.material = Array.isArray(c.material) ? c.material.map((m) => m.clone()) : c.material.clone();
+      materials.push(...(Array.isArray(c.material) ? c.material : [c.material]));
+    });
+    this.body.add(obj);
+    this.model.materials = materials.filter((m) => m.emissive);
+    this.baseGlow = this.model.materials.map((m) => ({ color: m.emissive.clone(), intensity: m.emissiveIntensity }));
+    if (gltf.animations.length) {
+      this.mixer = new THREE.AnimationMixer(obj);
+      this.actions = {};
+      for (const clip of gltf.animations) this.actions[clip.name] = this.mixer.clipAction(clip);
+      this.playAnim('Idle');
+    }
+    if (this.typeKey === 'mecha') {
+      // Rode richtstraal voordat hij schiet
+      this.laser = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+        new THREE.LineBasicMaterial({ color: 0xff2a2a, transparent: true, opacity: 0.8, toneMapped: false })
+      );
+      this.laser.visible = false;
+      this.laser.frustumCulled = false;
+      scene.add(this.laser);
+    }
   }
 
   /** Animatie afspelen (alleen modellen met animaties, zoals de zombie). */
@@ -447,7 +484,8 @@ class Enemy {
     if (!this.alive || this.lastSwingId === swingId) return null;
     this.lastSwingId = swingId;
     this.returning = false; // geraakt? dan geeft hij het niet op
-    this.hp = Math.max(0, this.hp - damage);
+    this.hp = Math.max(this.type.dummy ? 1 : 0, this.hp - damage); // een oefenpop valt nooit om
+    this.sinceHit = 0;
     this.flash = 0.12;
     this.punch = 1; // "boing": even platgedrukt
     this.healthBar.visible = true;
@@ -494,6 +532,19 @@ class Enemy {
     this.healthBar.quaternion.copy(ctx.camera.quaternion); // altijd naar de camera gericht
     this.healthFg.scale.x = Math.max(0.001, this.hp / type.hp);
     this.healthFg.material.color.setHSL((this.hp / type.hp) * 0.33, 0.9, 0.45); // groen → rood
+    if (type.dummy) {
+      // Oefenpop: wiebelen als je erop slaat, en na 3 seconden weer helemaal heel
+      this.punch = Math.max(0, (this.punch ?? 0) - dt * 2);
+      this.wobble = (this.wobble ?? 0) + dt * 18;
+      this.body.rotation.z = Math.sin(this.wobble) * 0.12 * this.punch;
+      this.body.rotation.x = Math.cos(this.wobble * 0.7) * 0.08 * this.punch;
+      this.sinceHit = (this.sinceHit ?? 0) + dt;
+      if (this.sinceHit > 3 && this.hp < type.hp) {
+        this.hp = type.hp;
+        this.healthBar.visible = false;
+      }
+      return;
+    }
 
     // Doodgaan: plat worden, ronddraaien en verdwijnen
     if (this.dying > 0 && this.mixer) {
@@ -540,7 +591,7 @@ class Enemy {
     if (!this.chasing && distFromHome >= giveUp) this.returning = true; // te ver weg: opgeven en terug naar huis
 
     // ---------- Eigen aanvallen van de nieuwe vijanden ----------
-    if (this.typeKey === 'zombie' || this.typeKey === 'spierbonk' || this.typeKey === 'mecha') {
+    if (['zombie', 'spierbonk', 'mecha'].includes(this.type.ai ?? this.typeKey)) {
       this.attackCooldown -= dt;
       if (this.specialAttack(dt, ctx, distToPlayer, flatToPlayer)) {
         // Terugstoot meteen (niet bewaren tot na de aanval), en niet in muren of buiten het level
@@ -837,8 +888,8 @@ class Enemy {
     };
     this.stateTimer -= dt;
 
-    // ----- Zombie: dichtbij komen en een vuistslag -----
-    if (this.typeKey === 'zombie') {
+    // ----- Zombie (en de Boks-Dino): dichtbij komen en een vuistslag -----
+    if ((this.type.ai ?? this.typeKey) === 'zombie') {
       if (this.state === 'walk' && this.chasing && dist < 1.8 && this.attackCooldown <= 0) {
         this.state = 'punch';
         this.stateTimer = 0.77;
@@ -847,6 +898,12 @@ class Enemy {
       }
       if (this.state === 'punch') {
         facePlayer(10);
+        if (!this.mixer) {
+          // Geen animaties in het model: zelf naar voren stoten
+          const k = Math.sin(Math.min(1, (0.77 - this.stateTimer) / 0.5) * Math.PI);
+          this.body.rotation.x = 0.4 * k;
+          this.body.position.z = 0.35 * k;
+        }
         if (!this.hitDone && this.stateTimer < 0.42) {
           this.hitDone = true;
           if (inFront(2.3)) ctx.hurtPlayer(this.position, this.type.damage);
@@ -854,14 +911,15 @@ class Enemy {
         if (this.stateTimer <= 0) {
           this.state = 'walk';
           this.attackCooldown = 1.1;
+          this.body.position.z = 0;
         }
         return true;
       }
       return false;
     }
 
-    // ----- Spierbonk: aanloop nemen en op je af stormen -----
-    if (this.typeKey === 'spierbonk') {
+    // ----- Spierbonk (en Bigfoot): aanloop nemen en op je af stormen -----
+    if ((this.type.ai ?? this.typeKey) === 'spierbonk') {
       const flash = (on) => this.model.materials.forEach((m) => {
         m.emissive.set(on ? 0xff2200 : 0x000000);
         m.emissiveIntensity = on ? 0.5 : 0;
@@ -932,7 +990,7 @@ class Enemy {
         if (this.stateTimer <= 0) {
           this.body.rotation.x = 0.35;
           play('heavySwing');
-          if (inFront(3)) ctx.hurtPlayer(this.position, 24);
+          if (inFront(3)) ctx.hurtPlayer(this.position, Math.round(24 * ENEMY_POWER.damage));
           this.state = 'walk';
           this.attackCooldown = 1.6;
         }
@@ -1101,7 +1159,10 @@ class Enemy {
 }
 
 export function createEnemies(scene) {
-  return SPAWNS.map(([typeKey, ...patrol]) => new Enemy(scene, typeKey, patrol));
+  return [
+    ...SPAWNS.map(([typeKey, ...patrol]) => new Enemy(scene, typeKey, patrol)),
+    ...(LEVEL.dummies ?? []).map(([x, z]) => new Enemy(scene, 'oefenpop', [x, z, x, z])),
+  ];
 }
 
 /** Een losse vijand op een plek neerzetten (bijv. slijmpjes die Koning Slijm oproept). */
