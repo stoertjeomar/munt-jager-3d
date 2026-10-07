@@ -8,6 +8,8 @@ import { getAudio } from './audio.js';
 //   1 3 5 8 7 = tonen van het akkoord, b2 en b6 = een halve toon boven de grondtoon/kwint (eng!), c = het hele akkoord tegelijk
 //   Drums: x = slaan, . = stil
 //   div = hoeveel tekens er in één maat staan (8 = achtste noten, 16 = zestiende noten)
+//   intro = zoveel maten aan het begin spelen maar één keer (tracks met intro: true spelen alleen dan)
+//   file  = een echt muziekbestand (mp3) in plaats van de bladmuziek. Lukt het laden niet, dan speelt de bladmuziek.
 //
 // Druk op N om de muziek aan of uit te zetten (M zet al het geluid uit).
 
@@ -31,6 +33,10 @@ function chord(name) {
 // ======================================================================
 // De liedjes
 // ======================================================================
+
+// Echte boss-muziek: "The Last Demon King – Epic Final Boss Battle Music" door Lo-fi Music Ai (gratis te gebruiken).
+// Hij speelt bij alle boss-gevechten en bij Omar. Lukt het laden niet? Dan speelt de zelfgemaakte boss-muziek hieronder.
+const BOSS_FILE = 'music/boss-battle.mp3';
 
 const SONGS = {
   // Groene Weide: vrolijk wandelen door het gras
@@ -89,23 +95,32 @@ const SONGS = {
     ],
   },
 
-  // Gewone bosses: een duister orkest met een eng koor (zoals de grote eindbazen in Elden Ring en Dark Souls)
+  // Gewone bosses: zwaar en dreigend. Eerst een grote klap als je de arena in komt, dan het gevecht.
   boss: {
-    bpm: 150, gain: 0.7,
-    chords: ['Em', 'Em', 'C', 'C', 'Am', 'F', 'B', 'B'],
+    file: BOSS_FILE, fileGain: 1,
+    bpm: 128, gain: 0.72, intro: 2,
+    chords: ['Em', 'Em', 'Em', 'Em', 'Cm', 'Cm', 'Am', 'Am', 'F#dim', 'B7'],
     tracks: [
-      { inst: 'horns', vol: 0.13, div: 8, fx: true, notes: `
-        B4 - - - - - C5 B4 | A4 - G4 - F#4 - G4 - | E5 - - - - - D5 C5 | B4 - - - G4 - - - |
-        A4 - - - C5 - E5 - | F5 - - - E5 - C5 - | D#5 - - - F#5 - A5 - | G5 - F#5 - D#5 - B4 -` },
+      // ---- Je komt binnen: BOEM ----
+      { intro: true, inst: 'choirLow', vol: 0.1, div: 1, oct: 3, pattern: 'c', fx: true },
+      { intro: true, inst: 'choir', vol: 0.08, div: 1, oct: 4, pattern: 'c', fx: true },
+      { intro: true, inst: 'tuba', vol: 0.16, div: 1, pattern: 'R' },
+      { intro: true, inst: 'drums', vol: 0.75, div: 16, kit: {
+        subdrop: 'x...............|................', taiko: 'x...............|x.x.x.x.x.x.xxxx', crash: 'x...............|................',
+        riser: '................|x...............', osnare: '................|xxxxxxxxxxxxxxxx' } },
+      // ---- Het gevecht ----
+      { inst: 'choir', vol: 0.08, div: 2, fx: true, notes: `
+        B4 - | C5 B4 | G4 - | Ab4 G4 | E4 - | F4 E4 | C5 A4 | D#4 F#4` },
+      { inst: 'horns', vol: 0.1, div: 2, shift: -12, fx: true, sameAs: 4 },
       { inst: 'choirLow', vol: 0.08, div: 1, oct: 3, pattern: 'c', fx: true },
-      { inst: 'choir', vol: 0.06, div: 8, oct: 4, pattern: 'c - - c - - c -', fx: true },
-      { inst: 'trombone', vol: 0.06, div: 8, oct: 3, pattern: 'c . . c . . c .' },
-      { inst: 'cello', vol: 0.1, div: 16, pattern: 'R R O R R O R R R R O R b2 R O R' },
-      { inst: 'timpani', vol: 0.2, div: 8, pattern: 'R . . R . . R .' },
-      { inst: 'drums', vol: 0.65, div: 16, kit: {
-        taiko: 'x.....x.....x...', osnare: `${'.'.repeat(112)}xxxxxxxxxxxxxxxx`,
-        crash: 'x...............|................|................|................',
-        subdrop: `x${'.'.repeat(127)}`, riser: `${'.'.repeat(112)}x...............` } },
+      { inst: 'tuba', vol: 0.13, div: 1, pattern: 'R' },
+      { inst: 'cello', vol: 0.1, div: 16, pattern: 'R . R R b2 . R . R . R R b2 . O .' },
+      { inst: 'trombone', vol: 0.07, div: 8, oct: 3, pattern: 'c - . . . . c .' },
+      { inst: 'timpani', vol: 0.2, div: 8, pattern: 'R . . . R . R .' },
+      { inst: 'drums', vol: 0.66, div: 16, kit: {
+        taiko: 'x.......x.x.....', bigsnare: '........x.......',
+        crash: 'x...............|................', subdrop: `x${'.'.repeat(127)}`,
+        riser: `${'.'.repeat(112)}x...............`, whisper: `${'.'.repeat(64)}x${'.'.repeat(63)}` } },
     ],
   },
 
@@ -122,45 +137,64 @@ const SONGS = {
     ],
   },
 
-  // DE ENGSTE MUZIEK VAN HET SPEL, tegen Omar: een duister orkest met een groot koor, lage hoorns,
-  // dreigende strijkers, pauken, taiko-trommels, kerkklokken, gefluister... en Omar die lacht.
-  // Op stand 1 (als hij boos wordt) gaat alles sneller en harder: een hoog vrouwenkoor, krassende violen
-  // en snelle trommels.
+  // DE ENGSTE MUZIEK VAN HET SPEL, tegen Omar. Als het gevecht begint: een enorme klap met koor, dan stilte
+  // met een hartslag, nog een klap en een roffel... en dan barst het los. Alleen enge (mineur) akkoorden,
+  // een langzaam koor met lange noten, zware lage koperblazers en een tuba, dreigende strijkers en trommels.
+  // Op stand 1 (als hij boos wordt) gaat alles sneller en harder: snelle strijkers en trommels,
+  // een hoog vrouwenkoor, krassende violen, gefluister... en Omar die lacht.
   omar: {
-    bpm: 160, faster: 1.12, gain: 0.7,
-    chords: ['Cm', 'Cm', 'Ab', 'Ab', 'Fm', 'Fm', 'G', 'G', 'Cm', 'Db', 'Cm', 'Bdim', 'Ab', 'Db', 'G', 'G'],
+    file: BOSS_FILE, fileGain: 1, fileFaster: 1.07, // (als hij boos is speelt het bestand 7% sneller)
+    bpm: 132, faster: 1.15, gain: 0.74, intro: 4,
+    chords: [
+      'Cm', 'Cm', 'Abm', 'Cm', // het begin
+      'Cm', 'Cm', 'Abm', 'Abm', 'Cm', 'Cm', 'F#m', 'F#m', 'Fm', 'Fm', 'Dbm', 'Dbm', 'Abm', 'Abm', 'Bdim', 'Bdim',
+    ],
     tracks: [
-      // Lage hoorns: de melodie
-      { inst: 'horns', vol: 0.14, div: 8, fx: true, notes: `
-        G4 - - - - - Ab4 G4 | F4 - Eb4 - D4 - Eb4 - | C5 - - - - - Bb4 Ab4 | G4 - - - Eb4 - - - |
-        F4 - - - Ab4 - C5 - | Db5 - - - C5 - Ab4 - | B4 - - - D5 - F5 - | Eb5 - D5 - B4 - G4 - |
-        C5 - - - G4 - - - | Ab4 - - - F4 - Db5 - | C5 - Bb4 - G4 - Eb4 - | D4 - F4 - Ab4 - B4 - |
-        C5 - - - Eb5 - - - | F5 - - - Eb5 - Db5 - | D5 - - - B4 - G4 - | Ab4 - G4 - F4 - D4 -` },
-      // Als hij boos is: een hoog vrouwenkoor zingt de melodie mee
-      { inst: 'choirHi', vol: 0.06, div: 8, min: 1, shift: 12, fx: true, sameAs: 0 },
-      // Mannenkoor: lange, lage akkoorden ("oooh")
+      // ---- Je komt binnen... ----
+      { intro: true, inst: 'choirLow', vol: 0.11, div: 1, oct: 3, pattern: 'c', fx: true },
+      { intro: true, inst: 'choir', vol: 0.08, div: 1, oct: 4, pattern: 'c', fx: true },
+      { intro: true, inst: 'tuba', vol: 0.16, div: 1, pattern: 'R' },
+      { intro: true, inst: 'toll', vol: 0.13, div: 1, pattern: 'O', fx: true },
+      { intro: true, inst: 'drums', vol: 0.78, div: 16, kit: {
+        subdrop: 'x...............|................|x...............|................',
+        taiko: 'x...............|................|x...............|x.x.x.x.x.x.xxxx',
+        crash: 'x...............|................|x...............|................',
+        heart: '................|x..x......x..x..|................|................',
+        whisper: '................|x...............|................|................',
+        riser: '................|................|................|x...............',
+        osnare: '................|................|................|xxxxxxxxxxxxxxxx' } },
+      // ---- Het gevecht ----
+      // Het koor zingt de melodie: lange, enge noten (halve en hele noten)
+      { inst: 'choir', vol: 0.085, div: 2, fx: true, notes: `
+        G4 - | Ab4 G4 | Eb5 - | D5 Eb5 | C5 - | Db5 C5 | C#5 - | D5 C#5 |
+        C5 - | Db5 Ab4 | Ab4 - | G4 Ab4 | Eb5 - | Cb5 Bb4 | Ab4 - | D4 B3` },
+      // Lage hoorns spelen hetzelfde, een octaaf lager
+      { inst: 'horns', vol: 0.1, div: 2, shift: -12, fx: true, sameAs: 5 },
+      // Als hij boos is: een hoog vrouwenkoor erbij
+      { inst: 'choirHi', vol: 0.055, div: 2, min: 1, shift: 12, fx: true, sameAs: 5 },
       { inst: 'choirLow', vol: 0.09, div: 1, oct: 3, pattern: 'c', fx: true },
-      // Koor en trombones: harde stoten (3 + 3 + 2)
-      { inst: 'choir', vol: 0.07, div: 8, oct: 4, pattern: 'c - - c - - c -', fx: true },
-      { inst: 'trombone', vol: 0.07, div: 8, oct: 3, pattern: 'c . . c . . c .' },
-      // Lage strijkers: snel en dreigend
-      { inst: 'cello', vol: 0.11, div: 16, pattern: 'R R O R R O R R R R O R b2 R O R' },
-      { inst: 'drone', vol: 0.1, div: 1, pattern: 'R' },
-      { inst: 'timpani', vol: 0.22, div: 8, max: 0, pattern: 'R . . R . . R .' },
+      { inst: 'tuba', vol: 0.14, div: 1, pattern: 'R' },
+      { inst: 'drone', vol: 0.09, div: 1, pattern: 'R' },
+      // Dreigende lage strijkers (met een enge halve toon, b2)
+      { inst: 'cello', vol: 0.1, div: 16, max: 0, pattern: 'R . R R b2 . R . R . R R b2 . O .' },
+      { inst: 'cello', vol: 0.1, div: 16, min: 1, pattern: 'R R R R b2 R R R R R R R b2 R O R' },
+      // Zware koperstoten
+      { inst: 'trombone', vol: 0.07, div: 8, max: 0, oct: 3, pattern: 'c - . . . . c .' },
+      { inst: 'trombone', vol: 0.07, div: 8, min: 1, oct: 3, pattern: 'c . . c . . c .' },
+      { inst: 'timpani', vol: 0.2, div: 8, max: 0, pattern: 'R . . . R . R .' },
       { inst: 'timpani', vol: 0.14, div: 16, min: 1, pattern: 'R . R . R . R . R R R . R . R R' },
-      { inst: 'toll', vol: 0.09, div: 2, pattern: 'O .', fx: true },
+      // Een diepe kerkklok, elke 4 maten
+      { inst: 'toll', vol: 0.1, div: 1, fx: true, notes: 'C3 . . . C3 . . . F3 . . . Ab2 . . .' },
       // Krassende violen (als hij boos is)
-      { inst: 'screech', vol: 0.022, div: 1, min: 1, oct: 5, pattern: '8' },
+      { inst: 'screech', vol: 0.02, div: 1, min: 1, oct: 5, pattern: '8' },
       { inst: 'drums', vol: 0.66, div: 16, max: 0, kit: {
-        taiko: 'x.....x.....x...', osnare: `${'.'.repeat(112)}xxxxxxxxxxxxxxxx`,
-        crash: 'x...............|................|................|................',
-        subdrop: `x${'.'.repeat(127)}`, riser: `${'.'.repeat(112)}x...............`,
-        whisper: `${'.'.repeat(48)}x${'.'.repeat(79)}` } },
+        taiko: 'x.......x.x.....', bigsnare: '........x.......',
+        crash: 'x...............|................', subdrop: `x${'.'.repeat(127)}`,
+        riser: `${'.'.repeat(112)}x...............`, whisper: `${'.'.repeat(80)}x${'.'.repeat(47)}` } },
       { inst: 'drums', vol: 0.58, div: 16, min: 1, kit: {
-        taiko: 'x.x.x.x.x.x.x.x.', boom: 'x.......x.......', osnare: '....x.......x...',
-        crash: 'x...............|................',
-        subdrop: `x${'.'.repeat(63)}`, riser: `${'.'.repeat(112)}x...............`,
-        whisper: `${'.'.repeat(16)}x${'.'.repeat(47)}`,
+        taiko: 'x.x.x.x.x.x.x.x.', boom: 'x.......x.......', bigsnare: '....x.......x...',
+        crash: 'x...............|................', subdrop: `x${'.'.repeat(63)}`,
+        riser: `${'.'.repeat(112)}x...............`, whisper: `${'.'.repeat(48)}x${'.'.repeat(79)}`,
         laugh: `${'.'.repeat(240)}x${'.'.repeat(15)}` } },
     ],
   },
@@ -405,16 +439,23 @@ const INSTRUMENTS = {
     lp.connect(g).connect(out);
     osc(a, 'sine', f / 2, t, d, v * 0.6, out, { attack: 0.008, release: 0.06 });
   },
-  // Hoorns: warm maar dreigend koper, de melodie
+  // Hoorns: donker en dreigend koper (zacht beginnen, dan zwelt het aan)
   horns: (a, f, t, d, v, out) => {
-    const g = envelope(a, t, d, v, 0.06, 0.15);
-    const lp = filter(a, 'lowpass', 400, 1.5);
-    lp.frequency.setValueAtTime(400, t);
-    lp.frequency.exponentialRampToValueAtTime(1700, t + 0.12);
-    lp.frequency.exponentialRampToValueAtTime(1100, t + 0.5);
-    saws(a, f, t, t + d + 0.2, lp, [-8, 8]);
-    saws(a, f, t, t + d + 0.2, lp, [0], 'square');
+    const g = envelope(a, t, d, v, 0.12, 0.25);
+    const lp = filter(a, 'lowpass', 300, 1.2);
+    lp.frequency.setValueAtTime(300, t);
+    lp.frequency.exponentialRampToValueAtTime(1200, t + 0.25);
+    lp.frequency.exponentialRampToValueAtTime(800, t + 0.8);
+    saws(a, f, t, t + d + 0.3, lp, [-8, 0, 8]);
     lp.connect(g).connect(out);
+  },
+  // Tuba: heel laag koper dat je in je buik voelt
+  tuba: (a, f, t, d, v, out) => {
+    const g = envelope(a, t, d, v, 0.12, 0.3);
+    const lp = filter(a, 'lowpass', 450, 1);
+    saws(a, f, t, t + d + 0.4, lp, [-5, 5]);
+    lp.connect(g).connect(out);
+    osc(a, 'sine', f, t, d, v * 0.8, out, { attack: 0.12, release: 0.3 });
   },
   // Trombones: ruwe, harde stoten
   trombone: (a, f, t, d, v, out) => {
@@ -523,6 +564,19 @@ const DRUMS = {
     o.connect(g).connect(out);
     o.start(t);
     o.stop(t + 0.15);
+  },
+  // Hartslag: doem... (heel laag)
+  heart: (a, t, v, out) => {
+    const o = a.ctx.createOscillator();
+    const g = a.ctx.createGain();
+    o.frequency.setValueAtTime(62, t);
+    o.frequency.exponentialRampToValueAtTime(38, t + 0.18);
+    g.gain.setValueAtTime(v * 0.9, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+    o.connect(g).connect(out);
+    o.start(t);
+    o.stop(t + 0.35);
+    hiss(a, t, 0.06, v * 0.25, out, 'lowpass', 200);
   },
   // Taiko: een enorme Japanse trom (DOEM)
   taiko: (a, t, v, out) => {
@@ -649,6 +703,28 @@ const DRUMS = {
 };
 
 // ======================================================================
+// Muziekbestanden (mp3)
+// ======================================================================
+
+const files = {}; // { pad: { el, source, ok } }  ok: null = nog bezig, true = gelukt, false = mislukt
+
+/** Een muziekbestand klaarzetten (één keer). Het geluid gaat door de Web Audio API, zodat M en N ook hiervoor werken. */
+function loadFile(a, path) {
+  let f = files[path];
+  if (!f) {
+    const el = new Audio(path);
+    el.loop = true;
+    el.preload = 'auto';
+    f = { el, source: null, ok: null };
+    files[path] = f;
+    el.addEventListener('canplaythrough', () => { if (f.ok === null) f.ok = true; });
+    el.addEventListener('error', () => { f.ok = false; });
+  }
+  if (!f.source) f.source = a.ctx.createMediaElementSource(f.el);
+  return f;
+}
+
+// ======================================================================
 // De sequencer
 // ======================================================================
 
@@ -692,6 +768,11 @@ export class Music {
     if (this.timer || !getAudio()) return;
     this.timer = setInterval(() => this.tick(), 40);
     this.tick();
+    // De boss-muziek alvast laden, dan speelt hij meteen als het gevecht begint
+    setTimeout(() => {
+      const a = getAudio();
+      if (a) loadFile(a, BOSS_FILE);
+    }, 1500);
   }
 
   /** Wisselt zo nodig van liedje en plant de volgende noten in. */
@@ -707,6 +788,17 @@ export class Music {
     const s = this.song;
     if (!s) return;
     const now = a.ctx.currentTime;
+    if (s.file) {
+      if (s.file.ok !== false) {
+        s.file.el.playbackRate = this.level > 0 ? s.def.fileFaster ?? 1 : 1; // Omar boos: sneller
+        return;
+      }
+      // Het bestand lukte niet: dan toch de zelfgemaakte muziek
+      s.file = null;
+      s.gain.gain.cancelScheduledValues(now);
+      s.gain.gain.setValueAtTime(s.def.gain, now);
+      s.next = now + 0.05;
+    }
     if (s.next < now - 0.3) s.next = now + 0.05; // tab was even weg: niet alles tegelijk inhalen
     while (s.next < now + AHEAD) {
       this.playStep(a, s, s.next);
@@ -742,7 +834,22 @@ export class Music {
     const send = a.ctx.createGain();
     send.connect(gain);
     send.connect(this.fx);
-    this.song = { name, def, gain, send, step: 0, next: a.ctx.currentTime + 0.08 };
+    this.song = { name, def, gain, send, step: 0, next: a.ctx.currentTime + 0.08, file: null };
+    if (def.file && files[def.file]?.ok !== false) this.startFile(a, this.song);
+  }
+
+  /** Het mp3-bestand vanaf het begin laten spelen (in plaats van de bladmuziek). */
+  startFile(a, s) {
+    const f = loadFile(a, s.def.file);
+    f.source.disconnect();
+    f.source.connect(s.gain);
+    s.gain.gain.cancelScheduledValues(a.ctx.currentTime);
+    s.gain.gain.setValueAtTime(0.0001, a.ctx.currentTime);
+    s.gain.gain.linearRampToValueAtTime(s.def.fileGain ?? 1, a.ctx.currentTime + 0.3);
+    f.el.currentTime = 0;
+    f.el.playbackRate = 1;
+    f.el.play().catch(() => { f.ok = false; });
+    s.file = f;
   }
 
   /** Huidige liedje zacht laten wegsterven. */
@@ -757,17 +864,26 @@ export class Music {
       s.gain.gain.linearRampToValueAtTime(0.0001, t + fade);
       setTimeout(() => s.gain.disconnect(), (fade + 2) * 1000);
     }
+    if (s.file) {
+      const f = s.file;
+      setTimeout(() => { if (this.song?.file !== f) f.el.pause(); }, fade * 1000 + 100);
+    }
     this.song = null;
   }
 
   playStep(a, s, t) {
     const def = s.def;
-    const bars = def.chords.length;
-    const bar = Math.floor(s.step / STEPS) % bars;
+    // Sommige liedjes hebben een begin (intro) dat maar één keer speelt; daarna herhaalt de rest zich
+    const intro = def.intro ?? 0;
+    const total = Math.floor(s.step / STEPS);
+    const inIntro = total < intro;
+    const chordBar = inIntro ? total : intro + ((total - intro) % (def.chords.length - intro));
+    const bar = inIntro ? total : chordBar - intro; // maat binnen het stuk (begin of herhaling)
     const inBar = s.step % STEPS;
     const stepTime = 60 / (def.bpm * (this.level > 0 ? def.faster ?? 1 : 1)) / 4;
-    const ch = def.chordInfo[bar];
+    const ch = def.chordInfo[chordBar];
     for (const track of def.tracks) {
+      if (!!track.intro !== inIntro) continue;
       if (this.level < (track.min ?? 0) || this.level > (track.max ?? 9)) continue;
       const every = STEPS / track.div;
       if (inBar % every) continue;
