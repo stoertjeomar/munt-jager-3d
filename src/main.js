@@ -1,11 +1,8 @@
 import * as THREE from 'three';
 import { Input } from './input.js';
 import { CameraRig } from './camera.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { createGraphics } from './graphics.js';
+import { BlobShadows } from './blobs.js';
 import { Player, PLAYABLE } from './player.js';
 import { createWorld, CHECKPOINTS, ARENAS, CHESTS } from './world.js';
 import { LEVELS, LEVEL, LEVEL_INDEX } from './levels.js';
@@ -24,47 +21,16 @@ import { Pickups, DIAMONDS } from './pickups.js';
 import { Projectiles } from './projectiles.js';
 
 // ---------- Basis: renderer, scene, camera ----------
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+// Geen "antialias" hier: alles gaat eerst door de nabewerking, daar zitten de gladde randjes (zie graphics.js).
+// "high-performance": laptops met twee videokaarten kiezen dan de snelle.
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping; // mooiere, zachtere kleuren
-renderer.toneMappingExposure = 1.15;
 document.body.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 230); // verder dan 230 m tekenen we niet (mist)
-
-// Nabewerking: felle dingen (vuur, lampen, zwaard-windjes) krijgen een zachte gloed
-const composer = new EffectComposer(renderer);
-composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth / 2, window.innerHeight / 2), 0.35, 0.5, 0.92);
-composer.addPass(bloom);
-composer.addPass(new OutputPass());
-// Kleuren net wat levendiger en een zachte donkere rand (vignet): dan voelt het meer als een echte game
-composer.addPass(new ShaderPass({
-  uniforms: { tDiffuse: { value: null } },
-  vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-  fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
-    void main() {
-      vec3 c = texture2D(tDiffuse, vUv).rgb;
-      float grey = dot(c, vec3(0.299, 0.587, 0.114));
-      c = mix(vec3(grey), c, 1.14);                 // verzadiging
-      c = (c - 0.5) * 1.05 + 0.5;                   // contrast
-      c *= vec3(1.02, 1.0, 0.97);                   // een tikje warmer
-      vec2 d = vUv - 0.5;
-      c *= 1.0 - smoothstep(0.35, 0.85, length(d * vec2(1.25, 1.0))) * 0.35; // vignet
-      gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
-    }`,
-}));
-
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  composer.setSize(window.innerWidth, window.innerHeight);
-});
 
 // ---------- Game-objecten ----------
 const stats = new Stats();
@@ -85,6 +51,20 @@ const npcs = new NPCs(scene, stats, world.colliders);
 const effects = new Effects(scene);
 const trail = new SwordTrail(scene);
 const cameraRig = new CameraRig(camera, renderer.domElement);
+// Nabewerking (gloed, kleuren, gladde randjes) en de graphics-standen (G)
+const gfx = createGraphics({ renderer, scene, camera, world, ui });
+const composer = gfx.composer;
+const blobs = new BlobShadows(scene);
+
+// 's Nachts een zacht, warm lichtje net boven en achter je (aan de kant van de camera):
+// dan zie je jezelf, het pad en vijanden vlak bij je goed. Geen schaduw, dus het kost bijna niks.
+// Het lampje is er altijd (overdag op 0): zo hoeft de computer nooit opnieuw shaders te maken.
+const nightLight = {
+  light: new THREE.PointLight(0xffe2b8, 0, 12, 1.5), // kleur, sterkte, bereik (m), afname
+  strength: 5, // hoe fel het lichtje 's nachts is
+};
+scene.add(nightLight.light);
+const toCamera = new THREE.Vector3();
 
 const state = {
   hitstop: 0, // heel even stilstaan bij een klap: dan voelt het krachtiger
@@ -593,6 +573,7 @@ document.addEventListener('pointerlockchange', () => {
 window.addEventListener('keydown', (e) => {
   unlockAudio();
   if (e.code === 'KeyM') toggleMute();
+  if (e.code === 'KeyG' && !e.repeat) gfx.cycle(); // G = mooier of sneller: kies wat je computer aankan
 });
 
 /** Welke kant wil de speler op? (WASD, ten opzichte van de camera) */
@@ -724,7 +705,8 @@ const bossCtx = { player, effects, hurtPlayer, spawnEnemy: addSummon, camera, pr
 
 function gameLoop() {
   // realDt = tijd sinds vorige frame. Begrensd zodat een lag-piek je niet door de vloer laat vallen.
-  const realDt = Math.min(clock.getDelta(), 0.05);
+  const frameTime = clock.getDelta();
+  const realDt = Math.min(frameTime, 0.05);
   // Tijdens een "hitstop" of een menu staat het spel even stil (de camera niet)
   // Pauze: in een menu (behalve rusten), of op het start-/pauzescherm (muis niet vast)
   const paused = !!ui.menuOpen || (!cameraRig.locked && !state.forceRun);
@@ -786,6 +768,7 @@ function gameLoop() {
   const enemyCtx = {
     time: elapsed, player, colliders: world.colliders, bounds: world.bounds, camera, onSlam: onGolemSlam,
     hurtPlayer, projectiles, effects,
+    night: world.night ?? 0, // 0 = dag, 1 = nacht (vijanden kunnen dan wat gloeien)
   };
   for (const enemy of enemies) enemy.update(dt, enemyCtx);
   for (const boss of bosses) boss.update(dt, bossCtx);
@@ -829,7 +812,7 @@ function gameLoop() {
   decor.update(dt, elapsed, player.position, world.night ?? 0);
   updateTrail(dt);
   effects.update(dt);
-  world.updateSun(player.position, dt);
+  world.updateSun(player.position, dt, cameraRig.forward);
 
   cameraRig.update(realDt, player.position, {
     facing: player.mesh.rotation.y,
@@ -839,6 +822,8 @@ function gameLoop() {
     maxDistance: world.insideHouse(player.position) ? 2.8 : null,
   });
   effects.applyShake(camera, realDt);
+  updateNightLight();
+  updateBlobShadows();
 
   // Lock-on markering
   lockMarker.visible = !!state.lockTarget;
@@ -856,8 +841,36 @@ function gameLoop() {
     stats.save();
   }
 
-  composer.render();
+  gfx.measure(frameTime, gameStarted && !paused);
+  gfx.render();
   input.endFrame();
+}
+
+/** Het warme lichtje bij de speler: boven en achter je, en alleen als het donker is. */
+function updateNightLight() {
+  toCamera.copy(camera.position).sub(player.position).setY(0);
+  if (toCamera.lengthSq() > 0.01) toCamera.setLength(1.2);
+  nightLight.light.position.copy(player.position).add(toCamera).setY(player.position.y + 2.4);
+  nightLight.light.intensity = nightLight.strength * (world.lampsOn ?? 0); // gaat al aan in de schemering
+}
+
+// Schaduw-vlekjes: waar stond de speler het laatst op iets? (dan blijft zijn vlekje daar als hij springt)
+let playerGroundY = 0;
+
+/** Zachte schaduw-vlekjes onder iedereen die in de buurt is. */
+function updateBlobShadows() {
+  const near = (p) => Math.abs(p.x - player.position.x) < 40 && Math.abs(p.z - player.position.z) < 40;
+  blobs.begin();
+  if (player.onGround) playerGroundY = player.position.y;
+  if (player.mesh.visible) blobs.add(player.position, 1.1, Math.min(playerGroundY, player.position.y));
+  for (const e of enemies) {
+    if (!e.alive || !e.mesh.visible || !near(e.position)) continue;
+    blobs.add(e.position, e.type.radius * 2.4, 0); // vijanden lopen altijd op de grond (spoken zweven erboven)
+  }
+  for (const b of bosses) if (b.alive && b.mesh.visible && near(b.position)) blobs.add(b.position, b.type.radius * 2.4, 0);
+  for (const n of npcs.list) if (near(n.position)) blobs.add(n.position, 1.1, 0);
+  for (const a of decor.animals) if (near(a.mesh.position)) blobs.add(a.mesh.position, 0.9, 0);
+  blobs.end();
 }
 
 renderer.setAnimationLoop(gameLoop);
@@ -872,4 +885,4 @@ if (stats.level === 1 && stats.runes === 0 && stats.data.bosses.length === 0) {
 }
 
 // Handig voor debuggen in de browser-console (F12): typ bijvoorbeeld `game.player.position`
-window.game = { scene, player, enemies, bosses, sites, npcs, stats, ui, world, state, camera, cameraRig, renderer, composer, effects, trail, onDefeated, loop: gameLoop };
+window.game = { scene, player, enemies, bosses, sites, npcs, stats, ui, world, state, camera, cameraRig, renderer, composer, gfx, nightLight, effects, trail, onDefeated, loop: gameLoop };

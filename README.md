@@ -45,6 +45,8 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 | X | Vuurzwaard |
 | I of Tab | Uitrusting (wapens, helmen, krachten) |
 | M | Geluid aan/uit |
+| G | Graphics: Laag / Normaal / Hoog (wordt onthouden) |
+| Scrollen | In- en uitzoomen (je begint helemaal ingezoomd) |
 | Esc | Pauze / muis vrij |
 
 ## Wat zit erin
@@ -63,6 +65,10 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 - Wind in de bomen en het gras, ronde loofbomen, zwevend stuifmeel overdag en vuurvliegjes 's nachts, een zon en maan aan de hemel
 - Levendige vijanden: glanzende slijmpjes die knipperen en je met hun ogen volgen, spoken met een gloed, golems met gloeiende scheuren
 - Lantaarns langs het pad, een bos rond elk level, minimap met het pad, **dag-en-nachtritme** met sterren en een zachte **gloed** (bloom)
+- 's Nachts is het donkerblauw maanlicht in plaats van pikzwart: de lantaarns verlichten de grond en een warm lichtje bij jou laat je de weg en de vijanden zien
+- **Mooiere graphics**: gladde randjes, licht uit de lucht (glanzende dingen weerspiegelen de lucht), schaduwen die niet kriebelen,
+  zachte schaduw-vlekjes onder iedereen, nevel laag bij de grond en een zon die een beetje schittert.
+  Met **G** kies je *Laag* (snel, voor oudere laptops), *Normaal* of *Hoog* (met extra donkere hoekjes, "ambient occlusion")
 - Vijanden (ook spoken) lopen niet meer door muren, bomen of stenen heen
 - **Levelen door te vechten**: elke verslagen vijand telt mee (een boss telt voor 10). Elk level geeft meer leven,
   stamina en schade, en op sommige levels speel je een kracht of bonus vrij (extra flesjes, sneller lopen, minder schade).
@@ -95,6 +101,8 @@ munt-jager-3d/
 ├── images/           → portretten voor het startscherm
 └── src/
     ├── main.js       → start alles op, game loop, gevechten, winkel, doodgaan
+    ├── graphics.js   → hoe het getekend wordt: gloed, kleuren, gladde randjes, de standen Laag/Normaal/Hoog (G)
+    ├── blobs.js      → zachte schaduw-vlekjes onder de speler, vijanden en mensen
     ├── levels.js     → de 4 levels: pad, vijanden, kisten, NPC's, huizen (pas hier je levels aan!)
     ├── world.js      → bouwt het level: grond, pad, huizen, ruïnes, natuur, arena, dag en nacht
     ├── npcs.js       → NPC's en hun zij-quests

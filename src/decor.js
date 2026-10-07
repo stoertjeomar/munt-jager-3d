@@ -12,6 +12,10 @@ import { LEVEL, LEVEL_INDEX } from './levels.js';
  */
 function scatter(scene, gltf, transforms, { shadows = false, wind = 0 } = {}) {
   gltf.scene.updateMatrixWorld(true);
+  // Niet te glanzend: met licht uit de lucht zien gladde planten en stenen er anders uit als plastic
+  gltf.scene.traverse((c) => {
+    if (c.isMesh && c.material.roughness !== undefined) c.material.roughness = Math.max(c.material.roughness, 0.8);
+  });
   // Gras en planten wiegen in de wind
   if (wind) gltf.scene.traverse((c) => c.isMesh && addWind(c.material, { strength: wind, speed: 2.2 }));
   // In vakken van 40 x 40 meter verdelen: dan tekent de computer alleen de vakken die in beeld zijn
@@ -182,13 +186,15 @@ export class Decor {
 
     // Wolken die langzaam voorbij drijven
     if (cloud) {
+      // Eén materiaal voor alle wolken: dan kunnen we ze 's nachts in één keer donkerder maken
+      this.cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92, fog: false });
       for (let i = 0; i < 28; i++) {
         const c = cloud.scene.clone();
         const s = 6 + rand() * 10;
         c.scale.set(s * (1.2 + rand()), s * 0.5, s);
         c.position.set((rand() - 0.5) * 300, 38 + rand() * 25, (rand() - 0.5) * 300);
         c.traverse((m) => {
-          if (m.isMesh) m.material = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92, fog: false });
+          if (m.isMesh) m.material = this.cloudMat;
         });
         scene.add(c);
         this.clouds.push({ mesh: c, speed: 0.6 + rand() * 1.2 });
@@ -212,6 +218,11 @@ export class Decor {
 
   update(dt, time, playerPos, night = 0) {
     this.updateMotes(dt, time, playerPos, night);
+    // 's Nachts zijn de wolken donker blauwgrijs (anders gloeien ze wit in de donkere lucht)
+    if (this.cloudMat) {
+      this.cloudMat.color.setRGB(1 - night * 0.75, 1 - night * 0.7, 1 - night * 0.55);
+      this.cloudMat.opacity = 0.92 - night * 0.2;
+    }
     for (const c of this.clouds) {
       c.mesh.position.x += c.speed * dt;
       if (c.mesh.position.x > 160) c.mesh.position.x = -160;

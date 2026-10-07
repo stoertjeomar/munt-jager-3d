@@ -55,6 +55,24 @@ export function tex(name, smooth = false) {
   return textureCache[key];
 }
 
+// ---------- Mist die bij de grond dikker is ----------
+// Verre dingen laag bij de grond verdwijnen in de nevel, boomtoppen niet zo snel. Dat geeft diepte.
+// (Dit verandert het mist-stukje van álle materialen, dus het moet gebeuren voordat er iets getekend wordt.)
+const FOG_LOW = LEVEL.theme === 'woud' ? 0.07 : 0.1; // hoeveel extra nevel er vlak boven de grond hangt
+THREE.ShaderChunk.fog_pars_vertex = '#ifdef USE_FOG\n\tvarying float vFogDepth;\n\tvarying float vFogHeight;\n#endif';
+THREE.ShaderChunk.fog_vertex = '#ifdef USE_FOG\n\tvFogDepth = - mvPosition.z;\n\tvFogHeight = ( transpose( mat3( viewMatrix ) ) * ( mvPosition.xyz - viewMatrix[ 3 ].xyz ) ).y;\n#endif';
+THREE.ShaderChunk.fog_pars_fragment += '\n#ifdef USE_FOG\n\tvarying float vFogHeight;\n#endif';
+THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
+  #ifdef FOG_EXP2
+    float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+  #else
+    float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
+    float fogLow = exp( - max( vFogHeight, 0.0 ) * 0.12 ); // 1 op de grond, 0 hoog in de lucht
+    fogFactor = clamp( fogFactor * ( 0.7 + 0.5 * fogLow ) + fogLow * ${FOG_LOW.toFixed(3)} * smoothstep( 8.0, 45.0, vFogDepth ), 0.0, 1.0 );
+  #endif
+  gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );
+#endif`;
+
 // ---------- Wind ----------
 // Eén klok voor alles wat in de wind beweegt (bomen, gras, planten).
 export const WIND = { value: 0 };
@@ -148,30 +166,63 @@ export function isFree(x, z, margin = 0) {
 
 // ---------- Dag en nacht ----------
 const DAY_LENGTH = 360; // een hele dag duurt 6 minuten
+// Licht uit de lucht (Normaal/Hoog): hoe sterk overdag en 's nachts, en hoeveel de hemisfeer dan nog meedoet
+// (te veranderen vanuit de browser-console: game.world.lightTuning)
+const LIGHT_TUNING = {
+  envDay: 0.7, envNight: 1.2, // licht uit de lucht
+  envHemi: 0.6, // hoeveel de hemisfeer dan nog meedoet
+  lantern: 5, // hoe fel een lantaarn 's nachts de grond verlicht
+};
+const GROUND_ENV = new THREE.Color(0.3, 0.3, 0.14); // kleur van de grond in het "fotootje" van de lucht
+const MOON_COLOR = new THREE.Color(0xdfe8ff);
 const glowingWindows = [];
 const glowingLamps = [];
 const glowingFires = [];
 
-// Kleuren op bepaalde momenten van de dag; daartussen vloeien ze in elkaar over
-const DAY_KEYS = [
-  { t: 0.0, top: 0x0a1030, horizon: 0x1b2850, sun: 0x8fa8ff, sunPower: 0.45, ambient: 0.35, skyLight: 0x6a7fc0, stars: 1 }, // nacht
-  { t: 0.22, top: 0x1d2f6a, horizon: 0xf2a37a, sun: 0xffb27a, sunPower: 0.9, ambient: 0.55, skyLight: 0xffc9a0, stars: 0.3 }, // zonsopgang
-  { t: 0.3, top: 0x3d7fd9, horizon: 0xcdeaff, sun: 0xffffff, sunPower: 1.6, ambient: 0.9, skyLight: 0xffffff, stars: 0 }, // ochtend
-  { t: 0.7, top: 0x3d7fd9, horizon: 0xcdeaff, sun: 0xffffff, sunPower: 1.6, ambient: 0.9, skyLight: 0xffffff, stars: 0 }, // middag
-  { t: 0.78, top: 0x4a3a7a, horizon: 0xff9a5c, sun: 0xff8a4a, sunPower: 1.0, ambient: 0.6, skyLight: 0xffb08a, stars: 0.2 }, // zonsondergang
-  { t: 0.86, top: 0x0a1030, horizon: 0x1b2850, sun: 0x8fa8ff, sunPower: 0.45, ambient: 0.35, skyLight: 0x6a7fc0, stars: 1 }, // nacht
-  { t: 1.0, top: 0x0a1030, horizon: 0x1b2850, sun: 0x8fa8ff, sunPower: 0.45, ambient: 0.35, skyLight: 0x6a7fc0, stars: 1 },
+// Kleuren op bepaalde momenten van de dag; daartussen vloeien ze in elkaar over.
+// fog = kleur van de mist, ground = licht dat van de grond terugkaatst,
+// exposure = hoe gevoelig de "camera" is ('s nachts hoger, net als je ogen die aan het donker wennen).
+// 's Nachts is het donkerblauw (maanlicht), niet pikzwart: je moet de weg en de vijanden nog kunnen zien.
+const NIGHT = { top: 0x0d1a48, horizon: 0x2a3f78, fog: 0x22335f, sun: 0xa9b4ff, sunPower: 1.15, ambient: 1.25, skyLight: 0x8590d8, ground: 0x2a3548, exposure: 1.4, stars: 1 };
+const DAY = { top: 0x2f6fd6, horizon: 0xb4dcf7, fog: 0xb4dcf7, sun: 0xffffff, sunPower: 1.6, ambient: 0.9, skyLight: 0xffffff, ground: 0x556b2f, exposure: 1.15, stars: 0 };
+export const DAY_KEYS = [
+  { t: 0.0, ...NIGHT }, // nacht
+  { t: 0.22, top: 0x2a3f80, horizon: 0xf2a37a, fog: 0xb98f88, sun: 0xffb27a, sunPower: 1.35, ambient: 1.35, skyLight: 0xffc9a0, ground: 0x5a4a3c, exposure: 1.3, stars: 0.3 }, // zonsopgang
+  { t: 0.3, ...DAY }, // ochtend
+  { t: 0.7, ...DAY }, // middag
+  { t: 0.78, top: 0x4a3a7a, horizon: 0xff9a5c, fog: 0xb88470, sun: 0xffa66a, sunPower: 1.7, ambient: 1.4, skyLight: 0xf0c0a8, ground: 0x5a4a3c, exposure: 1.3, stars: 0.2 }, // zonsondergang
+  { t: 0.86, ...NIGHT }, // nacht
+  { t: 1.0, ...NIGHT },
 ];
 
+const COLOR_KEYS = ['top', 'horizon', 'fog', 'sun', 'skyLight', 'ground'];
+const NUMBER_KEYS = ['sunPower', 'ambient', 'exposure', 'stars'];
+
+/** Hoe de wereld eruitziet op tijdstip t (0..1): kleuren en lichtsterktes. */
 function dayLook(t) {
   let i = 1;
   while (i < DAY_KEYS.length - 1 && DAY_KEYS[i].t < t) i++;
   const a = DAY_KEYS[i - 1];
   const b = DAY_KEYS[i];
   const k = THREE.MathUtils.smoothstep(t, a.t, b.t);
-  const col = (key) => new THREE.Color(a[key]).lerp(new THREE.Color(b[key]), k);
-  const num = (key) => a[key] + (b[key] - a[key]) * k;
-  return { top: col('top'), horizon: col('horizon'), sun: col('sun'), skyLight: col('skyLight'), sunPower: num('sunPower'), ambient: num('ambient'), stars: num('stars') };
+  const look = {};
+  for (const key of COLOR_KEYS) look[key] = new THREE.Color(a[key]).lerp(new THREE.Color(b[key]), k);
+  for (const key of NUMBER_KEYS) look[key] = a[key] + (b[key] - a[key]) * k;
+  return look;
+}
+
+/** Een zacht rond lichtvlekje (wit in het midden, doorzichtig aan de rand), voor gloed rond lampen. */
+function glowTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.25, 'rgba(255,255,255,0.45)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(canvas);
 }
 
 /** Sterren aan de hemel (alleen 's nachts zichtbaar). */
@@ -191,6 +242,12 @@ function createStars(scene) {
   scene.add(stars);
   return stars;
 }
+
+/**
+ * De kleuren van de lucht (top, horizon, sunDir, sunColor, sunSize). Andere dingen aan de hemel
+ * (wolken, bergen in de verte) kunnen deze gebruiken, dan kleuren ze vanzelf mee met de dag en nacht.
+ */
+export let SKY_UNIFORMS = null;
 
 /** Een lucht die van diepblauw (boven) naar lichtblauw (horizon) loopt. */
 function createSky(scene) {
@@ -215,14 +272,23 @@ function createSky(scene) {
           float h = clamp(dir.y, 0.0, 1.0);
           vec3 col = mix(horizon, top, pow(h, 0.55));
           float s = max(dot(dir, normalize(sunDir)), 0.0);
-          col += sunColor * (smoothstep(0.9993 - 0.0004 * (1.0 - sunSize), 0.9997, s) * 2.5 * sunSize + smoothstep(0.9988, 0.9995, s) * (1.0 - sunSize) * 1.2);
+          // De zon is heel fel (meer dan wit), dan krijgt hij een zachte gloed eromheen; de maan is rustiger
+          col += sunColor * (smoothstep(0.9993 - 0.0004 * (1.0 - sunSize), 0.9997, s) * 6.0 * sunSize + smoothstep(0.9988, 0.9995, s) * (1.0 - sunSize) * 1.2);
           col += sunColor * (pow(s, 24.0) * 0.35 + pow(s, 4.0) * 0.12) * sunSize;
+          col += sunColor * pow(s, 3.0) * 0.18 * (1.0 - h) * sunSize; // warme waas laag bij de horizon, aan de kant van de zon
           col = mix(col, horizon * 1.05, (1.0 - smoothstep(0.0, 0.12, dir.y)) * 0.6); // nevel bij de horizon
+          #ifdef ENV_SKY
+            // Voor het licht uit de lucht: minder blauw en wat warmer, anders wordt alles blauwgroen
+            col = mix(col, vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))) * vec3(1.1, 1.0, 0.82), 0.6);
+          #endif
           gl_FragColor = vec4(col, 1.0);
         #include <colorspace_fragment>
         }`,
     })
   );
+  sky.renderOrder = -2; // de lucht eerst tekenen: alles (ook bergen in de verte) komt eroverheen
+  sky.frustumCulled = false;
+  SKY_UNIFORMS = sky.material.uniforms;
   scene.add(sky);
   return sky;
 }
@@ -237,7 +303,7 @@ function createGround(scene) {
   const colors = [];
   const blends = [];
   const rand = seededRandom(7);
-  const base = { weide: [1.6, 1.6, 1.35], woud: [0.82, 0.98, 0.78], hoogland: [1.05, 1.0, 0.92] }[LEVEL.theme];
+  const base = { weide: [1.76, 1.63, 1.05], woud: [0.88, 0.99, 0.64], hoogland: [1.18, 1.06, 0.78] }[LEVEL.theme]; // wat warmer: geen blauwgroen gras
   const tint = new THREE.Color(...(LEVEL.tint ? base.map((v, i) => v * LEVEL.tint[i]) : base));
   const c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
@@ -308,6 +374,47 @@ function createGround(scene) {
   const ground = new THREE.Mesh(geo, material);
   ground.receiveShadow = true;
   scene.add(ground);
+  return geo;
+}
+
+/**
+ * Zachte donkere randjes op de grond rond bomen, rotsen, muren en blokken ("ambient occlusion"):
+ * vlak naast iets groots komt minder licht uit de lucht. Dan "staan" dingen echt op de grond.
+ * We rekenen het één keer uit bij het laden en kleuren de grond daar iets donkerder: tijdens het spelen kost het niks.
+ */
+function bakeGroundAO(geo, colliders) {
+  const { width, height: depth, widthSegments: segW, heightSegments: segD } = geo.parameters;
+  const pos = geo.attributes.position;
+  const color = geo.attributes.color;
+  const shade = new Float32Array(color.count).fill(1);
+  const toIx = (x) => Math.round(((x + width / 2) / width) * segW);
+  const toIz = (z) => Math.round(((z + depth / 2) / depth) * segD);
+  for (const box of colliders) {
+    if (box.min.y > 0.3) continue; // zweeft boven de grond (een platform): geen randje
+    const sizeX = box.max.x - box.min.x;
+    const sizeZ = box.max.z - box.min.z;
+    if (Math.max(sizeX, sizeZ) < 0.4) continue; // heel dun (een lantaarnpaal): te klein om te zien
+    const reach = THREE.MathUtils.clamp(0.4 + (box.max.y - box.min.y) * 0.3, 0.8, 2.2); // hoe ver het donker over de grond loopt (meter)
+    const strength = 0.32 * THREE.MathUtils.clamp(Math.min(sizeX, sizeZ) / 0.6, 0.6, 1); // dunne muren iets minder
+    const ix0 = Math.max(0, toIx(box.min.x - reach) - 1);
+    const ix1 = Math.min(segW, toIx(box.max.x + reach) + 1);
+    const iz0 = Math.max(0, toIz(box.min.z - reach) - 1);
+    const iz1 = Math.min(segD, toIz(box.max.z + reach) + 1);
+    for (let iz = iz0; iz <= iz1; iz++) {
+      for (let ix = ix0; ix <= ix1; ix++) {
+        const i = iz * (segW + 1) + ix;
+        const x = pos.getX(i);
+        const z = pos.getZ(i);
+        const d = Math.hypot(Math.max(box.min.x - x, 0, x - box.max.x), Math.max(box.min.z - z, 0, z - box.max.z));
+        if (d < reach) shade[i] *= 1 - strength * Math.pow(1 - d / reach, 1.5);
+      }
+    }
+  }
+  for (let i = 0; i < color.count; i++) {
+    const k = Math.max(0.6, shade[i]);
+    color.setXYZ(i, color.getX(i) * k, color.getY(i) * k, color.getZ(i) * k);
+  }
+  color.needsUpdate = true;
 }
 
 // Daken van huizen: verdwijnen als je naar binnen loopt, zodat je het interieur ziet
@@ -469,11 +576,17 @@ function createWell(scene, colliders) {
   colliders.push(new THREE.Box3(new THREE.Vector3(c.x - 1.3, 0, c.z - 1.3), new THREE.Vector3(c.x + 1.3, 1, c.z + 1.3)));
 }
 
-/** Lantaarnpalen langs het pad: 's nachts gloeien ze. */
+// Waar de lantaarns staan (voor de plas licht eromheen), en hun gloed-vlekjes
+const lanternSpots = [];
+let lanternHaloMat = null;
+
+/** Lantaarnpalen langs het pad: 's nachts gloeien ze en geven ze licht op de grond. */
 function createLanterns(scene, colliders) {
   const wood = texMat('timber_square_planks');
   const glassMat = new THREE.MeshStandardMaterial({ color: 0xffd27a, emissive: 0xffb347, emissiveIntensity: 1.2, roughness: 0.4 });
   glowingLamps.push(glassMat);
+  // Een zacht lichtvlekje rond elke lamp ('s nachts zie je dan van ver waar het pad loopt)
+  lanternHaloMat = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffb347, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0, fog: false });
   const pts = LEVEL.path;
   for (let i = 0; i < pts.length - 1; i++) {
     const [ax, az] = pts[i];
@@ -493,7 +606,12 @@ function createLanterns(scene, colliders) {
       lamp.position.set(x, 2.75, z);
       const cap = texturedBox(0.46, 0.08, 0.46, wood, 1);
       cap.position.set(x, 3.0, z);
-      scene.add(post, lamp, cap);
+      const halo = new THREE.Sprite(lanternHaloMat);
+      halo.position.set(x, 2.75, z);
+      halo.scale.setScalar(1.8);
+      halo.userData.noAO = true;
+      scene.add(post, lamp, cap, halo);
+      lanternSpots.push(new THREE.Vector3(x, 2.6, z));
       colliders.push(new THREE.Box3(new THREE.Vector3(x - 0.12, 0, z - 0.12), new THREE.Vector3(x + 0.12, 2.6, z + 0.12)));
     }
   }
@@ -661,12 +779,64 @@ export function createWorld(scene) {
   const stars = createStars(scene);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.bias = -0.0005;
-  sun.shadow.normalBias = 0.03;
-  Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 120 });
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.02;
+  Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 140 });
   scene.add(sun, sun.target);
+  let shadowHalf = 30; // de schaduw-doos is 2 x shadowHalf meter breed (rond de speler)
 
-  createGround(scene);
+  // De 3 lantaarns die het dichtst bij je staan geven 's nachts echt licht op de grond.
+  // Meer lampen maakt het spel trager, dus we schuiven deze 3 lampjes steeds naar de dichtstbijzijnde lantaarns.
+  // Ze zijn er altijd (overdag op 0): lampen erbij doen of weghalen laat de computer alle shaders opnieuw maken (hapering).
+  const lanternLights = [0, 1, 2].map(() => {
+    const light = new THREE.PointLight(0xffb060, 0, 11, 1.5); // kleur, sterkte, bereik (m), afname
+    scene.add(light);
+    return light;
+  });
+
+  // ---------- Licht uit de lucht (environment) ----------
+  // We maken een klein "fotootje" van de lucht rondom (6 kanten) en laten alle materialen daar zacht door
+  // belicht worden: glanzende dingen (metaal, slijm) weerspiegelen dan de lucht in plaats van zwart te zijn.
+  // Het fotootje wordt ververst als de tijd van de dag een stukje verder is (goedkoop: de lucht is maar een bol).
+  const envScene = new THREE.Scene();
+  // Zelfde lucht (zelfde kleuren, gedeeld), maar een stukje minder blauw (zie ENV_SKY in de lucht-shader)
+  const envSkyMat = new THREE.ShaderMaterial({
+    uniforms: sky.material.uniforms, vertexShader: sky.material.vertexShader, fragmentShader: sky.material.fragmentShader,
+    defines: { ENV_SKY: '' }, side: THREE.BackSide, depthWrite: false,
+  });
+  envScene.add(new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), envSkyMat));
+  const envGround = new THREE.Mesh(new THREE.CircleGeometry(40, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x4d4d24 }));
+  envGround.position.y = -1.5; // onderkant = grond, anders wordt alles van onderen bleek belicht
+  envScene.add(envGround);
+  const env = { renderer: null, pmrem: null, cubeRT: null, cubeCam: null, target: null, time: -1, on: false };
+  const envNightGround = new THREE.Color();
+  const refreshEnv = (timeOfDay, look) => {
+    if (!env.on || !env.renderer) return;
+    if (!env.pmrem) {
+      env.pmrem = new THREE.PMREMGenerator(env.renderer);
+      env.cubeRT = new THREE.WebGLCubeRenderTarget(64, { type: THREE.HalfFloatType });
+      env.cubeCam = new THREE.CubeCamera(0.1, 100, env.cubeRT);
+    }
+    // Overdag een zonnige grond, 's nachts de donkerblauwe grond-kleur van de nacht
+    envNightGround.copy(look.ground).multiplyScalar(0.8);
+    envGround.material.color.copy(GROUND_ENV).multiplyScalar(0.3 + sun.intensity * 0.5).lerp(envNightGround, look.stars);
+    env.cubeCam.update(env.renderer, envScene);
+    env.target = env.pmrem.fromCubemap(env.cubeRT.texture, env.target); // 1e keer null = aanmaken, daarna hergebruiken
+    env.time = timeOfDay;
+    scene.environment = env.target.texture;
+  };
+
+  // Hulpjes voor de schaduw (zodat hij niet "kriebelt" als je loopt)
+  const lightDir = new THREE.Vector3(0, 1, 0);
+  let lightTime = -1;
+  const shadowCenter = new THREE.Vector3();
+  const lightRot = new THREE.Matrix4();
+  const lightRotInv = new THREE.Matrix4();
+  const ZERO = new THREE.Vector3();
+  const NOON_HEIGHT = new THREE.Vector3(0, 1, 0.45).normalize().y; // zo hoog staat de zon om 12 uur
+  const UP = new THREE.Vector3(0, 1, 0);
+
+  const groundGeo = createGround(scene);
 
   const colliders = [];
   for (const [x, y, z, w, h, d] of LEVEL.blocks ?? []) {
@@ -683,6 +853,7 @@ export function createWorld(scene) {
   if (VILLAGE_CENTER) createWell(scene, colliders);
   createLanterns(scene, colliders);
   for (const arena of ARENAS) createArena(scene, colliders, arena);
+  bakeGroundAO(groundGeo, colliders); // pas nu: alles wat op de grond staat is er
 
   return {
     colliders,
@@ -693,35 +864,123 @@ export function createWorld(scene) {
     },
     /** Hoe laat is het? 0 = middernacht, 0.25 = ochtend, 0.5 = middag, 0.75 = avond. */
     timeOfDay: 0.3,
-    /** Laat de zon (en zijn schaduw) met de speler meelopen, en laat de dag verstrijken. */
-    updateSun(playerPos, dt = 0) {
+    night: 0, // 0 = dag, 1 = nacht
+    lampsOn: 0, // 0 = lampen uit, 1 = lampen helemaal aan (al vanaf de schemering)
+    exposure: DAY.exposure, // hoe fel het beeld is (main.js geeft dit door aan de renderer)
+    sunDir: new THREE.Vector3(0, 1, 0), // waar de zon (of maan) aan de hemel staat
+    isMoon: false,
+    look: dayLook(0.3), // alle kleuren van dit moment (voor wolken, bergen, ...)
+    lightTuning: LIGHT_TUNING,
+
+    /** Licht uit de lucht klaarzetten (heeft de renderer nodig om het "fotootje" van de lucht te maken). */
+    initEnvironment(renderer) {
+      env.renderer = renderer;
+    },
+
+    /** Licht uit de lucht aan (mooier) of uit (sneller). */
+    setEnvironment(on) {
+      env.on = on;
+      env.time = -1; // bij de volgende updateSun een nieuw fotootje maken (dan kloppen de kleuren van de lucht al)
+      if (!on) scene.environment = null;
+    },
+
+    /** Hoe scherp de schaduwen zijn: grootte van de schaduw-plaat (pixels) en hoe ver hij reikt (meter). */
+    setShadowQuality(size, half) {
+      shadowHalf = half;
+      Object.assign(sun.shadow.camera, { left: -half, right: half, top: half, bottom: -half });
+      sun.shadow.camera.updateProjectionMatrix();
+      if (sun.shadow.mapSize.x !== size) {
+        sun.shadow.mapSize.set(size, size);
+        sun.shadow.map?.dispose();
+        sun.shadow.map = null; // wordt bij de volgende frame opnieuw gemaakt in de nieuwe maat
+      }
+      lightTime = -1;
+    },
+
+    /**
+     * Laat de zon (en zijn schaduw) met de speler meelopen, en laat de dag verstrijken.
+     * @param {THREE.Vector3} [viewDir]  waar de camera heen kijkt (op de grond): daar komt meer schaduw
+     */
+    updateSun(playerPos, dt = 0, viewDir = null) {
       this.timeOfDay = (this.timeOfDay + dt / DAY_LENGTH) % 1;
       WIND.value += dt;
       const look = dayLook(this.timeOfDay);
+      this.look = look;
       // Zon (overdag) of maan (nacht) draait over de hemel
       const angle = (this.timeOfDay - 0.25) * Math.PI * 2;
       const dir = new THREE.Vector3(Math.cos(angle) * 0.8, Math.sin(angle), 0.45);
       const isMoon = dir.y < 0.15;
       if (isMoon) dir.set(-dir.x, Math.max(0.35, -dir.y), dir.z); // 's nachts schijnt de maan van de andere kant
-      sky.material.uniforms.sunDir.value.copy(dir).normalize();
-      sky.material.uniforms.sunColor.value.copy(isMoon ? new THREE.Color(0xdfe8ff) : look.sun);
+      dir.normalize();
+      this.sunDir.copy(dir);
+      this.isMoon = isMoon;
+      sky.material.uniforms.sunDir.value.copy(dir);
+      sky.material.uniforms.sunColor.value.copy(isMoon ? MOON_COLOR : look.sun);
       sky.material.uniforms.sunSize.value = isMoon ? 0.25 : 1;
-      sun.target.position.copy(playerPos);
-      sun.position.copy(playerPos).addScaledVector(dir.normalize(), 55);
+
+      // Het licht komt altijd van minstens ~35 graden hoog (anders wordt de grond bij zonsondergang heel donker)
+      // en draait soepel door: geen schaduw-sprong als de zon de maan wordt.
+      // We draaien het licht in kleine stapjes, anders "kriebelen" de schaduwranden de hele tijd.
+      if (lightTime < 0 || Math.abs(this.timeOfDay - lightTime) > 0.0015) {
+        lightTime = this.timeOfDay;
+        lightDir.set(Math.cos(angle) * 0.8, Math.max(Math.abs(Math.sin(angle)), 0.6), 0.45).normalize();
+        lightRot.lookAt(lightDir, ZERO, UP);
+        lightRotInv.copy(lightRot).transpose();
+      }
+      // De schaduw-doos staat rond de speler, een stukje naar voren (waar je naartoe kijkt)
+      shadowCenter.set(playerPos.x, 0, playerPos.z);
+      if (viewDir) shadowCenter.addScaledVector(viewDir, shadowHalf * 0.4);
+      // Vastklikken op het raster van schaduw-pixels: dan schuiven de randen niet als je loopt
+      const texel = (2 * shadowHalf) / sun.shadow.mapSize.x;
+      shadowCenter.applyMatrix4(lightRotInv);
+      shadowCenter.x = Math.round(shadowCenter.x / texel) * texel;
+      shadowCenter.y = Math.round(shadowCenter.y / texel) * texel;
+      shadowCenter.applyMatrix4(lightRot);
+      sun.target.position.copy(shadowCenter);
+      sun.position.copy(shadowCenter).addScaledVector(lightDir, 60);
+
       sun.color.copy(look.sun);
-      sun.intensity = look.sunPower;
-      hemi.intensity = look.ambient;
+      // Schuin licht geeft minder licht op de grond. Dat vullen we een stukje aan, anders wordt het al
+      // donker terwijl de zon nog fel is (en zo is de maan om 9 uur 's avonds bijna even fel als om middernacht).
+      sun.intensity = look.sunPower * Math.min(1.45, NOON_HEIGHT / lightDir.y);
       hemi.color.copy(look.skyLight);
+      hemi.groundColor.copy(look.ground);
+      // Met licht uit de lucht aan, komt een deel van het zachte licht daarvandaan (dus de hemisfeer wat zachter)
+      hemi.intensity = env.on ? look.ambient * LIGHT_TUNING.envHemi : look.ambient;
+      scene.environmentIntensity = THREE.MathUtils.lerp(LIGHT_TUNING.envDay, LIGHT_TUNING.envNight, look.stars);
       sky.material.uniforms.top.value.copy(look.top);
       sky.material.uniforms.horizon.value.copy(look.horizon);
-      scene.fog.color.copy(look.horizon);
+      scene.fog.color.copy(look.fog);
       stars.material.opacity = look.stars;
       this.night = look.stars; // 0 = dag, 1 = nacht
+      this.exposure = look.exposure;
       stars.position.copy(playerPos);
       sky.position.copy(playerPos); // de lucht reist mee, anders valt hij buiten beeld (zwart gat!)
+      // Het fotootje van de lucht verversen als de dag een stukje verder is (ongeveer elke 1,5 seconde)
+      if (env.on && (env.time < 0 || Math.abs(this.timeOfDay - env.time) > 0.004)) refreshEnv(this.timeOfDay, look);
+
       for (const m of glowingWindows) m.emissiveIntensity = 0.4 + look.stars * 1.6; // ramen gloeien 's nachts
       for (const m of glowingLamps) m.emissiveIntensity = 0.3 + look.stars * 2.5;
+      if (lanternHaloMat) {
+        lanternHaloMat.opacity = look.stars * 0.7;
+        lanternHaloMat.visible = look.stars > 0.01; // overdag niet tekenen (scheelt werk)
+      }
       for (const f of glowingFires) f.scale.y = 0.8 + Math.random() * 0.4; // flakkerend haardvuur
+      // Lampen gaan al aan in de schemering (dan wordt het nooit eerst donkerder en daarna weer lichter)
+      const dark = Math.min(1, look.stars / 0.6);
+      this.lampsOn = dark;
+      // De dichtstbijzijnde lantaarns krijgen een echt lampje (ver weg gaat het langzaam uit, dan floept het nooit ineens aan)
+      const nearest = lanternSpots.slice().sort((a, b) => a.distanceToSquared(playerPos) - b.distanceToSquared(playerPos));
+      lanternLights.forEach((light, i) => {
+        const spot = nearest[i];
+        if (!spot) {
+          light.intensity = 0;
+          return;
+        }
+        light.position.copy(spot);
+        const d = Math.hypot(spot.x - playerPos.x, spot.z - playerPos.z);
+        light.intensity = LIGHT_TUNING.lantern * dark * (1 - THREE.MathUtils.smoothstep(d, 18, 26));
+      });
       // Dak weg als je in een huis staat, zodat je naar binnen kunt kijken
       for (const h of houseRoofs) h.roof.visible = !h.inner.containsPoint(playerPos);
     },
