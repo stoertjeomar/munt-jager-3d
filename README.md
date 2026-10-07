@@ -73,13 +73,13 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
   Met **G** kies je *Laag* (snel, voor oudere laptops), *Normaal* of *Hoog* (met extra donkere hoekjes, "ambient occlusion")
 - Vijanden (ook spoken) lopen niet meer door muren, bomen of stenen heen
 - **Levelen door te vechten**: elke verslagen vijand telt mee (een boss telt voor 10). Elk level geeft meer leven,
-  stamina en schade, en op sommige levels speel je een kracht of bonus vrij (extra flesjes, sneller lopen, minder schade).
+  stamina en schade, en op sommige levels speel je een kracht of bonus vrij (meer leven, sneller lopen, minder schade).
   Je voortgang staat onder je levensbalk en in het menu *Level & krachten*.
 - **Checkpoint-vlaggen**: halverwege elk level staat een vlag. Loop erlangs en hij wordt goud: als je doodgaat kom je daar terug
   (je munten houd je gewoon)
-- **Koopman Kobus** staat met zijn kraampje bij het begin van elk level: Herstel-soep, Gouden Zaadje (+1 flesje),
+- **Koopman Kobus** staat met zijn kraampje bij het begin van elk level: Herstel-soep, Gouden Zaadje (flesjes helen meer),
   Hartversterker (+20 leven) en Wapen slijpen (+10% schade)
-- **Gevechten**: leven en stamina, rollen met onkwetsbaarheid, lock-on, flesjes, zwaard-windje,
+- **Gevechten**: leven en stamina, rollen met onkwetsbaarheid, lock-on, flesjes (maximaal 3 in het hele spel), zwaard-windje,
   vonken, schade-getallen, camera-schok en hitstop
 - **5 krachten**: Dash, Dubbele sprong, Wervelslag, Grondslag en Vuurzwaard (vrijspelen door te levelen en bosses te verslaan)
 - **Wapens** (alleen slagwapens): kort zwaard, dolk, bijl, ridderzwaard, katana, knots, strijdhamer, IJszwaard,

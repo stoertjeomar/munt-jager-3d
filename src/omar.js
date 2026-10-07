@@ -5,7 +5,7 @@ import { CHARACTERS, otherPlayable } from './player.js';
 import { play } from './audio.js';
 import { OMAR } from './omarFighter.js'; // (dit laadt ook Omar zelf, zodat hij bij de bosses staat)
 
-// Omar de Baas: alles rondom het gevecht tegen Omar.
+// Omar: alles rondom het gevecht tegen Omar.
 //
 //  1. In elk level staat Omar (npcs.js). Druk op E bij hem, dan daagt hij je uit: "Ja" of "Nee".
 //  2. Ja? Dan neemt hij je mee (paarse wervelwind) naar zijn Gekke Kasteel (index.html?level=omar).
@@ -24,8 +24,14 @@ const smooth = (t) => {
 };
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
-// Extra stijl voor het filmpje (zwarte balken, overgang, overslaan-knop)
+// Extra stijl voor het filmpje (zwarte balken, overgang, overslaan-knop) en het feest (confetti, flits)
 const STYLE = `
+#omar-confetti { position: fixed; inset: 0; z-index: 40; pointer-events: none; overflow: hidden; }
+#omar-confetti i { position: absolute; top: -30px; width: 10px; height: 16px; border-radius: 2px; animation: omar-fall linear forwards; }
+#omar-confetti b { position: absolute; top: -70px; font-size: 38px; animation: omar-fall linear forwards; }
+@keyframes omar-fall { to { transform: translate(var(--dx), 118vh) rotate(var(--rot)); } }
+#omar-flash { position: fixed; inset: 0; z-index: 39; pointer-events: none; background: #fff; animation: omar-flash 0.7s ease-out forwards; }
+@keyframes omar-flash { from { opacity: 0.85; } to { opacity: 0; } }
 #omar-fade { position: fixed; inset: 0; z-index: 25; pointer-events: none; opacity: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 16px;
   background: radial-gradient(circle at 50% 45%, #3a0d5a 0%, #14031f 65%, #000 100%); }
@@ -56,7 +62,8 @@ body.omar-kasteel #lock-hint h1 { font-size: clamp(28px, 5.5vw, 58px); letter-sp
 const CHALLENGE_LINES = {
   eerste: [
     'Hé! Jij daar! Ja, jij, met dat kleine zwaardje!',
-    'Ik ben <b>OMAR</b>. De baas van dit hele spel. Ik heb <b>álle krachten</b> én het <b>Diamanten zwaard</b>.',
+    'Ik ben <b>OMAR</b>. Ik heb dit hele spel gemaakt! Ik heb <b>álle krachten</b> én het <b>Diamanten zwaard</b>.',
+    'En weet je wat? <b>Niemand</b> heeft mij ooit verslagen. Niemand!',
     'Ik woon in mijn <b>Gekke Kasteel</b>. Wie durft, mag daar tegen mij vechten. Hehe.',
   ],
   verloren: [
@@ -74,15 +81,16 @@ const THRONE_LINES = {
   lang: {
     lines: [
       'Hehe! Hehehe! Welkom in mijn <b>Gekke Kasteel</b>!',
-      'Ik ben <b>OMAR</b>. De baas. De allerbeste. De sterkste van de hele wereld. En van Mars.',
+      'Ik ben <b>OMAR</b>. Ik heb <b>deze game gemaakt</b>. Alles hier is van mij!',
+      'En <b>niemand</b>... NIEMAND heeft mij ooit verslagen. Nog nooit!',
       'Ik kan <b>dashen</b>, <b>rollen</b>, een <b>wervelslag</b>, een <b>dubbele sprong</b>, een <b>grondslag</b>... en kijk: mijn <b>Diamanten zwaard</b>!',
       'En jij? Jij miezerig mannetje durft MIJ uit te dagen? Hahaha! Mijn goudvis is nog sterker dan jij!',
       'Oké dan. Kom maar op als je durft!',
     ],
-    gestures: ['lachen', 'zitten', 'zwaard', 'wijzen', 'zwaard'],
+    gestures: ['lachen', 'zitten', 'lachen', 'zwaard', 'wijzen', 'zwaard'],
   },
   kortVerloren: {
-    lines: ['Hahaha! Ben je daar alweer? Nog steeds even miezerig, zie ik.', 'Kom maar op dan. Ik ben altijd klaar.'],
+    lines: ['Hahaha! Ben je daar alweer? Nog steeds even miezerig, zie ik.', 'Ik heb deze game zelf gemaakt. Jij gaat mij echt niet verslaan!'],
     gestures: ['lachen', 'wijzen'],
   },
   kortGewonnen: {
@@ -90,7 +98,7 @@ const THRONE_LINES = {
     gestures: ['zitten', 'zwaard'],
   },
   kort: {
-    lines: ['Hehe! Kom je toch nog terug? Dapper hoor... of dom!', 'Kom maar op dan. Ik ben altijd klaar.'],
+    lines: ['Hehe! Kom je toch nog terug? Ik heb deze game gemaakt, hoor. Niemand verslaat mij!', 'Kom maar op dan. Ik ben altijd klaar.'],
     gestures: ['lachen', 'wijzen'],
   },
   herkansing: {
@@ -259,7 +267,7 @@ export class OmarFlow {
     this.phase = 'kiezen';
     document.exitPointerLock?.();
     const html = `Omar neemt je mee naar zijn <b>Gekke Kasteel</b>. Daar vecht je tegen hem in de arena.
-      <br><small>Omar is héél sterk: hij kan dashen, rollen, een wervelslag, een dubbele sprong met grondslag én zijn zwaard in brand zetten.
+      <br><small>Omar is héél sterk: hij kan dashen, rollen, een wervelslag, een dubbele sprong met grondslag én zijn zwaard in brand zetten. En hij drinkt ook helende flesjes!
       Verlies je? Geen probleem: je komt gewoon hier terug en je raakt niks kwijt.</small>
       <br><br>Jij: level <b>${stats.level}</b> · Omar: level <b>${OMAR.level}</b> · Gewonnen <b>${d.wins}</b> · Verloren <b>${d.losses}</b>`;
     ui.openLevelComplete('DAAG OMAR UIT?', html, [
@@ -354,7 +362,7 @@ export class OmarFlow {
     if (!this.d.seen && this.runTime > 4.6 && !ui.menuOpen && dist < 14) {
       this.d.seen = true;
       this.stats.save();
-      ui.toast('Dat is <b>Omar</b>, de baas van het spel! Durf je hem uit te dagen?<br>Loop naar hem toe en druk op <b>E</b>.', 6);
+      ui.toast('Dat is <b>Omar</b>, de maker van dit spel! Durf je hem uit te dagen?<br>Loop naar hem toe en druk op <b>E</b>.', 6);
     }
     // Kiezen met het toetsenbord: J = ja, N = nee
     if (this.phase === 'kiezen') {
@@ -570,7 +578,7 @@ export class OmarFlow {
     cameraRig.yaw = 0;
     cameraRig.pitch = 0.35;
     cameraRig.snapTo(player.position);
-    ui.banner('OMAR', 'De Baas van Alles — versla hem als je durft!', 'omar', 3.5);
+    ui.banner('OMAR', 'De maker van dit spel — niemand heeft hem ooit verslagen!', 'omar', 3.5);
     this.tipShown = this.d.wins + this.d.losses > 0; // de tip alleen bij je allereerste gevecht (na de banner)
     this.phase = 'gevecht';
     this.t = 0;
@@ -586,7 +594,8 @@ export class OmarFlow {
     state.lockTarget = null;
     play('win');
     effects.shake(0.6);
-    ui.banner('OMAR VERSLAGEN!', 'Wat?! Jij hebt de baas verslagen!', 'gold', 5);
+    ui.banner('JIJ HEBT OMAR VERSLAGEN!', first ? 'De allereerste ooit!' : 'Alweer! Jij bent een legende!', 'gold', 4.2);
+    this.startParty();
     this.powersBefore = stats.unlockedPowers();
     this.levelBefore = stats.level;
     this.newPerks = this.giveKills(first ? 25 : 6, false) ?? [];
@@ -603,25 +612,124 @@ export class OmarFlow {
     this.winTalked = false;
   }
 
-  updateWin(dt) {
+  /** Het feest begint: flits, confetti over je scherm en disco-lampen in het kasteel. */
+  startParty() {
+    this.party = { t: 0, confetti: 0, coins: 0, jump: 0 };
+    play('win');
+    const flash = document.createElement('div');
+    flash.id = 'omar-flash';
+    document.body.append(flash);
+    setTimeout(() => flash.remove(), 800);
+    // Confetti en feest-plaatjes die over je scherm naar beneden vallen
+    const box = document.createElement('div');
+    box.id = 'omar-confetti';
+    const colors = ['#ffd23a', '#ff5ab4', '#5ff7de', '#b04dff', '#7dff9a', '#ff8a3a', '#6fb7ff'];
+    for (let i = 0; i < 160; i++) {
+      const c = document.createElement('i');
+      c.style.left = `${Math.random() * 100}%`;
+      c.style.background = colors[i % colors.length];
+      c.style.animationDuration = `${2.5 + Math.random() * 3}s`;
+      c.style.animationDelay = `${Math.random() * 3.5}s`;
+      c.style.setProperty('--dx', `${(Math.random() - 0.5) * 300}px`);
+      c.style.setProperty('--rot', `${(Math.random() - 0.5) * 1440}deg`);
+      box.append(c);
+    }
+    const emoji = ['🎉', '🏆', '⭐', '👑', '🥳', '🎊', '💎', '✨'];
+    for (let i = 0; i < 30; i++) {
+      const e = document.createElement('b');
+      e.textContent = emoji[i % emoji.length];
+      e.style.left = `${Math.random() * 95}%`;
+      e.style.animationDuration = `${3 + Math.random() * 3}s`;
+      e.style.animationDelay = `${Math.random() * 4}s`;
+      e.style.setProperty('--dx', `${(Math.random() - 0.5) * 200}px`);
+      e.style.setProperty('--rot', `${(Math.random() - 0.5) * 720}deg`);
+      box.append(e);
+    }
+    document.body.append(box);
+    setTimeout(() => box.remove(), 10000);
+    // Disco: de lampen van het kasteel onthouden, zodat ze straks hun eigen kleur terugkrijgen
+    this.partyLights = (this.world.castle?.partyLights ?? []).map((light) => ({ light, color: light.color.clone() }));
+  }
+
+  /** Feest! Confetti en vuurwerk, munten, disco-lampen, de camera draait om je heen en jij springt van blijdschap. */
+  updateParty(dt) {
+    const party = this.party;
+    if (!party || dt <= 0) return;
+    party.t += dt;
+    const { effects, player, pickups, camera } = this;
+    const t = party.t;
+    const p = player.position;
+    const rainbow = [0xffd23a, 0xff5ab4, 0x5ff7de, 0xb04dff, 0x7dff9a, 0xff8a3a, 0x6fb7ff];
+    if (t < 8) {
+      // Confetti-regen rond jou
+      party.confetti -= dt;
+      if (party.confetti <= 0) {
+        party.confetti = 0.06;
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * 6;
+        effects.burst(V(p.x + Math.sin(a) * r, p.y + 6 + Math.random() * 3, p.z + Math.cos(a) * r), rainbow[Math.floor(Math.random() * rainbow.length)], { count: 8, speed: 1.5, size: 0.12, life: 2.2, up: 0, gravity: 0.25 });
+      }
+      // Munten-fontein (alleen om te zien: je beloning krijg je al)
+      party.coins -= dt;
+      if (party.coins <= 0 && t < 4.5) {
+        party.coins = 0.9;
+        pickups.coinBurst(V(p.x, p.y + 1, p.z), 60);
+      }
+      // Disco!
+      this.partyLights?.forEach(({ light }, i) => light.color.setHSL((t * 0.6 + i * 0.17) % 1, 1, 0.55));
+      // Jij springt en draait van blijdschap
+      if (!this.ui.menuOpen) {
+        party.jump -= dt;
+        if (player.onGround && party.jump <= 0) {
+          party.jump = 0.75;
+          player.velocity.y = 7.5;
+          effects.shockwave(p, rainbow[Math.floor(Math.random() * rainbow.length)], 1.4);
+          play('jump');
+        }
+        if (!player.onGround) player.mesh.rotation.y += dt * 9;
+      }
+      // De camera vliegt een rondje om jou heen (zacht erin en er weer uit)
+      const w = smooth((t - 0.3) / 0.6) * (1 - smooth((t - 3.8) / 0.8));
+      if (w > 0) {
+        const a = t * 1.1;
+        party.cam = party.cam ?? new THREE.PerspectiveCamera();
+        party.cam.position.set(p.x + Math.sin(a) * 6, p.y + 2.6, p.z + Math.cos(a) * 6);
+        party.cam.lookAt(p.x, p.y + 1.1, p.z);
+        camera.position.lerp(party.cam.position, w);
+        camera.quaternion.slerp(party.cam.quaternion, w);
+      }
+    } else if (this.partyLights) {
+      // Feest voorbij: lampen weer gewoon
+      for (const { light, color } of this.partyLights) light.color.copy(color);
+      this.partyLights = null;
+    }
+  }
+
+  updateWin(dt, live) {
     const { effects, ui } = this;
+    this.updateParty(live ? dt : 0);
     // Vuurwerk boven de arena
     if (this.t < 6) {
       this.fireworkTimer -= dt;
       if (this.fireworkTimer <= 0) {
-        this.fireworkTimer = 0.35;
+        this.fireworkTimer = 0.16;
         const a = Math.random() * Math.PI * 2;
         const r = Math.random() * 12;
         const colors = [0xffd23a, 0xb04dff, 0xff6bd5, 0x5ff7de];
-        effects.burst(V(Math.sin(a) * r, 7 + Math.random() * 4, Math.cos(a) * r), colors[Math.floor(Math.random() * colors.length)], { count: 50, speed: 11, size: 0.3, life: 1.3, up: 1, gravity: 0.35 });
+        effects.burst(V(Math.sin(a) * r, 7 + Math.random() * 5, Math.cos(a) * r), colors[Math.floor(Math.random() * colors.length)], { count: 70, speed: 12, size: 0.32, life: 1.4, up: 1, gravity: 0.35 });
         if (Math.random() < 0.4) play('coin');
       }
     }
-    if (this.t >= 3 && !this.winTalked && !ui.menuOpen) {
+    if (this.t >= 4.8 && !this.winTalked && !ui.menuOpen) { // eerst even feest, dan praat Omar
       this.winTalked = true;
       const lines = this.firstWin
-        ? ['Au! Hé! Dat... dat kan helemaal niet!', 'Ik ben toch de baas? De allerbeste?!', 'Oké, oké... JIJ wint. Deze keer! Hier, neem mijn reservekroon maar. Ik heb er nog honderd.']
-        : ['Wát? Alweer?!', 'Jij bent echt goed, mannetje. Eh... grote man. Eh... baas.'];
+        ? [
+          'Wat?! Nee... dat kan niet...',
+          'Jij bent de <b>eerste</b> die mij ooit heeft verslagen!',
+          'Eindelijk... eindelijk heb ik een <b>waardige tegenstander</b> gevonden.',
+          'Je hebt me <b>eerlijk</b> verslagen. Hier, ik geef je dit cadeau: mijn eigen <b>Kroon van Omar</b>!',
+        ]
+        : ['Wát? Alweer?!', 'Jij bent echt mijn waardigste tegenstander ooit.', 'Hier, nog een cadeautje voor jou. Maar de volgende keer win ík!'];
       ui.openDialog('Omar', lines, () => {
         this.announceNewPowers(this.powersBefore, 0, this.newPerks);
         this.winMenu();
@@ -632,7 +740,7 @@ export class OmarFlow {
   winMenu() {
     const { stats, ui, cameraRig } = this;
     document.exitPointerLock?.();
-    const html = `Jij hebt <b>Omar de Baas</b> verslagen. Nu ben JIJ de baas!
+    const html = `Jij hebt <b>Omar</b> verslagen. Nu ben JIJ de baas!
       <br>Beloning: ${this.firstWin ? '<b>+3000 munten</b> en de <b>Kroon van Omar</b> (35% bescherming, zet hem op met <b>I</b>)' : '<b>+500 munten</b>'}
       ${stats.level > this.levelBefore ? `<br>⬆ Je bent nu <b>level ${stats.level}</b>!` : ''}
       <br><small>Overwinningen op Omar: ${this.d.wins}</small>`;
@@ -789,7 +897,7 @@ export class OmarFlow {
         break;
       case 'gewonnen':
         if (running || ui.menuOpen) this.t += dt;
-        this.updateWin(dt);
+        this.updateWin(dt, tick || (running && !ui.menuOpen)); // het feest staat stil als het spel stilstaat
         break;
       case 'verloren':
         if (running || ui.menuOpen) this.t += dt;

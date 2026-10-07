@@ -12,7 +12,7 @@ import { CHARACTERS, otherPlayable } from './player.js';
 // NPC's: personages die in de wereld wonen. Praat met ze (E) en ze geven je een zij-quest.
 // Welke NPC waar staat, staat per level in levels.js (npcs = [personage, x, z, quest]).
 // Koopman Kobus staat met zijn kraampje bij het begin van elk level: bij hem geef je je munten uit.
-// Omar de Baas staat ook in elk level: hij geeft geen quest, maar daagt je uit voor een gevecht (zie omar.js).
+// Omar staat ook in elk level: hij geeft geen quest, maar daagt je uit voor een gevecht (zie omar.js).
 
 const PEOPLE = {
   mila: { name: 'Mila', file: 'models/personages/mila.glb', height: 1.45 },
@@ -87,9 +87,9 @@ export const QUESTS = {
     title: 'Slijm in de moestuin',
     goal: { kind: 'kill', type: 'slijmpje', count: 6 },
     reward: { runes: 80, items: [{ kind: 'flask' }] },
-    offer: ['Hé, jij daar! Ben jij een avonturier?', 'Die groene slijmpjes eten al mijn wortels op...', 'Versla er <b>6</b> voor me, dan krijg je een extra <b>flesje</b>!'],
+    offer: ['Hé, jij daar! Ben jij een avonturier?', 'Die groene slijmpjes eten al mijn wortels op...', 'Versla er <b>6</b> voor me, dan krijg je een <b>Gouden Appel</b>!'],
     busy: 'Nog niet klaar? Ik hoor ze smakken in de tuin...',
-    done: ['Je hebt ze echt verslagen! Mijn wortels zijn gered.', 'Hier, een extra flesje. Drink het met <b>R</b> als je pijn hebt.'],
+    done: ['Je hebt ze echt verslagen! Mijn wortels zijn gered.', 'Hier, een Gouden Appel uit mijn tuin. Daar word je voor altijd sterker van!'],
     after: 'Pas op voor de vliegende loodgieter in het noorden. Hij gooit met vuur!',
   },
   'strohoed-sterren': {
@@ -114,16 +114,16 @@ export const QUESTS = {
     title: 'De ondode wacht',
     goal: { kind: 'kill', type: 'zombie', count: 6 },
     reward: { runes: 300, items: [{ kind: 'flask' }] },
-    offer: ['Halt, reiziger. Ik ben Sir Roestbout, de laatste wachter van dit woud.', 'De doden zijn opgestaan. Mijn oude harnas is te roestig om ze te stoppen.', 'Versla <b>6 zombies</b>, en ik geef je mijn laatste <b>helende flesje</b>.'],
+    offer: ['Halt, reiziger. Ik ben Sir Roestbout, de laatste wachter van dit woud.', 'De doden zijn opgestaan. Mijn oude harnas is te roestig om ze te stoppen.', 'Versla <b>6 zombies</b>, en ik geef je mijn laatste <b>Gouden Appel</b>.'],
     busy: 'Hoor je dat gekreun? Er lopen er nog genoeg rond.',
-    done: ['Het woud is weer een beetje stiller. Je bent dapper.', 'Neem dit flesje. En pas op voor mijn oude meester, De Gevallen Ridder...'],
+    done: ['Het woud is weer een beetje stiller. Je bent dapper.', 'Neem deze appel. En pas op voor mijn oude meester, De Gevallen Ridder...'],
     after: 'Ga, dappere jager. Het woud rekent op je.',
   },
   'mila-mecha': {
     title: 'Metalen reuzen',
     goal: { kind: 'kill', type: 'mecha', count: 3 },
     reward: { runes: 600, items: [{ kind: 'flask' }] },
-    offer: ['Jij weer! Ik ben je achterna gereisd, haha.', 'Hier in het hoogland lopen enorme <b>Mecha-Wachters</b> rond. Ze schieten met lasers!', 'Versla er <b>3</b>, dan krijg je <b>600 munten</b> en een flesje.'],
+    offer: ['Jij weer! Ik ben je achterna gereisd, haha.', 'Hier in het hoogland lopen enorme <b>Mecha-Wachters</b> rond. Ze schieten met lasers!', 'Versla er <b>3</b>, dan krijg je <b>600 munten</b> en een Gouden Appel.'],
     busy: 'Rol opzij als hun ogen rood worden!',
     done: ['Drie mecha\'s! Jij bent echt de beste Munt Jager.', 'Hier, alles wat ik heb gespaard. Versla Gorath!'],
     after: 'Ik wacht hier op je. Succes bovenop de berg!',
@@ -324,7 +324,7 @@ export function makeBubble() {
 }
 
 /**
- * Omar de Baas in een level: hij doet stoer, laat zijn zwaard zien, roept dingen en wacht tot je hem uitdaagt (E).
+ * Omar in een level: hij doet stoer, laat zijn zwaard zien, roept dingen en wacht tot je hem uitdaagt (E).
  * Het uitdagen, de reis naar zijn kasteel en het gevecht staan in omar.js.
  */
 class OmarNPC extends NPC {

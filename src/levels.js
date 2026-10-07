@@ -9,7 +9,7 @@
 //   spawns    = [soort, aantal]  → worden langs het pad verdeeld
 //   chests    = [id, x, y, z, voorwerp]
 //   npcs      = [personage, x, z, quest]  (zie quests.js)
-//               ['omar', x, z] is Omar de Baas zelf: hij geeft geen quest, maar daagt je uit (zie omar.js).
+//               ['omar', x, z] is Omar zelf: hij geeft geen quest, maar daagt je uit (zie omar.js).
 //               Hij staat in elk level vlak bij het begin.
 //   blocks    = losse stenen blokken / platforms [x, y, z, breedte, hoogte, diepte, kleur]
 //   houses    = huizen (alleen in level 1: Muntdorp)

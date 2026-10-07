@@ -9,7 +9,7 @@ import { play } from './audio.js';
 // De vier bosses: aan het eind van elk level één. De boss woont in een arena (zie ARENAS in world.js).
 // Loop je de arena in, dan gaat er een mistmuur omhoog en begint het gevecht.
 // Elke boss heeft een eigen set aanvallen, en wordt bij de helft van zijn leven sneller en gemener (fase 2).
-// Omar de Baas woont niet in een level maar in zijn eigen kasteel: hij staat in omarFighter.js
+// Omar woont niet in een level maar in zijn eigen kasteel: hij staat in omarFighter.js
 // en meldt zich zelf aan in BOSS_CLASSES (onderaan dit bestand).
 
 export const BOSS_INFO = {
@@ -17,7 +17,7 @@ export const BOSS_INFO = {
   ridder: { name: 'De Gevallen Ridder', title: 'Bewaker van het Spookwoud', hp: 1100, runes: 900 },
   reus: { name: 'Steenreus Gorath', title: 'Hart van het Hoogland', hp: 1800, runes: 2000 },
   mario: { name: 'Budget Mario', title: 'De Vliegende Loodgieter', hp: 650, runes: 300 },
-  omar: { name: 'Omar de Baas', title: 'De Baas van Alles', hp: 1600, runes: 3000 }, // hp hangt af van jouw level (omarFighter.js)
+  omar: { name: 'Omar', title: 'De maker van dit spel', hp: 1600, runes: 3000 }, // hp hangt af van jouw level (omarFighter.js)
 };
 
 const tmp = new THREE.Vector3();

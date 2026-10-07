@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { loadGLB } from './assets.js';
 import { WEAPONS, RARITY_COLORS } from './weapons.js';
+import { APPLE_HEALTH } from './stats.js';
 
 // Helmen: hoe hoger de verdediging (defense), hoe minder schade je krijgt.
 // 0.2 betekent: 20% minder schade.
@@ -17,7 +18,7 @@ export const HELMETS = {
 export function itemInfo(item) {
   if (item.kind === 'weapon') return WEAPONS[item.key];
   if (item.kind === 'helmet') return HELMETS[item.key];
-  return { name: 'Gouden Zaadje', rarity: 'legendarisch', info: 'Je kunt één flesje meer meenemen.' };
+  return { name: 'Gouden Appel', rarity: 'legendarisch', info: `+${APPLE_HEALTH} levenspunten, voor altijd!` };
 }
 
 export function itemColor(item) {

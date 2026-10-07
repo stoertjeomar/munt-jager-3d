@@ -549,6 +549,7 @@ export function createCastleWorld(scene, { tex, texturedBox }) {
       center: new THREE.Vector3(0, 0, 0),
       braziers,
       addStatues,
+      partyLights: flickerLights.map((f) => f.light), // voor het feest als je Omar verslaat (omar.js)
     },
     /**
      * Elke frame: lucht en maanlicht reizen mee met de speler, de lava stroomt, vuur flakkert en vaandels wapperen.
