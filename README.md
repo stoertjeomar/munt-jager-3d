@@ -88,21 +88,26 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
   vonken, schade-getallen, camera-schok en hitstop
 - **5 krachten**: Dash, Dubbele sprong, Wervelslag, Grondslag en Vuurzwaard (vrijspelen door te levelen en bosses te verslaan)
 - **Wapens** (alleen slagwapens): kort zwaard, dolk, bijl, ridderzwaard, katana, knots, strijdhamer, IJszwaard,
-  Zonnezwaard en het diamanten zwaard — plus 3 helmen. Te vinden in kisten, bij quests en bij bosses
-- **Vijanden**: slijmpjes, slijmballen, spoken, rotsgolems, zombies, Spierbonken en Mecha-Wachters
+  Zonnezwaard, het diamanten zwaard, het **Demonenzwaard** (in een kist in het Rotshoogland) en de **Zeis van de Dood**
+  (die krijg je als je Omar verslaat) — plus 3 helmen. Te vinden in kisten, bij quests en bij bosses
+- **Vijanden**: slijmpjes, slijmballen, spoken, rotsgolems, zombies, Spierbonken, Mecha-Wachters, **Boks-Dino's**
+  (spring op hun hoofd: BOING!) en **Bigfoots**. Alle vijanden zijn een stuk sterker geworden
 - **4 bosses** met een mistmuur, boss-balk en een tweede fase: Koning Slijm, De Gevallen Ridder,
-  Steenreus Gorath en Budget Mario
+  Steenreus Gorath en Budget Mario. Ze hebben meer leven, doen meer schade en zijn sneller
+- In Muntdorp staan een **oefenpop** (sla erop om je schade te zien, hij valt nooit om) en **Zorp de Alien** (praat met hem!)
 - 3 verstopte **diamanten** per level, hartjes, munten die naar je toe vliegen
 - **Omar, de maker van het spel**, staat in elk level. Daag hem uit (E) en hij neemt je mee naar zijn **Gekke Kasteel**:
-  eerst een filmpje op zijn troon, dan een gevecht in de arena. Hij draagt het personage dat jij níet koos, heeft het
-  Diamanten zwaard en álle krachten: dash, wervelslag, dubbele sprong met grondslag, vuurzwaard, rollen en zelf flesjes
-  drinken. Hij kan zelfs **teleporteren** ("Achter je!") en roept de hele tijd dingen naar je. Verlies je? Dan ben je niks
-  kwijt. Win je? Dan krijg je de **Kroon van Omar** en een gek feest met confetti, disco-lampen en vuurwerk
-- **Muziek**: elk level heeft zijn eigen deuntje en bij **alle boss-gevechten en tegen Omar** speelt echte, epische boss-muziek
-  (*The Last Demon King*, zie Credits). Die begint altijd vooraan als het gevecht start en gaat sneller als Omar boos wordt.
-  De andere muziek is zelfgemaakt in de code, zonder muziekbestanden
-- **Geluidseffecten**: zwaarden, dashen, drinken, kisten, checkpoints, menu's, praatgeluidjes als iemand iets zegt
-  (iedereen heeft zijn eigen stem), vogeltjes overdag, krekels 's nachts, een uil in het Spookwoud en wind in de bergen
+  eerst een filmpje op zijn troon, dan een gevecht in de arena tussen duistere ritueel-altaren en samoerai-wachters.
+  Hij draagt het personage dat jij níet koos, heeft **gloeiende rode ogen**, een duistere aura, de **Zeis van de Dood** en
+  álle krachten: dash, wervelslag, dubbele sprong met grondslag, vuurzwaard, rollen en zelf flesjes drinken. Hij kan
+  **teleporteren** ("Achter je!"), de **bliksem** laten inslaan en als hij boos is roept hij **schaduwklonen** op die op je
+  af stormen. Verlies je? Dan ben je niks kwijt. Win je? Dan krijg je de **Kroon van Omar**, zijn **Zeis** en een gek feest
+- **Muziek** (zie Credits): bij **alle boss-gevechten** speelt *Where Is Your God Now*, tegen **Omar** zijn eigen epische
+  boss-muziek, die al zachtjes opkomt terwijl hij praat en sneller gaat als hij boos wordt. In het Spookwoud en het
+  Rotshoogland speelt duistere muziek, en de Weide en de Ruïnevallei hebben een zelfgemaakt deuntje (gemaakt in de code)
+- **Geluidseffecten** (lekker hard!): zwaarden, een anime-teleport bij het dashen, BOING als je op een vijand springt, een
+  anime-punch als je een vijand verslaat, WOW bij een nieuw level, FAAAH als je doodgaat, glitter bij een kist, donder bij
+  Omars bliksem, praatgeluidjes als iemand iets zegt, vogeltjes overdag, krekels 's nachts, een uil en wind in de bergen
 - Maximaal **3 flesjes** in het hele spel (net als Omar), dus drink ze slim
 - **Opslaan** in de browser (verder spelen waar je was)
 
@@ -113,10 +118,10 @@ munt-jager-3d/
 ├── index.html        → pagina, HUD en startscherm
 ├── style.css         → opmaak
 ├── lib/              → Three.js (r170) + loaders + licentie
-├── models/           → 3D-modellen (personages, wapens, helmen, bosses, KayKit, Kenney)
+├── models/           → 3D-modellen (personages, wapens, helmen, bosses, KayKit, Kenney; extra/ = de nieuwe modellen)
 ├── textures/         → Kenney Retro Textures (grond, muren, daken, ramen)
 ├── sounds/           → geluiden uit het Kenney Starter Kit
-├── music/            → de boss-muziek (mp3)
+├── music/            → muziek (mp3): boss-muziek, Omars muziek en de duistere levelmuziek
 ├── images/           → portretten voor het startscherm
 └── src/
     ├── main.js       → start alles op, game loop, gevechten, winkel, doodgaan
@@ -151,7 +156,8 @@ munt-jager-3d/
 
 - **Levels** → `LEVELS` in `src/levels.js` (welke vijanden, kisten, NPC's, huizen en welke boss). Test een level met `?level=3` achter de link
 - **Quests** → `QUESTS` bovenaan `src/npcs.js`
-- **Vijanden** → `ENEMY_TYPES` bovenaan `src/enemies.js`
+- **Vijanden** → `ENEMY_TYPES` bovenaan `src/enemies.js`. Alle vijanden sterker of zwakker: `ENEMY_POWER` (en voor de
+  bosses `BOSS_POWER` in `src/bosses.js`)
 - **Wapens** → `WEAPONS` in `src/weapons.js` · **Helmen** → `HELMETS` in `src/gear.js`
 - **Krachten en levelen** → `POWERS`, `PERKS` en `killsNeeded` in `src/stats.js`
 - **Personages** → `CHARACTERS` en `PLAYABLE` bovenaan `src/player.js`
@@ -165,7 +171,14 @@ munt-jager-3d/
 - Mini-Game Variety Pack (planten, stenen, dieren, hart, diamant): [KayKit / Kay Lousberg](https://kaylousberg.com) — CC0
 - Starter Kit 3D Platformer (munt, gras, vlaggen, robot, geluiden): [Kenney](https://kenney.nl) — MIT
 - Retro Textures Fantasy: [Kenney](https://kenney.nl) — CC0
-- Boss-muziek: *The Last Demon King 🔥 Epic Final Boss Battle Music* door **Lo-fi Music Ai** (YouTube) — gratis te gebruiken volgens de maker
+- Muziek (gratis te gebruiken volgens de makers):
+  - Boss-muziek: *Where Is Your God Now* door **RokNardin** (via Epic Music World, YouTube)
+  - Omars muziek: *I wrote EPIC Boss Fight music for a Video Game* door **Carameii** (YouTube)
+  - Spookwoud en Rotshoogland: *Black Ops: Resurrection – Dark Cinematic Tactical Music* door **Garzehar** (Free to Use)
+- Geluiden: Boing Boing, Anime punch, Wow Anime meme en FAAAH van [QuickSounds.com](https://quicksounds.com);
+  anime shine door alexis_gaming_cam en thunder for anime door lordsonny (Pixabay)
+- Extra 3D-modellen (Pixabay): magic ritual, glowing green reaper weapon, fantasy weapon en cosmic peace alien door
+  pixellabs, samurai en bigfoot door nickpanek, male door promptplay, dinosaurs door tiny_planet_friends_3d en male door dezyne_3d
 - Personages Eve, Soldaat en Mila: via Mixamo
 - Budget Mario door Teh_LaughingMan, Buff man door joney_lol, MS Gundam RX-78-2 door Tipatat Chennavasin
   (fan-modellen; Mario en Gundam zijn van Nintendo en Bandai — alleen voor eigen plezier)

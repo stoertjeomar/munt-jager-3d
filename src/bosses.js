@@ -20,6 +20,11 @@ export const BOSS_INFO = {
   omar: { name: 'Omar', title: 'De maker van dit spel', hp: 1600, runes: 3000 }, // hp hangt af van jouw level (omarFighter.js)
 };
 
+// Hoe sterk de gewone bosses zijn (Omar niet: die heeft zijn eigen instellingen in omarFighter.js)
+//   hp = keer zoveel leven · damage = keer zoveel schade · speed = keer zo snel (lopen, aanvallen én wachten)
+export const BOSS_POWER = { hp: 1.6, damage: 1.4, speed: 1.15 };
+for (const [key, info] of Object.entries(BOSS_INFO)) if (key !== 'omar') info.hp = Math.round(info.hp * BOSS_POWER.hp);
+
 const tmp = new THREE.Vector3();
 
 function angleTo(from, to) {

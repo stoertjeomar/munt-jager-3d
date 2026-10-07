@@ -62,7 +62,19 @@ export const WEAPONS = {
   diamant: {
     name: 'Diamanten zwaard', rarity: 'legendarisch', damage: 40, stamina: 15, range: 2.6, swingTime: 0.32,
     pixels: 'diamant', blade: [0.3, 1.0], trail: 0x5ff7de,
-    info: 'Het zwaard van de Gevallen Ridder. Het sterkste wapen dat er is.',
+    info: 'Het zwaard van de Gevallen Ridder. Een van de sterkste wapens die er zijn.',
+  },
+  // ---------- Extra 3D-wapens (models/extra) ----------
+  //   grip = waar je het vasthoudt (hoogte in het model)   glow = de lichte stukjes gloeien op (0 = niet)
+  demonenzwaard: {
+    name: 'Demonenzwaard', rarity: 'legendarisch', damage: 43, stamina: 16, range: 2.9, swingTime: 0.33,
+    file: 'models/extra/demonenzwaard.glb', scale: 0.95, grip: 0.14, glow: 0.7, blade: [0.4, 1.0], trail: 0xff2a3a,
+    info: 'Gesmeed in vuur en duisternis. Nog sterker dan het Diamanten zwaard!',
+  },
+  zeis: {
+    name: 'Zeis van de Dood', rarity: 'legendarisch', damage: 46, stamina: 18, range: 3.1, swingTime: 0.36,
+    file: 'models/extra/zeis.glb', scale: 1.6, grip: -0.32, glow: 1.2, blade: [0.6, 1.35], trail: 0x3dff6a,
+    info: 'De zeis van Omar zelf. Het sterkste wapen dat er is.',
   },
 };
 
@@ -87,6 +99,7 @@ export function createWeaponMesh(key, scaleMultiplier = 1) {
     (gltf) => {
       const model = gltf.scene.clone();
       model.scale.setScalar(weapon.scale * scaleMultiplier);
+      model.position.y = -(weapon.grip ?? 0) * weapon.scale * scaleMultiplier; // het handvat in je hand
       model.traverse((child) => {
         if (!child.isMesh) return;
         child.castShadow = true;
@@ -95,6 +108,12 @@ export function createWeaponMesh(key, scaleMultiplier = 1) {
         child.material.metalness = Math.min(child.material.metalness, 0.35);
         const hsl = child.material.color.getHSL({});
         if (hsl.l < 0.18) child.material.color.setHSL(hsl.h, hsl.s, 0.18);
+        // Gloeiende stukjes (de groene kling van de zeis, de rode runen van het demonenzwaard)
+        if (weapon.glow && child.material.map) {
+          child.material.emissiveMap = child.material.map;
+          child.material.emissive?.set(0xffffff);
+          child.material.emissiveIntensity = weapon.glow;
+        }
       });
       group.add(model);
     },

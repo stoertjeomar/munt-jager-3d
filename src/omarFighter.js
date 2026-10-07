@@ -6,12 +6,13 @@ import { makeBubble } from './npcs.js';
 import { SwordTrail } from './trail.js';
 import { play } from './audio.js';
 import { SAVE_KEY } from './levels.js';
+import { loadGLB } from './assets.js';
 
 // Omar: de maker van het spel. Hij woont in zijn Gekke Kasteel (castle.js) en vecht in de arena.
 // Omar is een echte "speler": hij heeft hetzelfde lijf, dezelfde animaties en dezelfde krachten als jij
 // (zwaard-combo's, dash, wervelslag, dubbele sprong + grondslag, vuurzwaard, rollen, sprinten en drinken).
 // Alleen bestuurt de computer hem, in plaats van een toetsenbord.
-// Hij draagt altijd het personage dat jij NIET koos, de Kroon van Omar en het Diamanten zwaard.
+// Hij draagt altijd het personage dat jij NIET koos, de Kroon van Omar en de Zeis van de Dood.
 //
 // Eerlijk vechten: elke aanval laat hij eerst zien (een houding, een "ting!" of gebrom, een ! boven zijn hoofd,
 // en bij grote aanvallen een rode cirkel op de grond). Na elke aanval staat hij even te hijgen: DAN moet je slaan!
@@ -25,12 +26,12 @@ export const OMAR = {
   size: 1.12, // Omar is iets groter dan jij
   hipHeight: 0.95, // hoogte van zijn heupen (om hem goed op de troon te laten zitten)
   // Leven: zoveel klappen met JOUW wapen kan Omar hebben. Hoe hoger jouw level, hoe minder klappen het zijn.
-  hp: { hits: 35, perLevel: 0.3, minHits: 27, min: 560 },
+  hp: { hits: 38, perLevel: 0.3, minHits: 29, min: 600 },
   speed: [1.55, 1.75], // hoe snel hij loopt (1 = net zo snel als jij): hij is veel sneller dan jij!
   sprintFrom: 6, // verder weg dan dit (meter)? Dan sprint hij naar je toe
   swingSpeed: 0.68, // zijn zwaard zwaait sneller dan dat van jou (0.68 = in 68% van de tijd)
   // Hoeveel van JOUW leven een klap kost (0.11 = 11%). Zo is hij op elk level even eng.
-  damagePct: { slag: 0.14, dash: 0.17, wervelslag: 0.19, grondslag: 0.23, boos: 0.1 },
+  damagePct: { slag: 0.15, dash: 0.18, wervelslag: 0.2, grondslag: 0.24, boos: 0.11, bliksem: 0.18, schaduw: 0.12 },
   phase2Damage: 1.3, // in fase 2 doet alles 30% meer pijn
   fireDamage: 1.35, // met zijn vuurzwaard 35% meer
   // Zo lang laat hij eerst zien wat hij gaat doen (seconden): kort, maar je kunt het altijd zien aankomen
@@ -62,6 +63,10 @@ export const OMAR = {
   teleportChain: 0.5, // als hij boos is: kans dat hij meteen nóg een keer achter je teleporteert
   teleportDodge: [0.35, 0.5], // kans dat hij wegteleporteert als jij slaat (in plaats van rollen)
   talk: [4, 7], // zo vaak (seconden) roept hij iets tijdens het gevecht
+  // Bliksem: hij steekt zijn zeis omhoog, er verschijnen rode cirkels om jou heen... en daar slaat de bliksem in
+  bliksem: { windup: [0.7, 0.55], strikes: [3, 5], delay: 0.8, every: 0.18, radius: 1.8, cooldown: [8, 5.5] },
+  // Schaduwklonen (alleen als hij boos is): zwarte schaduwen met rode ogen verschijnen om je heen en stormen op je af
+  schaduwen: { count: 3, appear: 0.9, speed: 16, dashTime: 0.6, cooldown: 11 },
 };
 
 const tmp = new THREE.Vector3();
@@ -85,8 +90,12 @@ const TAUNTS = {
     'Kleine speler, kom hier!', 'Denk je echt dat je mij gaat verslaan?', 'Ik heb deze game gemaakt. Ik ken al je trucjes!',
     'Is dat alles wat je kan?', 'Kom hier, kleintje!', 'Ik ben veel te snel voor jou!', 'Niemand verslaat Omar!',
     'Hehe, ben je nu al moe?', 'Mijn goudvis vecht beter dan jij!', 'Kijk maar uit... ik kan teleporteren!',
+    'Ik ruik je angst...', 'Er is geen ontsnapping.', 'Hoor je de donder? Dat ben IK.', 'Kniel voor de maker!',
   ],
-  boos: ['Nu is het menens, kleine speler!', 'Jij maakt me echt boos!', 'Denk je nou echt dat je kan winnen?!', 'Ik ben de maker van dit spel!'],
+  boos: [
+    'Nu is het menens, kleine speler!', 'Jij maakt me echt boos!', 'Denk je nou echt dat je kan winnen?!', 'Ik ben de maker van dit spel!',
+    'Mijn schaduwen hebben honger...', 'Jouw einde is begonnen!', 'Niemand ontsnapt aan Omar!',
+  ],
 };
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
@@ -111,7 +120,7 @@ function flatDist(a, b) {
  */
 export class OmarStats {
   constructor(character) {
-    this.data = { character, weapon: 'diamant', helmet: 'kroon', level: OMAR.level };
+    this.data = { character, weapon: 'zeis', helmet: 'kroon', level: OMAR.level };
     this.phase = 0; // 0 = fase 1, 1 = fase 2
     this.boost = 1; // even sneller of langzamer (rustig rondlopen, ver springen)
   }
@@ -128,6 +137,57 @@ export class OmarStats {
 }
 
 /** Naambordje "Omar" boven zijn hoofd. */
+/** Een gloeiend rood oog (een plaatje dat altijd naar de camera kijkt). */
+let eyeTexture = null;
+function makeEye() {
+  if (!eyeTexture) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.25, 'rgba(255,60,40,1)');
+    grad.addColorStop(0.6, 'rgba(255,0,0,0.35)');
+    grad.addColorStop(1, 'rgba(255,0,0,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    eyeTexture = new THREE.CanvasTexture(c);
+  }
+  const eye = new THREE.Sprite(new THREE.SpriteMaterial({ map: eyeTexture, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+  eye.scale.setScalar(0.11);
+  return eye;
+}
+
+const BOLT_GEO = new THREE.CylinderGeometry(1, 1, 1, 6, 1, true);
+const BOLT_CORE = new THREE.MeshBasicMaterial({ color: 0xf2e6ff, toneMapped: false, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+const BOLT_GLOW = new THREE.MeshBasicMaterial({ color: 0x9a4dff, toneMapped: false, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false });
+
+/** Een bliksemschicht: een zigzag van de lucht naar de grond. */
+function makeBolt(ground) {
+  const group = new THREE.Group();
+  const points = [];
+  for (let i = 0; i <= 9; i++) {
+    const k = i / 9;
+    const wiggle = i === 0 || i === 9 ? 0 : 0.7;
+    points.push(new THREE.Vector3(ground.x + (Math.random() - 0.5) * wiggle, ground.y + 18 * (1 - k), ground.z + (Math.random() - 0.5) * wiggle));
+  }
+  const up = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const len = a.distanceTo(b);
+    const dir = b.clone().sub(a).normalize();
+    for (const [mat, r] of [[BOLT_CORE, 0.07], [BOLT_GLOW, 0.28]]) {
+      const seg = new THREE.Mesh(BOLT_GEO, mat);
+      seg.position.copy(a).lerp(b, 0.5);
+      seg.quaternion.setFromUnitVectors(up, dir);
+      seg.scale.set(r, len, r);
+      group.add(seg);
+    }
+  }
+  return group;
+}
+
 function makeNameTag() {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
@@ -183,6 +243,16 @@ export class OmarFighter extends Boss {
     this.throne = new THREE.Vector3(0, 2.2, -26.6); // bovenkant van het kussen (wordt gezet door omar.js)
     this.landing = new THREE.Vector3(0, 0, -6);
     this.effects = null; // wordt gezet door omar.js (voor vonken als het spel stilstaat)
+    // Enge rode ogen die gloeien (ze staan los in de wereld en volgen zijn hoofd)
+    this.scene = scene;
+    this.eyes = new THREE.Group();
+    this.eyes.add(makeEye(), makeEye());
+    scene.add(this.eyes);
+    this.auraTimer = 0;
+    this.strikes = []; // bliksems die nog moeten inslaan: { pos, t, first }
+    this.bolts = []; // bliksemschichten in beeld: { mesh, life }
+    this.clones = []; // schaduwklonen: { mesh, eyes, t, dir, hit }
+    loadGLB('models/extra/schaduw.glb').then((g) => { this.shadowModel = g.scene; }).catch(() => {});
     this.resetFight();
   }
 
@@ -225,7 +295,7 @@ export class OmarFighter extends Boss {
     this.hp = this.info.hp;
     p.stats.phase = 0;
     p.stats.boost = 1;
-    p.respawnAt(this.seatedPosition); // ook: vuurzwaard uit, flesjes vol, Diamanten zwaard en kroon
+    p.respawnAt(this.seatedPosition); // ook: vuurzwaard uit, flesjes vol, zeis en kroon
     p.sword.swingTime *= OMAR.swingSpeed; // Omar slaat sneller dan jij
     this.mesh.rotation.y = 0; // kijkt naar de arena (het zuiden)
     this.mesh.scale.setScalar(OMAR.size);
@@ -238,7 +308,7 @@ export class OmarFighter extends Boss {
     this.introT = 0;
     this.setState('start', 1.2);
     // Wachttijden (seconden). Aan het begin even rustig: geen aanval in de eerste seconde.
-    this.cd = { think: 0, gap: 0.3, dash: 0.8, spin: 1.8, slam: 2.5, dodge: 0.6, taunt: 6, mercy: 0, fire: 2.5, drink: 0, say: 0, raak: 0, teleport: 2, praat: 3 };
+    this.cd = { think: 0, gap: 0.3, dash: 0.8, spin: 1.8, slam: 2.5, dodge: 0.6, taunt: 6, mercy: 0, fire: 2.5, drink: 0, say: 0, raak: 0, teleport: 2, praat: 3, bliksem: 4, schaduwen: 3 };
     this.swingsLeft = 0;
     this.after = OMAR.recover.combo[0];
     this.lastSwordHit = null;
@@ -265,6 +335,7 @@ export class OmarFighter extends Boss {
     this.dealt = {}; // hoeveel schade hij jou deed, per aanval (handig om te testen)
     this.taken = { total: 0, hits: 0, missed: 0 }; // hoeveel schade jij hem deed (en hoe vaak je mis sloeg)
     this.trail?.cut();
+    this.clearMagic?.();
     // Fase-2 kleur weer weg, en de materialen opnieuw onthouden (zwaard en kroon zijn nieuw)
     this.materials.forEach((entry, i) => {
       if (!this.baseEmissive?.[i]) return;
@@ -361,6 +432,7 @@ export class OmarFighter extends Boss {
   /** Bewegen terwijl het spel stilstaat (in een filmpje of menu). omar.js roept dit elke frame aan. */
   cutsceneTick(dt) {
     this.time = (this.time ?? 0) + dt;
+    this.updateLook(dt, this.effects);
     this.fogOpacity += ((this.awake && !this.dead ? 1 : 0) - this.fogOpacity) * Math.min(1, 3 * dt);
     this.fog.material.uniforms.opacity.value = this.fogOpacity;
     this.fog.material.uniforms.time.value = this.time;
@@ -551,6 +623,7 @@ export class OmarFighter extends Boss {
     }
     if (!result.killed && damage >= this.info.hp * 0.08 && Math.random() < 0.6) this.say(pick(TAUNTS.au));
     if (result.killed) {
+      this.clearMagic();
       this.dying = 0; // niet verdwijnen zoals andere bosses: Omar gaat duizelig op de grond zitten
       this.mode = 'verslagen';
       this.state = null;
@@ -1034,6 +1107,29 @@ export class OmarFighter extends Boss {
         break;
       }
 
+      case 'bliksemWindup': {
+        // Zeis naar de hemel, paarse vonken: zo meteen slaat de bliksem in!
+        this.patch = 'zwaardOmhoog';
+        this.bladeSparks(dt, 0xc9a0ff, 0.04);
+        if (this.timer <= 0) {
+          this.callLightning(ctx, ph);
+          this.setState('herstel', 0.5);
+        }
+        break;
+      }
+
+      case 'schaduwWindup': {
+        // Armen wijd: de schaduwen komen eraan
+        this.patch = 'wenken';
+        if (Math.random() < 0.6) ctx.effects.burst(this.center, 0x2a0a3a, { count: 2, speed: 2, size: 0.2, life: 0.6, up: 1, gravity: -0.3 });
+        if (this.timer <= 0) {
+          this.summonShadows(ctx);
+          this.setState('neutraal');
+          cd.gap = OMAR.gap[ph];
+        }
+        break;
+      }
+
       case 'verdwijnen': {
         // Paarse rook om hem heen... zo meteen is hij weg!
         this.patch = 'hurken';
@@ -1143,6 +1239,9 @@ export class OmarFighter extends Boss {
     const canDash = cd.dash <= 0 && p.dashCooldown <= 0;
     const canSlam = cd.slam <= 0 && p.onGround;
     const canTeleport = cd.teleport <= 0 && p.onGround;
+    const canBolt = cd.bliksem <= 0 && p.onGround;
+    if (canBolt) add('bliksem', dist > 5 ? 0.6 : 0.25);
+    if (ph && cd.schaduwen <= 0 && this.shadowModel) add('schaduwen', 0.55);
     // Vuurzwaard aanzetten (in fase 2 staat hij altijd aan). Van dichtbij liever niet: dan kun jij hem slaan.
     if (!ph && cd.fire <= 0 && p.fireCooldown <= 0 && p.fireTimer <= 0) add('vuurzwaard', dist > 5 ? 1.2 : 0.5);
     if (dist <= 3.4) {
@@ -1179,6 +1278,19 @@ export class OmarFighter extends Boss {
     else if (move === 'grondslag') this.startJumpSlam(null, ph);
     else if (move === 'dash') this.startDash(ph);
     else if (move === 'teleport') this.startTeleport(ph);
+    else if (move === 'bliksem') {
+      cd.bliksem = OMAR.bliksem.cooldown[ph];
+      this.setState('bliksemWindup', OMAR.bliksem.windup[ph]);
+      this.say(pick(['Voel de bliksem!', 'Hoor je de donder? Dat ben IK!', 'De hemel luistert naar mij!']), 1.8, true);
+      play('charge');
+      this.log('bliksem');
+    } else if (move === 'schaduwen') {
+      cd.schaduwen = OMAR.schaduwen.cooldown;
+      this.setState('schaduwWindup', 0.7);
+      this.say(pick(['Mijn schaduwen... PAK HEM!', 'Kom maar, schaduwen!']), 1.8, true);
+      play('charge');
+      this.log('schaduwen');
+    }
     else if (move === 'vuurzwaard') {
       cd.fire = OMAR.cooldown.fire;
       this.setState('vuurWindup', OMAR.windup.fire);
@@ -1319,6 +1431,167 @@ export class OmarFighter extends Boss {
     this.counter = threat === 'slag' && Math.random() < OMAR.counterChance;
     this.setState('ontwijk');
     return true;
+  }
+
+  // ---------- Bliksem, schaduwen, ogen en aura ----------
+
+  /** Rode cirkels om de speler heen: daar slaat zo meteen de bliksem in. */
+  callLightning(ctx, ph) {
+    const player = ctx.player;
+    const n = OMAR.bliksem.strikes[ph];
+    for (let i = 0; i < n; i++) {
+      const pos = player.position.clone().setY(this.position.y);
+      if (i === 0) pos.addScaledVector(player.velocity.clone().setY(0), 0.4); // waar jij straks bent
+      else {
+        const a = Math.random() * Math.PI * 2;
+        const r = 2 + Math.random() * 2.5;
+        pos.x += Math.sin(a) * r;
+        pos.z += Math.cos(a) * r;
+      }
+      const off = pos.clone().sub(this.arena.center).setY(0);
+      if (off.length() > this.arena.radius - 1) pos.sub(off.setLength(off.length() - (this.arena.radius - 1)));
+      const t = OMAR.bliksem.delay + i * OMAR.bliksem.every;
+      ctx.effects.warnCircle(pos, OMAR.bliksem.radius, t);
+      this.strikes.push({ pos, t, first: i === 0 });
+    }
+  }
+
+  /** BOEM: de bliksem slaat in. */
+  strike(ctx, s) {
+    const bolt = makeBolt(s.pos);
+    this.scene.add(bolt);
+    this.bolts.push({ mesh: bolt, life: 0.25 });
+    if (s.first) play('donder');
+    ctx.effects.shockwave(s.pos, 0xc9a0ff, 2.4);
+    ctx.effects.burst(s.pos.clone().setY(s.pos.y + 0.3), 0xe8d0ff, { count: 22, speed: 8, size: 0.14, life: 0.5, up: 4 });
+    ctx.effects.shake(0.35);
+    const player = ctx.player;
+    if (flatDist(player.position, s.pos) < OMAR.bliksem.radius + 0.1 && player.position.y < s.pos.y + 3) this.hurt(ctx, 'bliksem');
+  }
+
+  /** Zwarte schaduwklonen met rode ogen verschijnen in een kring om de speler. */
+  summonShadows(ctx) {
+    if (!this.shadowModel) return;
+    const player = ctx.player;
+    const n = OMAR.schaduwen.count;
+    const start = Math.random() * Math.PI * 2;
+    for (let i = 0; i < n; i++) {
+      const a = start + (i / n) * Math.PI * 2;
+      const pos = player.position.clone().setY(this.position.y).add(new THREE.Vector3(Math.sin(a) * 5.5, 0, Math.cos(a) * 5.5));
+      const off = pos.clone().sub(this.arena.center).setY(0);
+      if (off.length() > this.arena.radius - 1) pos.sub(off.setLength(off.length() - (this.arena.radius - 1)));
+      const model = this.shadowModel.clone(true);
+      model.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(model);
+      const scale = (1.95 * OMAR.size) / (box.max.y - box.min.y);
+      model.scale.multiplyScalar(scale);
+      const center = box.getCenter(new THREE.Vector3());
+      model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+      const mat = new THREE.MeshStandardMaterial({ color: 0x050008, roughness: 0.6, emissive: 0x24063a, transparent: true, opacity: 0 });
+      model.traverse((c) => {
+        if (c.isMesh) c.material = mat;
+      });
+      const mesh = new THREE.Group();
+      mesh.add(model);
+      mesh.position.copy(pos);
+      const eyes = [makeEye(), makeEye()];
+      eyes.forEach((e, k) => {
+        e.position.set(k ? 0.045 : -0.045, 1.95 * OMAR.size * 0.93, 0.13);
+        mesh.add(e);
+      });
+      this.scene.add(mesh);
+      ctx.effects.burst(pos.clone().setY(pos.y + 1), 0x2a0a3a, { count: 20, speed: 3, size: 0.25, life: 0.6, up: 1.5, gravity: 0 });
+      this.clones.push({ mesh, mat, t: 0, dir: null, hit: false });
+    }
+    play('poef');
+  }
+
+  /** Elke frame: bliksems, schaduwklonen, ogen en de duistere aura. */
+  updateMagic(dt, ctx) {
+    // Bliksems die moeten inslaan
+    for (let i = this.strikes.length - 1; i >= 0; i--) {
+      const s = this.strikes[i];
+      s.t -= dt;
+      if (s.t <= 0) {
+        this.strikes.splice(i, 1);
+        this.strike(ctx, s);
+      }
+    }
+    for (let i = this.bolts.length - 1; i >= 0; i--) {
+      const b = this.bolts[i];
+      b.life -= dt;
+      b.mesh.visible = b.life > 0 && Math.random() < 0.8; // flikkeren
+      if (b.life <= 0) {
+        this.scene.remove(b.mesh);
+        this.bolts.splice(i, 1);
+      }
+    }
+    // Schaduwklonen: verschijnen, op je af stormen, verdwijnen
+    const C = OMAR.schaduwen;
+    const player = ctx.player;
+    for (let i = this.clones.length - 1; i >= 0; i--) {
+      const c = this.clones[i];
+      c.t += dt;
+      if (c.t < C.appear) {
+        c.mat.opacity = Math.min(1, c.t / 0.5);
+        tmp.copy(player.position).sub(c.mesh.position).setY(0);
+        c.mesh.rotation.y = Math.atan2(tmp.x, tmp.z);
+        continue;
+      }
+      if (!c.dir) {
+        c.dir = player.position.clone().sub(c.mesh.position).setY(0).normalize();
+        c.mat.transparent = false;
+        play('dash');
+      }
+      c.mesh.position.addScaledVector(c.dir, C.speed * dt);
+      ctx.effects.burst(c.mesh.position.clone().setY(c.mesh.position.y + 1), 0x1a0626, { count: 1, speed: 0.5, size: 0.3, life: 0.4, up: 0.5, gravity: 0 });
+      if (!c.hit && flatDist(c.mesh.position, player.position) < 1 && Math.abs(player.position.y - c.mesh.position.y) < 1.8) {
+        c.hit = true;
+        this.hurt(ctx, 'schaduw');
+      }
+      if (c.t > C.appear + C.dashTime) {
+        ctx.effects.burst(c.mesh.position.clone().setY(c.mesh.position.y + 1), 0x6a1a9a, { count: 18, speed: 4, size: 0.2, life: 0.5, up: 1, gravity: 0 });
+        this.scene.remove(c.mesh);
+        this.clones.splice(i, 1);
+      }
+    }
+    this.updateLook(dt, ctx.effects);
+  }
+
+  /** Gloeiende rode ogen op zijn hoofd, en een duistere aura van paarse rook (rood als hij boos is). */
+  updateLook(dt, effects) {
+    const slot = this.puppet.headSlot;
+    const show = !!slot && this.mesh.visible && this.mode !== 'verslagen';
+    this.eyes.visible = show;
+    if (!show) return;
+    slot.updateWorldMatrix(true, false);
+    const head = slot.getWorldPosition(new THREE.Vector3());
+    const q = slot.getWorldQuaternion(new THREE.Quaternion());
+    const size = OMAR.size;
+    const glow = (this.phase2 ? 0.15 : 0.11) * (0.85 + Math.random() * 0.3);
+    this.eyes.children.forEach((eye, i) => {
+      eye.position.set((i ? 1 : -1) * 0.032 * size, -0.02 * size, 0.09 * size).applyQuaternion(q).add(head);
+      eye.scale.setScalar(glow);
+    });
+    // Aura (niet op de troon: alleen als hij vecht of opstaat)
+    if (!effects || this.mode === 'troon') return;
+    this.auraTimer -= dt;
+    if (this.auraTimer > 0) return;
+    this.auraTimer = this.phase2 ? 0.03 : 0.05;
+    const a = Math.random() * Math.PI * 2;
+    const r = 0.25 + Math.random() * 0.35;
+    const at = this.position.clone().add(new THREE.Vector3(Math.sin(a) * r, 0.2 + Math.random() * 1.7, Math.cos(a) * r));
+    const colors = this.phase2 ? [0xb0101e, 0x1a0006, 0xff3b2a] : [0x4a1070, 0x14031f, 0x7a2ab0];
+    effects.burst(at, colors[Math.floor(Math.random() * colors.length)], { count: 1, speed: 0.3, size: this.phase2 ? 0.2 : 0.15, life: 0.8, up: 1.4, gravity: -0.3 });
+  }
+
+  /** Alle bliksems en schaduwen weg (nieuw gevecht, of hij is verslagen). */
+  clearMagic() {
+    this.strikes.length = 0;
+    for (const b of this.bolts) this.scene.remove(b.mesh);
+    this.bolts.length = 0;
+    for (const c of this.clones) this.scene.remove(c.mesh);
+    this.clones.length = 0;
   }
 
   /** De speler is dood: lekker uitlachen. */
@@ -1504,6 +1777,7 @@ export class OmarFighter extends Boss {
   update(dt, ctx) {
     this.lastCtx = ctx;
     super.update(dt, ctx);
+    if (dt > 0) this.updateMagic(dt, ctx);
   }
 }
 
