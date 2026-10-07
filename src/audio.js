@@ -157,6 +157,8 @@ const SOUNDS = {
   laugh: () => [520, 470, 430, 380].forEach((f, i) => tone({ type: 'square', from: f, to: f * 0.8, duration: 0.12, volume: 0.12, delay: i * 0.15 })),
   // Wind die aanzwelt (Omar neemt je mee)
   whoosh: () => noise({ from: 200, to: 3000, duration: 0.9, volume: 0.35, q: 1 }),
+  // "Ting!": Omars zwaard glinstert vlak voordat hij aanvalt (dan weet je: nu opletten!)
+  glint: () => tone({ type: 'triangle', from: 1900, to: 2600, duration: 0.14, volume: 0.13 }),
 };
 
 /** Speel een geluid, bijvoorbeeld play('hit'). */

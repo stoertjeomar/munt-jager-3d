@@ -101,6 +101,7 @@ export class Boss {
     this.cooldown = 1.5;
     this.flash = 0;
     this.lastSwingId = null;
+    this.recentSwings = []; // de laatste klappen die al geraakt hebben
     this.events.length = 0;
     this.position.copy(this.arena.center).add(new THREE.Vector3(0, 0, -this.arena.radius * 0.4));
     this.mesh.rotation.set(0, 0, 0);
@@ -125,8 +126,11 @@ export class Boss {
   }
 
   hit(from, swingId, damage) {
-    if (!this.alive || !this.awake || this.lastSwingId === swingId) return null;
+    // Elke klap telt maar één keer, ook als je slaat én tegelijk een wervelslag doet (dan wisselen de nummers elkaar af)
+    if (!this.alive || !this.awake || this.recentSwings.includes(swingId)) return null;
     this.lastSwingId = swingId;
+    this.recentSwings.push(swingId);
+    if (this.recentSwings.length > 8) this.recentSwings.shift();
     this.hp = Math.max(0, this.hp - damage);
     this.flash = 0.1;
     const killed = this.hp <= 0;

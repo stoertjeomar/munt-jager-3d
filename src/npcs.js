@@ -278,8 +278,8 @@ class NPC {
   }
 }
 
-/** Een tekstwolkje boven Omars hoofd (zoals in een stripboek). */
-function makeBubble() {
+/** Een tekstwolkje boven Omars hoofd (zoals in een stripboek). Ook gebruikt door Omar in zijn arena (omarFighter.js). */
+export function makeBubble() {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 128;
