@@ -4,6 +4,10 @@ Een **actie-RPG met levels** in de browser, gemaakt met **JavaScript** en **[Thr
 Kies je held, volg het pad door 4 levels, versla vijanden voor munten en XP, help de dorpelingen met zij-quests,
 koop spullen bij de koopman en versla aan het eind van elk level de boss.
 
+> 👑 **Ikzelf, Omar, zit ook in de game!** Ik heb dit spel gemaakt en ik sta in elk level.
+> Daag me uit en ik neem je mee naar mijn Gekke Kasteel. Niemand heeft mij ooit verslagen...
+> **dus probeer me maar eens te verslaan!**
+
 ![Screenshot van Munt Jager 3D](docs/screenshot.png)
 
 ## Direct spelen
@@ -45,6 +49,7 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 | X | Vuurzwaard |
 | I of Tab | Uitrusting (wapens, helmen, krachten) |
 | M | Geluid aan/uit |
+| N | Muziek aan/uit (wordt onthouden) |
 | G | Graphics: Laag / Normaal / Hoog (wordt onthouden) |
 | Scrollen | In- en uitzoomen (je begint helemaal ingezoomd) |
 | Esc | Pauze / muis vrij |
@@ -88,7 +93,17 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 - **4 bosses** met een mistmuur, boss-balk en een tweede fase: Koning Slijm, De Gevallen Ridder,
   Steenreus Gorath en Budget Mario
 - 3 verstopte **diamanten** per level, hartjes, munten die naar je toe vliegen
-- Geluidseffecten en **opslaan** in de browser (verder spelen waar je was)
+- **Omar, de maker van het spel**, staat in elk level. Daag hem uit (E) en hij neemt je mee naar zijn **Gekke Kasteel**:
+  eerst een filmpje op zijn troon, dan een gevecht in de arena. Hij draagt het personage dat jij níet koos, heeft het
+  Diamanten zwaard en álle krachten: dash, wervelslag, dubbele sprong met grondslag, vuurzwaard, rollen en zelf flesjes
+  drinken. Hij kan zelfs **teleporteren** ("Achter je!") en roept de hele tijd dingen naar je. Verlies je? Dan ben je niks
+  kwijt. Win je? Dan krijg je de **Kroon van Omar** en een gek feest met confetti, disco-lampen en vuurwerk
+- **Muziek**: elk level heeft zijn eigen deuntje, bosses hebben spannende muziek en tegen Omar speelt er **gekke boss-muziek**
+  (die nog sneller wordt als hij boos wordt). Alles zelfgemaakt in de code, zonder muziekbestanden
+- **Geluidseffecten**: zwaarden, dashen, drinken, kisten, checkpoints, menu's, praatgeluidjes als iemand iets zegt
+  (iedereen heeft zijn eigen stem), vogeltjes overdag, krekels 's nachts, een uil in het Spookwoud en wind in de bergen
+- Maximaal **3 flesjes** in het hele spel (net als Omar), dus drink ze slim
+- **Opslaan** in de browser (verder spelen waar je was)
 
 ## Projectstructuur
 
@@ -123,6 +138,10 @@ munt-jager-3d/
     ├── stats.js      → level (door vijanden te verslaan), bonussen, krachten, opslaan
     ├── ui.js         → balken, menu's, banners, minimap
     ├── effects.js    → deeltjes, schokgolven, waarschuwingscirkels
+    ├── omar.js       → alles rond Omar: uitdagen, het kasteel-filmpje, winnen (feest!) en verliezen
+    ├── omarFighter.js→ Omar zelf in het gevecht: zijn brein, aanvallen, teleporteren en praatjes
+    ├── castle.js     → het Gekke Kasteel van Omar met de arena en zijn troon
+    ├── music.js      → de muziek: liedjes als "bladmuziek" in tekst en een kleine sequencer
     ├── audio.js      → geluiden · camera.js · input.js · assets.js
 ```
 
@@ -134,6 +153,8 @@ munt-jager-3d/
 - **Wapens** → `WEAPONS` in `src/weapons.js` · **Helmen** → `HELMETS` in `src/gear.js`
 - **Krachten en levelen** → `POWERS`, `PERKS` en `killsNeeded` in `src/stats.js`
 - **Personages** → `CHARACTERS` en `PLAYABLE` bovenaan `src/player.js`
+- **Omar sterker of zwakker maken** → `OMAR` bovenaan `src/omarFighter.js`. Test het kasteel met `?level=omar`
+- **Muziek** → `SONGS` in `src/music.js`: schrijf je eigen liedje met noten als `C5 - E5 G5`
 - **Opnieuw beginnen** → uitrusting (I) → *Nieuw spel beginnen*
 
 ## Credits

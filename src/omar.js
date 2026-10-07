@@ -579,10 +579,19 @@ export class OmarFlow {
     cameraRig.pitch = 0.35;
     cameraRig.snapTo(player.position);
     ui.banner('OMAR', 'De maker van dit spel — niemand heeft hem ooit verslagen!', 'omar', 3.5);
+    play('gong');
     this.tipShown = this.d.wins + this.d.losses > 0; // de tip alleen bij je allereerste gevecht (na de banner)
     this.phase = 'gevecht';
     this.t = 0;
     this.phase2Shown = false;
+  }
+
+  /** Welke muziek hoort er in het kasteel? [liedje, hoe heftig] (main.js speelt hem af, zie music.js). */
+  musicWanted() {
+    if (this.phase === 'gevecht') return ['omar', this.fighter.phase2 ? 1 : 0]; // boos = sneller en harder
+    if (this.phase === 'gewonnen') return ['feest', 0];
+    if (this.phase === 'verloren') return [null, 0];
+    return ['kasteel', 0];
   }
 
   /** Omar verslagen (via onBossDefeated in main.js). */
