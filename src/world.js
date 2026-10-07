@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { LEVEL } from './levels.js';
+import { createCastleWorld } from './castle.js';
 
 // De wereld van het huidige level: grond, pad, huizen (waar je in kunt!), ruïnes, natuur,
 // de boss-arena, de checkpoints en de kisten. Wat er in elk level staat, staat in levels.js.
@@ -14,6 +15,7 @@ export const CHECKPOINTS = LEVEL.checkpoints.map(([id, name, x, z]) => ({ id, na
 
 // De boss-arena staat altijd aan het eind (noorden) van het level
 export const ARENAS = [{ id: LEVEL.boss, center: v3(0, -78), radius: 18 }];
+if (LEVEL.arena) Object.assign(ARENAS[0], { center: v3(LEVEL.arena.x, LEVEL.arena.z), radius: LEVEL.arena.radius }); // Omars kasteel: arena in het midden
 
 export const CHESTS = LEVEL.chests.map(([id, x, y, z, item]) => ({ id, position: v3(x, z, y), item }));
 
@@ -769,6 +771,7 @@ function createArena(scene, colliders, arena) {
 }
 
 export function createWorld(scene) {
+  if (LEVEL.castle) return createCastleWorld(scene, { tex, texturedBox }); // Omars Gekke Kasteel bouwt zijn eigen wereld (castle.js)
   const sky = createSky(scene);
   const fogNear = LEVEL.theme === 'woud' ? 25 : 50;
   scene.fog = new THREE.Fog(0xcdeaff, fogNear, fogNear + 90);
