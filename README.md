@@ -98,8 +98,9 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
   Diamanten zwaard en álle krachten: dash, wervelslag, dubbele sprong met grondslag, vuurzwaard, rollen en zelf flesjes
   drinken. Hij kan zelfs **teleporteren** ("Achter je!") en roept de hele tijd dingen naar je. Verlies je? Dan ben je niks
   kwijt. Win je? Dan krijg je de **Kroon van Omar** en een gek feest met confetti, disco-lampen en vuurwerk
-- **Muziek**: elk level heeft zijn eigen deuntje, bosses hebben spannende muziek en tegen Omar speelt er **gekke boss-muziek**
-  (die nog sneller wordt als hij boos wordt). Alles zelfgemaakt in de code, zonder muziekbestanden
+- **Muziek**: elk level heeft zijn eigen deuntje en bij **alle boss-gevechten en tegen Omar** speelt echte, epische boss-muziek
+  (*The Last Demon King*, zie Credits). Die begint altijd vooraan als het gevecht start en gaat sneller als Omar boos wordt.
+  De andere muziek is zelfgemaakt in de code, zonder muziekbestanden
 - **Geluidseffecten**: zwaarden, dashen, drinken, kisten, checkpoints, menu's, praatgeluidjes als iemand iets zegt
   (iedereen heeft zijn eigen stem), vogeltjes overdag, krekels 's nachts, een uil in het Spookwoud en wind in de bergen
 - Maximaal **3 flesjes** in het hele spel (net als Omar), dus drink ze slim
@@ -115,6 +116,7 @@ munt-jager-3d/
 ├── models/           → 3D-modellen (personages, wapens, helmen, bosses, KayKit, Kenney)
 ├── textures/         → Kenney Retro Textures (grond, muren, daken, ramen)
 ├── sounds/           → geluiden uit het Kenney Starter Kit
+├── music/            → de boss-muziek (mp3)
 ├── images/           → portretten voor het startscherm
 └── src/
     ├── main.js       → start alles op, game loop, gevechten, winkel, doodgaan
@@ -163,6 +165,7 @@ munt-jager-3d/
 - Mini-Game Variety Pack (planten, stenen, dieren, hart, diamant): [KayKit / Kay Lousberg](https://kaylousberg.com) — CC0
 - Starter Kit 3D Platformer (munt, gras, vlaggen, robot, geluiden): [Kenney](https://kenney.nl) — MIT
 - Retro Textures Fantasy: [Kenney](https://kenney.nl) — CC0
+- Boss-muziek: *The Last Demon King 🔥 Epic Final Boss Battle Music* door **Lo-fi Music Ai** (YouTube) — gratis te gebruiken volgens de maker
 - Personages Eve, Soldaat en Mila: via Mixamo
 - Budget Mario door Teh_LaughingMan, Buff man door joney_lol, MS Gundam RX-78-2 door Tipatat Chennavasin
   (fan-modellen; Mario en Gundam zijn van Nintendo en Bandai — alleen voor eigen plezier)
@@ -170,4 +173,4 @@ munt-jager-3d/
 ## Licentie
 
 MIT — zie [LICENSE](LICENSE). Three.js valt onder zijn eigen MIT-licentie ([lib/THREE-LICENSE](lib/THREE-LICENSE)).
-De gebruikte modellen en texturen vallen onder de licenties hierboven.
+De gebruikte modellen, texturen en muziek vallen onder de licenties hierboven.
