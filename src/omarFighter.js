@@ -25,23 +25,23 @@ export const OMAR = {
   size: 1.12, // Omar is iets groter dan jij
   hipHeight: 0.95, // hoogte van zijn heupen (om hem goed op de troon te laten zitten)
   // Leven: zoveel klappen met JOUW wapen kan Omar hebben. Hoe hoger jouw level, hoe minder klappen het zijn.
-  hp: { hits: 31, perLevel: 0.4, minHits: 23, min: 480 },
-  speed: [1.45, 1.65], // hoe snel hij loopt (1 = net zo snel als jij): hij is veel sneller dan jij!
+  hp: { hits: 35, perLevel: 0.3, minHits: 27, min: 560 },
+  speed: [1.55, 1.75], // hoe snel hij loopt (1 = net zo snel als jij): hij is veel sneller dan jij!
   sprintFrom: 6, // verder weg dan dit (meter)? Dan sprint hij naar je toe
-  swingSpeed: 0.72, // zijn zwaard zwaait sneller dan dat van jou (0.72 = in 72% van de tijd)
+  swingSpeed: 0.68, // zijn zwaard zwaait sneller dan dat van jou (0.68 = in 68% van de tijd)
   // Hoeveel van JOUW leven een klap kost (0.11 = 11%). Zo is hij op elk level even eng.
-  damagePct: { slag: 0.12, dash: 0.15, wervelslag: 0.17, grondslag: 0.21, boos: 0.09 },
+  damagePct: { slag: 0.14, dash: 0.17, wervelslag: 0.19, grondslag: 0.23, boos: 0.1 },
   phase2Damage: 1.3, // in fase 2 doet alles 30% meer pijn
   fireDamage: 1.35, // met zijn vuurzwaard 35% meer
   // Zo lang laat hij eerst zien wat hij gaat doen (seconden): kort, maar je kunt het altijd zien aankomen
   // teleport = zo lang staat hij achter je (met een "ting!") voordat hij slaat
   windup: { combo: [0.28, 0.2], dash: [0.34, 0.26], spin: [0.38, 0.3], slam: [0.42, 0.34], fire: 0.45, teleport: [0.42, 0.34] },
   // Zo lang staat hij daarna te hijgen: dan kun jij slaan! (niet lang...)
-  recover: { combo: [0.55, 0.4], dash: [0.55, 0.4], spin: [0.55, 0.4], slam: [0.75, 0.55] },
+  recover: { combo: [0.5, 0.36], dash: [0.5, 0.36], spin: [0.5, 0.36], slam: [0.7, 0.5] },
   // Zo lang moet hij wachten voordat hij een aanval nog een keer mag doen
-  cooldown: { dash: [1.5, 0.9], spin: [2.4, 1.7], slam: [3.8, 2.6], dodge: [1.3, 0.8], taunt: [12, 99], mercy: 20, fire: 12, drink: [9, 7], teleport: [4.5, 3.2] },
+  cooldown: { dash: [1.5, 0.9], spin: [2.4, 1.7], slam: [3.8, 2.6], dodge: [1.3, 0.8], taunt: [12, 99], mercy: 30, fire: 12, drink: [9, 7], teleport: [3.5, 2.4] },
   comboHits: [3, 4], // zoveel klappen achter elkaar
-  dodgeChance: [0.5, 0.65], // kans dat hij wegrolt, wegdasht of wegteleporteert als jij slaat
+  dodgeChance: [0.5, 0.68], // kans dat hij wegrolt, wegdasht of wegteleporteert als jij slaat
   dashDodge: 0.65, // kans dat hij wegdasht in plaats van wegrolt
   counterChance: 0.6, // kans dat hij na het ontwijken meteen terugslaat
   spinAfterCombo: [0.3, 0.55], // kans op een wervelslag na zijn combo
@@ -58,8 +58,9 @@ export const OMAR = {
   // Teleporteren: "Achter je!", poef, weg... en dan staat hij opeens achter je
   teleportDist: 1.8, // zo ver achter je komt hij te staan
   teleportGone: 0.22, // zo lang is hij helemaal weg (seconden)
-  teleportHits: [2, 3], // zoveel klappen doet hij daarna
-  teleportDodge: [0.3, 0.45], // kans dat hij wegteleporteert als jij slaat (in plaats van rollen)
+  teleportHits: [3, 4], // zoveel klappen doet hij daarna
+  teleportChain: 0.5, // als hij boos is: kans dat hij meteen nóg een keer achter je teleporteert
+  teleportDodge: [0.35, 0.5], // kans dat hij wegteleporteert als jij slaat (in plaats van rollen)
   talk: [4, 7], // zo vaak (seconden) roept hij iets tijdens het gevecht
 };
 
@@ -247,6 +248,7 @@ export class OmarFighter extends Boss {
     this.recentHits = [];
     this.pending = null; // een geplande ontwijk-rol
     this.chained = false; // al een tweede grondslag gedaan?
+    this.fromTeleport = false; // komt de combo na een teleport? (dan kan hij als hij boos is nog een keer)
     this.lastMove = null;
     this.seenSwing = null;
     this.seenSpin = null;
@@ -822,7 +824,16 @@ export class OmarFighter extends Boss {
           }
           break;
         }
-        // Klaar met slaan. Soms nog een wervelslag erachteraan (in fase 2 vaker)!
+        // Klaar met slaan. Boos en net geteleporteerd? Dan soms meteen nog een keer: "Nog een keer!"
+        const chain = this.fromTeleport && ph && p.onGround && Math.random() < OMAR.teleportChain;
+        this.fromTeleport = false;
+        if (chain) {
+          this.say('Nog een keer!', 1.2, true);
+          this.startTeleport(ph, 0.2);
+          this.cd.teleport = OMAR.cooldown.teleport[ph];
+          break;
+        }
+        // Soms nog een wervelslag erachteraan (in fase 2 vaker)!
         if (dist < OMAR.spinRadius + 0.5 && p.spinCooldown <= 0 && Math.random() < OMAR.spinAfterCombo[ph]) {
           this.startSpin(ph, 0.32);
           break;
@@ -1050,6 +1061,7 @@ export class OmarFighter extends Boss {
         if (this.timer <= 0) {
           this.after = OMAR.recover.combo[ph];
           this.swingsLeft = OMAR.teleportHits[ph];
+          this.fromTeleport = true;
           this.setState('combo');
         }
         break;
@@ -1185,6 +1197,7 @@ export class OmarFighter extends Boss {
   }
 
   startCombo(ph, windupScale = 1) {
+    this.fromTeleport = false;
     this.after = OMAR.recover.combo[ph];
     this.setState('comboWindup', OMAR.windup.combo[ph] * windupScale);
     this.telegraph('glint');
@@ -1410,8 +1423,11 @@ export class OmarFighter extends Boss {
   handleEvents(ctx) {
     const p = this.puppet;
     for (const ev of p.events) {
-      if (ev === 'dash') ctx.effects.burst(this.position.clone().setY(this.position.y + 0.9), 0xb04dff, { count: 16, speed: 3, size: 0.1, life: 0.35, gravity: 0 });
-      else if (ev === 'roll') play('swing');
+      if (ev === 'dash') {
+        play('dash'); // (zo hoor je hem ook aankomen als je hem niet ziet)
+        ctx.effects.burst(this.position.clone().setY(this.position.y + 0.9), 0xb04dff, { count: 16, speed: 3, size: 0.1, life: 0.35, gravity: 0 });
+      } else if (ev === 'roll') play('swing');
+      else if (ev === 'drink') play('gulp');
       else if (ev === 'doubleJump') {
         play('jump');
         this.log('dubbele sprong');

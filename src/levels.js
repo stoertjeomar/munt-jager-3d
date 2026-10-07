@@ -4,6 +4,7 @@
 // Pas deze lijsten aan om je eigen levels te maken!
 //   half      = hoe groot het level is: x van -half.x tot half.x, z van -half.z tot half.z
 //   theme     = 'weide' (gras), 'woud' (donker bos) of 'hoogland' (rotsen)
+//   music     = welk liedje er speelt (zie music.js)
 //   path      = punten van het pad, van start naar boss
 //   checkpoints = [id, naam, x, z]  (de eerste is het begin; als je doodgaat kom je terug bij de laatste die je haalde)
 //   spawns    = [soort, aantal]  → worden langs het pad verdeeld
@@ -21,6 +22,7 @@ export const LEVELS = [
     name: 'Groene Weide',
     subtitle: 'Level 1',
     theme: 'weide',
+    music: 'weide',
     half: { x: 36, z: 100 },
     boss: 'mario',
     path: [[4, 92], [8, 72], [6, 44], [-6, 16], [-10, -14], [0, -40], [0, -62]],
@@ -50,6 +52,7 @@ export const LEVELS = [
     name: 'Ruïnevallei',
     subtitle: 'Level 2',
     theme: 'weide',
+    music: 'vallei',
     tint: [1.15, 1.2, 0.95],
     half: { x: 36, z: 100 },
     boss: 'koning',
@@ -79,6 +82,7 @@ export const LEVELS = [
     name: 'Spookwoud',
     subtitle: 'Level 3',
     theme: 'woud',
+    music: 'woud',
     half: { x: 36, z: 100 },
     boss: 'ridder',
     path: [[0, 92], [14, 70], [10, 40], [-14, 18], [-12, -12], [8, -38], [0, -62]],
@@ -100,6 +104,7 @@ export const LEVELS = [
     name: 'Rotshoogland',
     subtitle: 'Level 4 · Finale',
     theme: 'hoogland',
+    music: 'hoogland',
     half: { x: 38, z: 100 },
     boss: 'reus',
     path: [[0, 92], [-14, 64], [-8, 34], [14, 10], [14, -20], [0, -44], [0, -60]],
@@ -139,6 +144,7 @@ export const CASTLE = {
   name: 'Het Gekke Kasteel van Omar',
   subtitle: 'Geheim kasteel',
   theme: 'kasteel',
+  music: 'kasteel',
   castle: true,
   half: { x: 31, z: 35 },
   boss: 'omar',

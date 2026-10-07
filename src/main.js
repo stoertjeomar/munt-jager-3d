@@ -6,7 +6,7 @@ import { BlobShadows } from './blobs.js';
 import { GrassField } from './grass.js';
 import { Player, PLAYABLE } from './player.js';
 import { createWorld, CHECKPOINTS, ARENAS, CHESTS, grassMask } from './world.js';
-import { LEVELS, LEVEL, LEVEL_INDEX } from './levels.js';
+import { LEVELS, LEVEL, LEVEL_INDEX, IN_CASTLE } from './levels.js';
 import { NPCs } from './npcs.js';
 import { createEnemies, spawnEnemy } from './enemies.js';
 import { createBosses, BOSS_INFO } from './bosses.js';
@@ -17,7 +17,8 @@ import { itemInfo } from './gear.js';
 import { Effects } from './effects.js';
 import { SwordTrail } from './trail.js';
 import { UI } from './ui.js';
-import { play, unlockAudio, toggleMute, setFootsteps } from './audio.js';
+import { play, unlockAudio, toggleMute, setFootsteps, updateAmbience } from './audio.js';
+import { Music } from './music.js';
 import { Pickups, DIAMONDS } from './pickups.js';
 import { Projectiles } from './projectiles.js';
 import { OmarFlow } from './omar.js';
@@ -135,7 +136,7 @@ function giveKills(amount, announce = true) {
   const newPerks = stats.unlockedPerks().filter((k) => !perksBefore.includes(k));
   player.health = player.maxHealth;
   player.stamina = player.maxStamina;
-  play('win');
+  play('levelUp');
   effects.burst(player.position.clone().setY(player.position.y + 1.2), 0xffd76a, { count: 40, speed: 5, size: 0.12, life: 1, up: 4 });
   if (announce) {
     ui.banner(`LEVEL ${stats.level}`, 'Je bent sterker geworden! Meer leven, stamina en schade.', 'gold', 3.5);
@@ -452,7 +453,7 @@ function openChest(chest) {
     stats.addItem(chest.item);
     stats.data.chests.push(chest.id);
     stats.save();
-    play('pickup');
+    play('chest');
     effects.burst(chest.position.clone().setY(chest.position.y + 1), 0xffd76a, { count: 24, speed: 4, size: 0.1, life: 0.8, up: 3 });
     const info = itemInfo(chest.item);
     ui.toast(`Gevonden: <b style="color:${info.rarity === 'legendarisch' ? '#ffb340' : '#f3d27a'}">${info.name}</b><br><small>${info.info}${chest.item.kind === 'flask' ? '' : ' — open je uitrusting met I'}</small>`, 5);
@@ -579,6 +580,7 @@ document.addEventListener('pointerlockchange', () => {
 window.addEventListener('keydown', (e) => {
   unlockAudio();
   if (e.code === 'KeyM') toggleMute();
+  if (e.code === 'KeyN' && !e.repeat) ui.toast(music.toggle() ? '🎵 Muziek <b>aan</b> (N)' : '🔇 Muziek <b>uit</b> (N)', 2);
   if (e.code === 'KeyG' && !e.repeat) gfx.cycle(); // G = mooier of sneller: kies wat je computer aankan
 });
 
@@ -633,6 +635,7 @@ function handleActions(move) {
 function handlePlayerEvents() {
   for (const ev of player.events) {
     if (ev === 'dash') {
+      play('dash');
       effects.burst(player.position.clone().setY(player.position.y + 0.9), 0x9be7ff, { count: 16, speed: 3, size: 0.1, life: 0.35, gravity: 0 });
     } else if (ev === 'doubleJump') {
       play('jump');
@@ -646,7 +649,10 @@ function handlePlayerEvents() {
       effects.floatText(at.setY(at.y + 0.9), `+${Math.round(player.maxHealth * 0.45)}`, '#7dff9a', 0.55);
     } else if (ev === 'land') {
       play('land');
+    } else if (ev === 'drink') {
+      play('gulp');
     } else if (ev === 'fire') {
+      play('fire');
       ui.toast('🔥 <b>Vuurzwaard!</b> 50% meer schade', 2);
     }
   }
@@ -678,6 +684,19 @@ function updateTrail(dt) {
   }
 }
 
+// ---------- Muziek ----------
+const music = new Music();
+
+/** Welk liedje past nu? Elk level heeft zijn eigen deuntje, bosses hebben spannende muziek en Omar heeft GEKKE muziek. */
+function updateMusic() {
+  const boss = state.activeBoss;
+  if (!gameStarted) music.play(null);
+  else if (IN_CASTLE) music.play(...omar.musicWanted());
+  else if (boss && boss.awake && !boss.dead) music.play('boss');
+  else music.play(LEVEL.music ?? 'weide');
+  music.update();
+}
+
 // ---------- Bosses: arena in = gevecht ----------
 
 function updateBossFights() {
@@ -689,6 +708,7 @@ function updateBossFights() {
         b.wake();
         state.activeBoss = b;
         ui.banner(b.name.toUpperCase(), BOSS_INFO[b.id].title, 'gold', 3);
+        play('gong');
       }
     }
   }
@@ -763,7 +783,7 @@ function gameLoop() {
     // Bij een checkpoint-vlag langs gelopen? Dan kom je hier terug als je doodgaat.
     const reached = sites.reachCheckpoint(player.position);
     if (reached) {
-      play('pickup');
+      play('flag');
       effects.burst(reached.position.clone().setY(2.6), 0xffd76a, { count: 30, speed: 4, size: 0.1, life: 0.9, up: 3 });
       ui.toast(`🚩 <b>Checkpoint: ${reached.name}</b><br><small>Als je doodgaat, kom je hier terug.</small>`, 3);
     }
@@ -843,6 +863,8 @@ function gameLoop() {
 
   ui.update(realDt, player, state.activeBoss, elapsed);
   omar.update(realDt); // Omar: keuzes, reizen en tussenfilmpjes (mag de camera overnemen)
+  updateMusic();
+  updateAmbience(dt, { theme: LEVEL.theme, night: world.night ?? 0 });
 
   // Af en toe automatisch opslaan
   state.saveTimer += realDt;
@@ -897,3 +919,4 @@ if (stats.level === 1 && stats.runes === 0 && stats.data.bosses.length === 0) {
 // Handig voor debuggen in de browser-console (F12): typ bijvoorbeeld `game.player.position`
 window.game = { scene, player, enemies, bosses, sites, npcs, stats, ui, world, state, camera, cameraRig, renderer, composer, gfx, nightLight, grass, decor, effects, trail, onDefeated, loop: gameLoop };
 window.game.omar = omar;
+window.game.music = music;

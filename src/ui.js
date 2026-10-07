@@ -3,6 +3,7 @@ import { WEAPONS } from './weapons.js';
 import { HELMETS, itemInfo, itemColor } from './gear.js';
 import { BOUNDS, CHECKPOINTS, ARENAS } from './world.js';
 import { LEVEL, LEVELS, LEVEL_INDEX } from './levels.js';
+import { play, talk } from './audio.js';
 
 // Alles wat je op het scherm ziet (behalve de 3D-wereld): balken, munten, menu's, banners en de minimap.
 
@@ -11,6 +12,10 @@ const $ = (id) => document.getElementById(id);
 export class UI {
   constructor(stats) {
     this.stats = stats;
+    // Klikje bij elke knop in een menu
+    document.getElementById('menu')?.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('button')) play('click');
+    });
     this.el = {
       hpFill: $('hp-fill'), hpLag: $('hp-lag'), hpText: $('hp-text'),
       stFill: $('st-fill'), level: $('level'), xpFill: $('xp-fill'),
@@ -160,6 +165,7 @@ export class UI {
     this.el.dialog.classList.remove('hidden');
     this.el.dialogName.textContent = name;
     this.el.dialogText.innerHTML = lines[0];
+    talk(name, lines[0]); // praatgeluidjes
   }
 
   advanceDialog() {
@@ -168,6 +174,7 @@ export class UI {
     d.index++;
     if (d.index < d.lines.length) {
       this.el.dialogText.innerHTML = d.lines[d.index];
+      talk(this.el.dialogName.textContent, d.lines[d.index]);
       return;
     }
     this.dialog = null;
@@ -179,6 +186,7 @@ export class UI {
   /** Scherm aan het eind van een level. buttons = [[tekst, functie], ...] */
   openLevelComplete(title, html, buttons) {
     this.menuOpen = 'level';
+    play('menuOpen');
     this.el.menu.classList.remove('hidden');
     this.el.menuTitle.textContent = title;
     this.el.menuBody.innerHTML = `<div class="level-done">${html}</div>` + buttons.map(([text], i) => `<button data-i="${i}">${text}</button>`).join('');
@@ -191,6 +199,7 @@ export class UI {
   // ---------- Menu's ----------
 
   closeMenu() {
+    if (this.menuOpen && this.menuOpen !== 'dialog') play('menuClose');
     this.menuOpen = null;
     this.el.menu.classList.add('hidden');
   }
@@ -198,6 +207,7 @@ export class UI {
   /** De winkel van de koopman: munten uitgeven. actions = { buy(key), close() } */
   openShop(name, actions) {
     this.menuOpen = 'shop';
+    play('menuOpen');
     this.el.menu.classList.remove('hidden');
     this.el.menuTitle.textContent = name;
     const render = () => {
@@ -229,6 +239,7 @@ export class UI {
   /** Uitrusting (I of Tab): wapens, helmen, je level en krachten. */
   openInventory(actions) {
     this.menuOpen = 'inventory';
+    play('menuOpen');
     this.el.menu.classList.remove('hidden');
     this.el.menuTitle.textContent = 'Uitrusting';
     const render = () => {

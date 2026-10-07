@@ -345,6 +345,7 @@ export class Player {
     this.flasks--;
     this.drinkTimer = DRINK.time;
     this.healed = false;
+    this.events.push('drink');
     return true;
   }
 

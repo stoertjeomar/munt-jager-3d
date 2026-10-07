@@ -1,6 +1,6 @@
 // Geluidseffecten, gemaakt met de Web Audio API: geen geluidsbestanden nodig!
 // Elk geluid wordt "gesynthetiseerd" uit simpele golven en ruis.
-// Druk op M om het geluid aan/uit te zetten.
+// Druk op M om het geluid aan/uit te zetten. (De muziek staat in music.js: N zet die aan/uit.)
 
 let ctx = null;
 let master = null;
@@ -80,8 +80,13 @@ function ready() {
   return ctx && !muted && ctx.state === 'running';
 }
 
-/** Toon met een frequentie die verschuift van `from` naar `to`. */
-function tone({ type = 'sine', from, to = from, duration, volume = 0.3, delay = 0 }) {
+/** Voor music.js: de geluidskaart, de hoofdvolumeknop en de ruis (of null als het geluid nog niet mag). */
+export function getAudio() {
+  return ctx && ctx.state === 'running' ? { ctx, master, noise: noiseBuffer } : null;
+}
+
+/** Toon met een frequentie die verschuift van `from` naar `to`. pan = links (-1) of rechts (1). */
+function tone({ type = 'sine', from, to = from, duration, volume = 0.3, delay = 0, pan = 0 }) {
   const t = ctx.currentTime + delay;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -91,7 +96,11 @@ function tone({ type = 'sine', from, to = from, duration, volume = 0.3, delay = 
   gain.gain.setValueAtTime(0.0001, t);
   gain.gain.exponentialRampToValueAtTime(volume, t + 0.01);
   gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
-  osc.connect(gain).connect(master);
+  if (pan && ctx.createStereoPanner) {
+    const panner = ctx.createStereoPanner();
+    panner.pan.value = pan;
+    osc.connect(gain).connect(panner).connect(master);
+  } else osc.connect(gain).connect(master);
   osc.start(t);
   osc.stop(t + duration + 0.02);
 }
@@ -159,12 +168,108 @@ const SOUNDS = {
   whoosh: () => noise({ from: 200, to: 3000, duration: 0.9, volume: 0.35, q: 1 }),
   // "Ting!": Omars zwaard glinstert vlak voordat hij aanvalt (dan weet je: nu opletten!)
   glint: () => tone({ type: 'triangle', from: 1900, to: 2600, duration: 0.14, volume: 0.13 }),
+  // Menu's: klikje, openen (omhoog) en dicht (omlaag)
+  click: () => tone({ type: 'square', from: 1300, to: 1100, duration: 0.035, volume: 0.05 }),
+  menuOpen: () => {
+    tone({ type: 'triangle', from: 420, to: 840, duration: 0.12, volume: 0.12 });
+    noise({ from: 800, to: 3000, duration: 0.15, volume: 0.06, q: 1 });
+  },
+  menuClose: () => tone({ type: 'triangle', from: 800, to: 380, duration: 0.12, volume: 0.1 }),
+  // Een gong als er een boss in beeld komt
+  gong: () => {
+    for (const [f, v] of [[98, 0.35], [196.5, 0.18], [293, 0.1], [415, 0.06]]) tone({ type: 'sine', from: f, to: f * 0.98, duration: 2.2, volume: v });
+    noise({ from: 600, to: 200, duration: 0.6, volume: 0.15, q: 0.8 });
+  },
+  // Nieuw level: een vrolijk fanfaretje
+  levelUp: () => [523, 659, 784, 1047, 1319].forEach((f, i) => {
+    tone({ type: 'square', from: f, duration: i === 4 ? 0.5 : 0.12, volume: 0.1, delay: i * 0.09 });
+    tone({ type: 'triangle', from: f / 2, duration: i === 4 ? 0.5 : 0.12, volume: 0.12, delay: i * 0.09 });
+  }),
+  // Dash: snelle windvlaag
+  dash: () => noise({ from: 400, to: 4000, duration: 0.22, volume: 0.3, q: 0.9 }),
+  // Vuurzwaard: vlammen die opflakkeren
+  fire: () => {
+    noise({ from: 300, to: 1500, duration: 0.6, volume: 0.35, q: 0.6 });
+    tone({ type: 'sawtooth', from: 90, to: 160, duration: 0.5, volume: 0.08 });
+  },
+  // Flesje drinken: glug glug glug
+  gulp: () => [0, 0.17, 0.34].forEach((d) => tone({ type: 'sine', from: 260, to: 140, duration: 0.1, volume: 0.2, delay: d })),
+  // Kist open: krakend deksel en dan een schatten-tingel
+  chest: () => {
+    tone({ type: 'sawtooth', from: 140, to: 90, duration: 0.25, volume: 0.08 });
+    [784, 988, 1175, 1568].forEach((f, i) => tone({ type: 'triangle', from: f, duration: 0.2, volume: 0.13, delay: 0.2 + i * 0.07 }));
+  },
+  // Checkpoint-vlag: fladder + ding
+  flag: () => {
+    noise({ from: 1500, to: 600, duration: 0.3, volume: 0.12, q: 2 });
+    [659, 988].forEach((f, i) => tone({ type: 'triangle', from: f, duration: 0.3, volume: 0.15, delay: 0.1 + i * 0.12 }));
+  },
   // "Poef!": Omar teleporteert (verdwijnt in paarse rook)
   poef: () => {
     noise({ from: 3200, to: 300, duration: 0.25, volume: 0.35, q: 2 });
     tone({ type: 'sine', from: 900, to: 180, duration: 0.22, volume: 0.15 });
   },
 };
+
+/**
+ * Praatgeluidjes, als iemand iets zegt (zoals in sommige spelletjes: "blablabla" in piepjes).
+ * Iedereen heeft zijn eigen stem: Omar praat diep en snel, een robot piept.
+ */
+export function talk(name = '', text = '') {
+  if (!ready()) return;
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 997;
+  const omar = /omar/i.test(name);
+  const robot = /robot|biep|bot/i.test(name);
+  const base = omar ? 118 : 200 + (h % 9) * 26;
+  const type = omar ? 'sawtooth' : robot ? 'sine' : h % 2 ? 'square' : 'triangle';
+  const letters = text.replace(/<[^>]+>/g, '').length;
+  const n = Math.max(3, Math.min(14, Math.round(letters / 5)));
+  const step = omar ? 0.065 : 0.075;
+  for (let i = 0; i < n; i++) {
+    const f = robot ? base * (i % 2 ? 2 : 1.5) : base * (0.85 + Math.random() * 0.5);
+    tone({ type, from: f, to: f * (0.9 + Math.random() * 0.25), duration: step * 0.8, volume: omar ? 0.06 : type === 'square' ? 0.035 : 0.06, delay: i * step });
+  }
+}
+
+// ---------- Geluiden van de wereld om je heen ----------
+const amb = { bird: 2, cricket: 1, wind: 5, owl: 6, crackle: 0.3 };
+
+/** Elke frame: vogeltjes overdag, krekels 's nachts, een uil in het Spookwoud, wind in de bergen, knetterende fakkels in het kasteel. */
+export function updateAmbience(dt, { theme, night = 0 }) {
+  if (!ready() || dt <= 0) return;
+  for (const key in amb) amb[key] -= dt;
+  const pan = () => Math.random() * 1.6 - 0.8;
+  if (theme === 'kasteel') {
+    if (amb.crackle <= 0) {
+      amb.crackle = 0.12 + Math.random() * 0.5;
+      noise({ from: 2000 + Math.random() * 2500, duration: 0.04, volume: 0.03, q: 3 });
+    }
+    return;
+  }
+  if (night < 0.5 && theme !== 'woud' && amb.bird <= 0) {
+    amb.bird = 2.5 + Math.random() * 5;
+    const p = pan();
+    const f = 2500 + Math.random() * 1000;
+    const n = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) tone({ type: 'sine', from: f, to: f * 1.35, duration: 0.06, volume: 0.03, delay: i * 0.09, pan: p });
+  }
+  if (night >= 0.5 && amb.cricket <= 0) {
+    amb.cricket = 0.6 + Math.random() * 1.4;
+    const p = pan();
+    for (let i = 0; i < 5; i++) tone({ type: 'sine', from: 4300, duration: 0.025, volume: 0.012, delay: i * 0.045, pan: p });
+  }
+  if (theme === 'woud' && amb.owl <= 0) {
+    amb.owl = 9 + Math.random() * 10;
+    const p = pan();
+    tone({ type: 'sine', from: 410, to: 370, duration: 0.35, volume: 0.05, pan: p });
+    tone({ type: 'sine', from: 430, to: 360, duration: 0.55, volume: 0.05, delay: 0.5, pan: p });
+  }
+  if (theme === 'hoogland' && amb.wind <= 0) {
+    amb.wind = 7 + Math.random() * 8;
+    noise({ from: 250, to: 900, duration: 3, volume: 0.05, q: 0.5 });
+  }
+}
 
 /** Speel een geluid, bijvoorbeeld play('hit'). */
 export function play(name) {
