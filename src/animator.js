@@ -192,6 +192,17 @@ export class CharacterAnimator {
       hips.rotation.x = 0.5;
     }
 
+    // ---------- Op de draak: met gespreide benen in het zadel, één hand aan de zadelknop ----------
+    if (s.ride) {
+      legL.rotation.x = legR.rotation.x = -1.2;
+      legL.rotation.z = 0.55;
+      legR.rotation.z = -0.55;
+      kneeL.rotation.x = kneeR.rotation.x = 1.25;
+      armL.rotation.x = -0.85;
+      elbowL.rotation.x = -0.5;
+      hips.rotation.x = 0.12;
+    }
+
     // ---------- NPC's: zwaaien naar de speler ----------
     if (s.wave) {
       armR.rotation.x = -0.3;

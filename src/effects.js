@@ -35,11 +35,13 @@ export class Effects {
    * Een explosie van blokjes.
    * @param {THREE.Vector3} pos
    * @param {number} color
-   * @param {object} opts  count, speed, size, life, up (extra omhoog), gravity (0..1)
+   * @param {object} opts  count, speed, size, life, up (extra omhoog), gravity (0..1),
+   *                       dir = alle deeltjes deze kant op (bijv. vuur uit de bek van de draak), spread = hoe wijd dan
    */
-  burst(pos, color, { count = 14, speed = 5, size = 0.12, life = 0.6, up = 2, gravity = 1 } = {}) {
+  burst(pos, color, { count = 14, speed = 5, size = 0.12, life = 0.6, up = 2, gravity = 1, dir: aim = null, spread = 0.25 } = {}) {
     for (let i = 0; i < count && this.particles.length < MAX_PARTICLES; i++) {
       const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.3, Math.random() - 0.5).normalize();
+      if (aim) dir.multiplyScalar(spread).add(aim).normalize();
       this.particles.push({
         pos: pos.clone(),
         vel: dir.multiplyScalar(speed * (0.4 + Math.random() * 0.6)).add(new THREE.Vector3(0, up, 0)),

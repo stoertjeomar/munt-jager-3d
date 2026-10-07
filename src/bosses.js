@@ -6,7 +6,7 @@ import { createHelmetMesh } from './gear.js';
 import { SwordTrail } from './trail.js';
 import { play } from './audio.js';
 
-// De vier bosses: aan het eind van elk level één. De boss woont in een arena (zie ARENAS in world.js).
+// De vier bosses: aan het eind van het pad van elk gebied één. De boss woont in een arena (zie ARENAS in world.js).
 // Loop je de arena in, dan gaat er een mistmuur omhoog en begint het gevecht.
 // Elke boss heeft een eigen set aanvallen, en wordt bij de helft van zijn leven sneller en gemener (fase 2).
 // Omar woont niet in een level maar in zijn eigen kasteel: hij staat in omarFighter.js

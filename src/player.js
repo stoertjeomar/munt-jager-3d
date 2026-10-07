@@ -497,20 +497,52 @@ export class Player {
       } else if (wasInAir) this.events.push('land');
     }
 
-    // ---------- Flesje drinken ----------
-    if (this.drinkTimer > 0) {
-      this.drinkTimer -= dt;
-      if (!this.healed && DRINK.time - this.drinkTimer >= DRINK.healAt) {
-        this.healed = true;
-        this.health = Math.min(this.maxHealth, this.health + Math.round(this.maxHealth * (DRINK.heal + this.stats.healBonus)));
-        this.events.push('heal');
-      }
-    }
+    this.updateDrink(dt);
 
     // ---------- Animatie ----------
     this.moving = hasMove;
     this.sprinting = sprinting;
     this.updateAnimation(dt);
+  }
+
+  /** Flesje drinken: halverwege komt het leven terug. */
+  updateDrink(dt) {
+    if (this.drinkTimer <= 0) return;
+    this.drinkTimer -= dt;
+    if (!this.healed && DRINK.time - this.drinkTimer >= DRINK.healAt) {
+      this.healed = true;
+      this.health = Math.min(this.maxHealth, this.health + Math.round(this.maxHealth * (DRINK.heal + this.stats.healBonus)));
+      this.events.push('heal');
+    }
+  }
+
+  /**
+   * Op de draak zitten (in plaats van update): de draak bepaalt waar je bent, jij zit in het zadel.
+   * @param {THREE.Vector3} seat  waar het zadel is (in de wereld)
+   * @param {number} yaw  welke kant de draak op kijkt
+   */
+  ride(dt, seat, yaw) {
+    for (const key of ['invulnerable', 'dashCooldown', 'spinCooldown', 'fireCooldown', 'fireTimer']) this[key] = Math.max(0, this[key] - dt);
+    this.sword.update(dt);
+    this.staminaDelay -= dt;
+    if (this.staminaDelay <= 0) this.stamina = Math.min(this.maxStamina, this.stamina + STAMINA_REGEN * dt);
+    this.rollTimer = this.dashTimer = this.spinTimer = this.pickupTimer = 0;
+    this.slamming = false;
+    this.body.rotation.set(0, 0, 0);
+    this.mesh.visible = this.invulnerable <= 0 || Math.floor(this.invulnerable * 14) % 2 === 0;
+    this.position.copy(seat).y -= 0.8; // je heupen op het zadel
+    this.velocity.set(0, 0, 0);
+    this.knockback.set(0, 0, 0);
+    this.mesh.rotation.y = yaw;
+    this.onGround = true;
+    this.jumped = false;
+    this.moving = false;
+    this.sprinting = false;
+    this.updateDrink(dt);
+    if (this.rig) {
+      this.animator.update(dt, { moving: false, vy: 0, turn: 0, run: false, onGround: true, attack: null, pickup: null, drink: this.drinkTimer > 0 ? 1 - this.drinkTimer / DRINK.time : null, spin: false, tuck: false, ride: true });
+      this.rig.apply?.();
+    }
   }
 
   updateAnimation(dt) {

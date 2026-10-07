@@ -19,7 +19,7 @@ const SAMPLE_FILES = {
   donder: 'extra/donder.mp3', // Omars bliksem
 };
 // Hoe hard elk geluidje klinkt (0 tot 1)
-const SAMPLE_VOLUME = { lose: 0.8, boing: 1, punch: 0.45, wow: 0.7, faaah: 0.6, shine: 0.7, donder: 0.9 };
+const SAMPLE_VOLUME = { lose: 0.8, boing: 1, punch: 0.15, defeat: 0.35, wow: 0.7, faaah: 0.6, shine: 0.7, donder: 0.9 };
 const MASTER = 0.9; // hoofdvolume (hoger = harder)
 const samples = {};
 let footsteps = null;
@@ -232,6 +232,25 @@ const SOUNDS = {
     noise({ from: 3200, to: 300, duration: 0.25, volume: 0.35, q: 2 });
     tone({ type: 'sine', from: 900, to: 180, duration: 0.22, volume: 0.15 });
   },
+  // De draak brult: een diepe, rauwe grom die omhoog gaat en weer zakt
+  roar: () => {
+    tone({ type: 'sawtooth', from: 70, to: 140, duration: 0.5, volume: 0.22 });
+    tone({ type: 'sawtooth', from: 140, to: 55, duration: 0.9, volume: 0.2, delay: 0.45 });
+    tone({ type: 'square', from: 95, to: 75, duration: 1.2, volume: 0.07 });
+    noise({ from: 400, to: 1200, duration: 0.6, volume: 0.3, q: 0.8 });
+    noise({ from: 1100, to: 250, duration: 0.9, volume: 0.28, q: 0.8, delay: 0.45 });
+  },
+  // Vleugelslag: een zware "woesj"
+  flap: () => noise({ from: 160, to: 520, duration: 0.35, volume: 0.32, q: 0.9 }),
+  // Drakenvuur: een lange brullende vlam
+  breath: () => {
+    noise({ from: 250, to: 1800, duration: 0.8, volume: 0.45, q: 0.5 });
+    noise({ from: 900, to: 400, duration: 0.8, volume: 0.25, q: 0.7, delay: 0.1 });
+    tone({ type: 'sawtooth', from: 60, to: 110, duration: 0.8, volume: 0.12 });
+  },
+  // Het huisdiertje: een blij piepje (en een boos grommetje als het aanvalt)
+  pet: () => [880, 1175].forEach((f, i) => tone({ type: 'triangle', from: f, to: f * 1.15, duration: 0.09, volume: 0.15, delay: i * 0.08 })),
+  petGrr: () => tone({ type: 'sawtooth', from: 220, to: 160, duration: 0.18, volume: 0.1 }),
 };
 
 /**

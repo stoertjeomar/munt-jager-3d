@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { LEVELS, LEVEL_INDEX, IN_CASTLE } from './levels.js';
+
+// Omar woont in Muntdorp (het begin van de wereld): daar kom je ook terug na zijn kasteel
+const HOME_NAME = LEVELS[0].checkpoints[0][1];
 import { CHECKPOINTS } from './world.js';
 import { CHARACTERS, otherPlayable } from './player.js';
 import { play } from './audio.js';
@@ -7,7 +10,7 @@ import { OMAR } from './omarFighter.js'; // (dit laadt ook Omar zelf, zodat hij 
 
 // Omar: alles rondom het gevecht tegen Omar.
 //
-//  1. In elk level staat Omar (npcs.js). Druk op E bij hem, dan daagt hij je uit: "Ja" of "Nee".
+//  1. In Muntdorp staat Omar (npcs.js). Druk op E bij hem, dan daagt hij je uit: "Ja" of "Nee".
 //  2. Ja? Dan neemt hij je mee (paarse wervelwind) naar zijn Gekke Kasteel (index.html?level=omar).
 //  3. In het kasteel: een filmpje. De camera vliegt over het kasteel naar Omar op zijn troon, hij schept op,
 //     springt met een salto de arena in en trekt jou erbij. Dan begint het gevecht.
@@ -139,9 +142,9 @@ export class OmarFlow {
     return this.stats.data.omar;
   }
 
-  /** Naam van het level waar je vandaan kwam (en naartoe teruggaat). */
+  /** Naam van de plek waar je vandaan kwam (en naartoe teruggaat). */
   get homeName() {
-    return LEVELS[this.d.trip?.level ?? LEVEL_INDEX]?.name ?? LEVELS[0].name;
+    return HOME_NAME;
   }
 
   createDom() {
@@ -219,7 +222,7 @@ export class OmarFlow {
     const d = this.d;
     // Kom je terug uit het kasteel? (of had je het kasteel dichtgeklikt?) Dan krijg je je checkpoint terug.
     const back = d.back ?? (d.trip ? { ...d.trip, result: null } : null);
-    if (back && back.level === LEVEL_INDEX) {
+    if (back) {
       if (CHECKPOINTS.some((c) => c.id === back.checkpoint)) this.stats.data.checkpoint = back.checkpoint;
       if (back.result && this.npc) {
         this.placeNextToOmar();
@@ -236,8 +239,8 @@ export class OmarFlow {
   /** Zet de speler naast Omar, met de camera achter je zodat je hem ziet. */
   placeNextToOmar() {
     const o = this.npc.position;
-    const [, , sx, sz] = LEVELS[LEVEL_INDEX].checkpoints[0];
-    const dir = V(sx - o.x, 0, sz + 2.5 - o.z);
+    const start = CHECKPOINTS[0].position; // Muntdorp: Omar kijkt die kant op
+    const dir = V(start.x - o.x, 0, start.z + 2.5 - o.z);
     if (dir.lengthSq() < 0.01) dir.set(0, 0, 1);
     dir.normalize();
     const spot = o.clone().addScaledVector(dir, 2.8).setY(0);
@@ -842,7 +845,7 @@ export class OmarFlow {
     this.phase = 'weg';
     this.fade = null;
     this.fadeEl.style.transition = 'opacity 0.6s';
-    this.setFade(1, `Terug naar ${LEVELS[level].name}...`, result === 'gewonnen' ? 'Als de nieuwe baas!' : '');
+    this.setFade(1, `Terug naar ${HOME_NAME}...`, result === 'gewonnen' ? 'Als de nieuwe baas!' : '');
     d.back = { level, checkpoint: d.trip?.checkpoint ?? null, result };
     d.trip = null;
     stats.data.currentLevel = level;

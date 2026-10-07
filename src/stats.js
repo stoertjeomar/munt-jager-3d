@@ -8,12 +8,12 @@ import { SAVE_KEY, LEVELS } from './levels.js';
 import { WEAPONS } from './weapons.js';
 
 // Zoveel sterker word je per level
-const PER_LEVEL = { health: 12, stamina: 6, damage: 0.08 };
+const PER_LEVEL = { health: 6, stamina: 6, damage: 0.08 };
 
 // Meer flesjes dan dit heb je nooit, in het hele spel (Omar heeft er ook 3)
 export const MAX_FLASKS = 3;
 // Een Gouden Appel (uit een kist, van een boss of een quest) geeft je voor altijd zoveel extra leven
-export const APPLE_HEALTH = 15;
+export const APPLE_HEALTH = 8;
 
 // Hoeveel vijanden een boss waard is (de eerste keer, en daarna)
 export const BOSS_KILLS = { first: 10, again: 3 };
@@ -46,27 +46,28 @@ export const POWERS = {
 //   health = meer leven · speed = sneller lopen · defense = minder schade · heal = flesjes helen meer
 // (Extra flesjes bestaan niet: je hebt er altijd maximaal MAX_FLASKS.)
 export const PERKS = {
-  hart1: { name: 'Sterk hart', level: 2, health: 20, info: '+20 levenspunten.' },
+  hart1: { name: 'Sterk hart', level: 2, health: 10, info: '+10 levenspunten.' },
   speed: { name: 'Snelle benen', level: 4, speed: 0.1, info: 'Je loopt 10% sneller.' },
-  hart2: { name: 'Groot hart', level: 5, health: 25, info: '+25 levenspunten.' },
+  hart2: { name: 'Groot hart', level: 5, health: 12, info: '+12 levenspunten.' },
   skin: { name: 'Taaie huid', level: 7, defense: 0.1, info: 'Je krijgt 10% minder schade.' },
   heal: { name: 'Sterke flesjes', level: 8, heal: 0.15, info: 'Een flesje geeft 15% meer leven terug.' },
-  hart3: { name: 'Leeuwenhart', level: 10, health: 30, info: '+30 levenspunten.' },
+  hart3: { name: 'Leeuwenhart', level: 10, health: 15, info: '+15 levenspunten.' },
   master: { name: 'Meester-jager', level: 12, speed: 0.1, defense: 0.1, info: 'Nog 10% sneller en 10% minder schade.' },
 };
 
-// De winkel van Koopman Kobus (bij het begin van elk level). price = wat het kost; elke volgende keer wordt het duurder.
+// De winkel van Koopman Kobus (bij het begin van elk gebied). price = wat het kost; elke volgende keer wordt het duurder.
 // Een item met repeat koop je zo vaak als je wilt (altijd dezelfde prijs).
 export const SHOP_ITEMS = {
   soep: { name: 'Herstel-soep', icon: '🍲', price: [40], repeat: true, info: 'Meteen al je leven en flesjes terug.' },
   zaadje: { name: 'Gouden Zaadje', icon: '🧪', price: [200, 450, 800], info: 'Je flesjes helen 10% meer.' },
-  hart: { name: 'Hartversterker', icon: '❤', price: [150, 300, 500, 800, 1200], info: '+20 levenspunten.' },
+  hart: { name: 'Hartversterker', icon: '❤', price: [150, 300, 500, 800, 1200], info: '+10 levenspunten.' },
   slijpen: { name: 'Wapen slijpen', icon: '⚔', price: [150, 300, 500, 800, 1200], info: '+10% schade met al je wapens.' },
+  dino: { name: 'Dino-ei', icon: '🥚', price: [250], info: 'Er komt Knokkie uit: een Boks-Dinootje dat met je meeloopt en meevecht!' },
 };
 
 /** Hoeveel vijanden je moet verslaan om van `level` naar `level + 1` te gaan. */
 export function killsNeeded(level) {
-  return 3 + level * 2;
+  return 4 + level * 3; // (zo word je niet te snel sterk)
 }
 
 function freshSave() {
@@ -76,8 +77,8 @@ function freshSave() {
     kills: 0, // alle verslagen vijanden ooit
     runes: 0, // munten
     character: 'eve', // alleen Eve en Soldaat zijn speelbaar
-    currentLevel: 0, // welk level speel je nu (0 = level 1)
-    unlockedLevel: 0, // tot en met dit level mag je kiezen
+    currentLevel: 0, // in welk gebied ben je nu (0 = de Groene Weide)
+    unlockedLevel: 0, // tot en met dit gebied is open (de boss ervoor is verslagen)
     quests: {}, // zij-quests: { id: { state: 'actief' | 'klaar' | 'beloond', count } }
     questItems: [], // opgepakte quest-voorwerpen (sterren, batterijen)
     weapon: 'shortsword',
@@ -85,7 +86,9 @@ function freshSave() {
     inventory: [{ kind: 'weapon', key: 'shortsword' }, { kind: 'helmet', key: 'geen' }],
     flasksMax: 3, // (oud: zo ging je vroeger met extra flesjes om, nu altijd MAX_FLASKS)
     apples: 0, // gevonden Gouden Appels: elk +15 leven
-    checkpoint: null, // hier kom je terug als je doodgaat (null = begin van het level)
+    checkpoint: null, // hier kom je terug als je doodgaat (null = begin van de wereld)
+    flags: [], // alle vlaggen waar je al langs liep: daar kun je heen snelreizen (T)
+    pet: null, // Knokkie het Boks-Dinootje: { level, kills } (als je het Dino-ei hebt gekocht)
     bosses: [], // verslagen bosses
     chests: [], // geopende kisten
     diamonds: [], // gevonden diamanten
@@ -113,7 +116,7 @@ export class Stats {
   get runes() { return this.data.runes; }
   get xp() { return this.data.xp; }
   get xpNeeded() { return killsNeeded(this.data.level); }
-  get maxHealth() { return 150 + (this.data.level - 1) * PER_LEVEL.health + this.bought('hart') * 20 + this.perkBonus('health') + this.data.apples * APPLE_HEALTH; }
+  get maxHealth() { return 150 + (this.data.level - 1) * PER_LEVEL.health + this.bought('hart') * 10 + this.perkBonus('health') + this.data.apples * APPLE_HEALTH; }
   get maxStamina() { return 100 + (this.data.level - 1) * PER_LEVEL.stamina; }
   get damageMultiplier() { return 1 + (this.data.level - 1) * PER_LEVEL.damage + this.bought('slijpen') * 0.1; }
   get flasksMax() { return MAX_FLASKS; }
@@ -218,6 +221,11 @@ export class Stats {
       if (this.data.flasksMax > MAX_FLASKS) {
         this.data.apples += this.data.flasksMax - MAX_FLASKS;
         this.data.flasksMax = MAX_FLASKS;
+      }
+      // Oude save (van voor de open wereld): de vlaggen van de gebieden die je al haalde mag je meteen gebruiken
+      if (!saved?.flags) {
+        this.data.flags = LEVELS.filter((l, i) => i <= this.data.unlockedLevel).map((l) => l.checkpoints[0][0]);
+        if (this.data.checkpoint && !this.data.flags.includes(this.data.checkpoint)) this.data.flags.push(this.data.checkpoint);
       }
     } catch {
       // geen of kapotte save: nieuw spel
