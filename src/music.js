@@ -89,21 +89,23 @@ const SONGS = {
     ],
   },
 
-  // Gewone bosses: gevaarlijk en eng (spookkoor, grommende bas, zware drums)
+  // Gewone bosses: een duister orkest met een eng koor (zoals de grote eindbazen in Elden Ring en Dark Souls)
   boss: {
-    bpm: 138, gain: 0.7,
-    chords: ['Em', 'F', 'Em', 'D#dim', 'Em', 'F', 'C', 'B'],
+    bpm: 150, gain: 0.7,
+    chords: ['Em', 'Em', 'C', 'C', 'Am', 'F', 'B', 'B'],
     tracks: [
-      { inst: 'brass', vol: 0.11, div: 8, fx: true, notes: `
-        E5 - - - F5 - E5 - | A5 - - - C6 - B5 - | G5 - F#5 - E5 - - - | D#5 - F#5 - A5 - C6 - |
-        B5 - - - C6 - B5 - | A5 - G5 - F5 - E5 - | G5 - E5 - C5 - E5 - | D#5 - - - - - . .` },
-      { inst: 'choir', vol: 0.06, div: 1, oct: 4, pattern: 'c', fx: true },
-      { inst: 'growl', vol: 0.15, div: 16, pattern: 'R . R R R . R R R . R R O . R R' },
-      { inst: 'strings', vol: 0.022, div: 16, oct: 5, pattern: '5 b6 5 b6 5 b6 5 b6 5 b6 5 b6 5 b6 5 b6' },
-      { inst: 'drums', vol: 0.6, div: 16, kit: {
-        boom: 'x.....x.x.....x.', bigsnare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.',
+      { inst: 'horns', vol: 0.13, div: 8, fx: true, notes: `
+        B4 - - - - - C5 B4 | A4 - G4 - F#4 - G4 - | E5 - - - - - D5 C5 | B4 - - - G4 - - - |
+        A4 - - - C5 - E5 - | F5 - - - E5 - C5 - | D#5 - - - F#5 - A5 - | G5 - F#5 - D#5 - B4 -` },
+      { inst: 'choirLow', vol: 0.08, div: 1, oct: 3, pattern: 'c', fx: true },
+      { inst: 'choir', vol: 0.06, div: 8, oct: 4, pattern: 'c - - c - - c -', fx: true },
+      { inst: 'trombone', vol: 0.06, div: 8, oct: 3, pattern: 'c . . c . . c .' },
+      { inst: 'cello', vol: 0.1, div: 16, pattern: 'R R O R R O R R R R O R b2 R O R' },
+      { inst: 'timpani', vol: 0.2, div: 8, pattern: 'R . . R . . R .' },
+      { inst: 'drums', vol: 0.65, div: 16, kit: {
+        taiko: 'x.....x.....x...', osnare: `${'.'.repeat(112)}xxxxxxxxxxxxxxxx`,
         crash: 'x...............|................|................|................',
-        tom: `${'.'.repeat(112)}........x.x.x.xx` } },
+        subdrop: `x${'.'.repeat(127)}`, riser: `${'.'.repeat(112)}x...............` } },
     ],
   },
 
@@ -120,33 +122,46 @@ const SONGS = {
     ],
   },
 
-  // ENGE BOSS-MUZIEK tegen Omar: een spookkoor, een grommende bas, kerkklokken en zware drums.
-  // Op stand 1 (als hij boos wordt) gaat alles sneller en harder: dubbele bassdrum, gillende violen en een tweede stem.
+  // DE ENGSTE MUZIEK VAN HET SPEL, tegen Omar: een duister orkest met een groot koor, lage hoorns,
+  // dreigende strijkers, pauken, taiko-trommels, kerkklokken, gefluister... en Omar die lacht.
+  // Op stand 1 (als hij boos wordt) gaat alles sneller en harder: een hoog vrouwenkoor, krassende violen
+  // en snelle trommels.
   omar: {
-    bpm: 150, faster: 1.12, gain: 0.72,
-    chords: ['Cm', 'Db', 'Cm', 'Bdim', 'Cm', 'Db', 'Ab', 'G', 'Fm', 'Db', 'Ab', 'G', 'Fm', 'Db', 'Bdim', 'G7'],
+    bpm: 160, faster: 1.12, gain: 0.7,
+    chords: ['Cm', 'Cm', 'Ab', 'Ab', 'Fm', 'Fm', 'G', 'G', 'Cm', 'Db', 'Cm', 'Bdim', 'Ab', 'Db', 'G', 'G'],
     tracks: [
-      { inst: 'brass', vol: 0.12, div: 8, fx: true, notes: `
-        C5 - - - Db5 - C5 - | F5 - - - Ab5 - G5 - | Eb5 - D5 - C5 - - - | B4 - D5 - F5 - Ab5 - |
-        G5 - - - Ab5 - G5 - | F5 - Eb5 - Db5 - C5 - | Eb5 - C5 - Ab4 - C5 - | B4 - - - - - . . |
-        C6 - - - Db6 - C6 - | Ab5 - - - G5 - F5 - | Eb6 - - - D6 - C6 - | B5 - D6 - F6 - - - |
-        Ab5 - G5 - F5 - Eb5 - | F5 - Eb5 - Db5 - C5 - | D5 - F5 - Ab5 - B5 - | G5 F5 D5 B4 G4 - - -` },
-      // Als hij boos is: een gillende tweede stem, een octaaf hoger
-      { inst: 'lead', vol: 0.05, div: 8, min: 1, shift: 12, fx: true, sameAs: 0 },
-      { inst: 'choir', vol: 0.07, div: 1, oct: 4, pattern: 'c', fx: true },
-      { inst: 'drone', vol: 0.12, div: 1, pattern: 'R' },
-      { inst: 'toll', vol: 0.1, div: 1, pattern: 'O', fx: true },
-      { inst: 'growl', vol: 0.16, div: 16, max: 0, pattern: 'R . R R R . R R R . R R O . R R' },
-      { inst: 'growl', vol: 0.16, div: 16, min: 1, pattern: 'R R R R R R R R O R R R R R b2 R' },
-      { inst: 'strings', vol: 0.03, div: 16, min: 1, oct: 5, pattern: '5 b6 5 b6 5 b6 5 b6 5 b6 5 b6 5 b6 5 b6' },
-      { inst: 'drums', vol: 0.62, div: 16, max: 0, kit: {
-        boom: 'x.....x.x.....x.', bigsnare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.',
+      // Lage hoorns: de melodie
+      { inst: 'horns', vol: 0.14, div: 8, fx: true, notes: `
+        G4 - - - - - Ab4 G4 | F4 - Eb4 - D4 - Eb4 - | C5 - - - - - Bb4 Ab4 | G4 - - - Eb4 - - - |
+        F4 - - - Ab4 - C5 - | Db5 - - - C5 - Ab4 - | B4 - - - D5 - F5 - | Eb5 - D5 - B4 - G4 - |
+        C5 - - - G4 - - - | Ab4 - - - F4 - Db5 - | C5 - Bb4 - G4 - Eb4 - | D4 - F4 - Ab4 - B4 - |
+        C5 - - - Eb5 - - - | F5 - - - Eb5 - Db5 - | D5 - - - B4 - G4 - | Ab4 - G4 - F4 - D4 -` },
+      // Als hij boos is: een hoog vrouwenkoor zingt de melodie mee
+      { inst: 'choirHi', vol: 0.06, div: 8, min: 1, shift: 12, fx: true, sameAs: 0 },
+      // Mannenkoor: lange, lage akkoorden ("oooh")
+      { inst: 'choirLow', vol: 0.09, div: 1, oct: 3, pattern: 'c', fx: true },
+      // Koor en trombones: harde stoten (3 + 3 + 2)
+      { inst: 'choir', vol: 0.07, div: 8, oct: 4, pattern: 'c - - c - - c -', fx: true },
+      { inst: 'trombone', vol: 0.07, div: 8, oct: 3, pattern: 'c . . c . . c .' },
+      // Lage strijkers: snel en dreigend
+      { inst: 'cello', vol: 0.11, div: 16, pattern: 'R R O R R O R R R R O R b2 R O R' },
+      { inst: 'drone', vol: 0.1, div: 1, pattern: 'R' },
+      { inst: 'timpani', vol: 0.22, div: 8, max: 0, pattern: 'R . . R . . R .' },
+      { inst: 'timpani', vol: 0.14, div: 16, min: 1, pattern: 'R . R . R . R . R R R . R . R R' },
+      { inst: 'toll', vol: 0.09, div: 2, pattern: 'O .', fx: true },
+      // Krassende violen (als hij boos is)
+      { inst: 'screech', vol: 0.022, div: 1, min: 1, oct: 5, pattern: '8' },
+      { inst: 'drums', vol: 0.66, div: 16, max: 0, kit: {
+        taiko: 'x.....x.....x...', osnare: `${'.'.repeat(112)}xxxxxxxxxxxxxxxx`,
         crash: 'x...............|................|................|................',
-        tom: `${'.'.repeat(112)}........x.x.x.xx` } },
-      { inst: 'drums', vol: 0.66, div: 16, min: 1, kit: {
-        dbl: 'xxxxxxxxxxxxxxxx', boom: 'x.......x.......', bigsnare: '....x.......x...', open: '..x...x...x...x.',
+        subdrop: `x${'.'.repeat(127)}`, riser: `${'.'.repeat(112)}x...............`,
+        whisper: `${'.'.repeat(48)}x${'.'.repeat(79)}` } },
+      { inst: 'drums', vol: 0.58, div: 16, min: 1, kit: {
+        taiko: 'x.x.x.x.x.x.x.x.', boom: 'x.......x.......', osnare: '....x.......x...',
         crash: 'x...............|................',
-        tom: `${'.'.repeat(48)}....x.x.x.x.xxxx` } },
+        subdrop: `x${'.'.repeat(63)}`, riser: `${'.'.repeat(112)}x...............`,
+        whisper: `${'.'.repeat(16)}x${'.'.repeat(47)}`,
+        laugh: `${'.'.repeat(240)}x${'.'.repeat(15)}` } },
     ],
   },
 
@@ -292,6 +307,43 @@ function filter(a, type, f, q = 1) {
   return node;
 }
 
+// Klinkers voor het koor: de "mond" (filters) waar het geluid doorheen gaat
+const VOWELS = {
+  a: [[800, 1], [1150, 0.6], [2900, 0.2]],
+  o: [[450, 1], [800, 0.55], [2830, 0.12]],
+};
+
+/** Een koor: vier stemmen die net niet gelijk zingen (met een beetje trilling), door een "mond". */
+function voices(a, f, t, d, v, out, vowel, vibratoHz = 5) {
+  const attack = Math.min(0.35, d * 0.3);
+  const g = envelope(a, t, d, v * 3.2, attack, Math.min(0.6, d * 0.4));
+  const mouth = a.ctx.createGain();
+  for (const [freq, level] of vowel) {
+    const bp = filter(a, 'bandpass', freq, freq < 1000 ? 5 : 8);
+    const lvl = a.ctx.createGain();
+    lvl.gain.value = level;
+    mouth.connect(bp).connect(lvl).connect(g);
+  }
+  const lfo = a.ctx.createOscillator();
+  const depth = a.ctx.createGain();
+  lfo.frequency.value = vibratoHz;
+  depth.gain.value = f * 0.007;
+  lfo.start(t);
+  lfo.stop(t + d + 0.7);
+  lfo.connect(depth);
+  for (const det of [-16, -6, 6, 16]) {
+    const o = a.ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.value = f;
+    o.detune.value = det;
+    depth.connect(o.frequency);
+    o.connect(mouth);
+    o.start(t);
+    o.stop(t + d + 0.7);
+  }
+  g.connect(out);
+}
+
 const INSTRUMENTS = {
   // Brullend koper: ruw, en het "gaat open" aan het begin van elke noot
   brass: (a, f, t, d, v, out) => {
@@ -344,6 +396,77 @@ const INSTRUMENTS = {
       pling(a, 'sine', f * ratio, t, decay, v * vol, out);
     }
     hiss(a, t, 0.08, v * 0.4, out, 'bandpass', 3000, 1);
+  },
+  // Lage strijkers (cello's en contrabassen): kort en hard aangestreken, met een diepe toon eronder
+  cello: (a, f, t, d, v, out) => {
+    const g = envelope(a, t, d, v, 0.008, 0.06);
+    const lp = filter(a, 'lowpass', 1400, 0.7);
+    saws(a, f, t, t + d + 0.1, lp, [-10, 0, 10]);
+    lp.connect(g).connect(out);
+    osc(a, 'sine', f / 2, t, d, v * 0.6, out, { attack: 0.008, release: 0.06 });
+  },
+  // Hoorns: warm maar dreigend koper, de melodie
+  horns: (a, f, t, d, v, out) => {
+    const g = envelope(a, t, d, v, 0.06, 0.15);
+    const lp = filter(a, 'lowpass', 400, 1.5);
+    lp.frequency.setValueAtTime(400, t);
+    lp.frequency.exponentialRampToValueAtTime(1700, t + 0.12);
+    lp.frequency.exponentialRampToValueAtTime(1100, t + 0.5);
+    saws(a, f, t, t + d + 0.2, lp, [-8, 8]);
+    saws(a, f, t, t + d + 0.2, lp, [0], 'square');
+    lp.connect(g).connect(out);
+  },
+  // Trombones: ruwe, harde stoten
+  trombone: (a, f, t, d, v, out) => {
+    const g = envelope(a, t, d, v, 0.02, 0.1);
+    const lp = filter(a, 'lowpass', 300, 2);
+    lp.frequency.setValueAtTime(300, t);
+    lp.frequency.exponentialRampToValueAtTime(2200, t + 0.05);
+    lp.frequency.exponentialRampToValueAtTime(900, t + 0.25);
+    const ws = distortion(a, 1.5);
+    saws(a, f, t, t + d + 0.15, ws, [-6, 6]);
+    ws.connect(lp).connect(g).connect(out);
+  },
+  // Koren: "aaah" (gewoon), "oooh" (laag mannenkoor) en hoog vrouwenkoor
+  choir: (a, f, t, d, v, out) => voices(a, f, t, d, v, out, VOWELS.a),
+  choirLow: (a, f, t, d, v, out) => voices(a, f, t, d, v, out, VOWELS.o),
+  choirHi: (a, f, t, d, v, out) => voices(a, f, t, d, v, out, VOWELS.a, 7),
+  // Pauken: een grote trom met een toonhoogte
+  timpani: (a, f, t, d, v, out) => {
+    const o = a.ctx.createOscillator();
+    const g = a.ctx.createGain();
+    o.frequency.setValueAtTime(f * 1.04, t);
+    o.frequency.exponentialRampToValueAtTime(f, t + 0.08);
+    g.gain.setValueAtTime(v, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+    o.connect(g).connect(out);
+    o.start(t);
+    o.stop(t + 1.2);
+    pling(a, 'sine', f * 1.5, t, 0.5, v * 0.3, out);
+    hiss(a, t, 0.08, v * 0.5, out, 'lowpass', 400);
+  },
+  // Krassende violen: drie noten vlak naast elkaar die langzaam omhoog glijden en trillen (heel eng)
+  screech: (a, f, t, d, v, out) => {
+    const g = envelope(a, t, d, v, 0.3, 0.3);
+    const trem = a.ctx.createGain();
+    const lfo = a.ctx.createOscillator();
+    const depth = a.ctx.createGain();
+    lfo.frequency.value = 13;
+    depth.gain.value = 0.5;
+    lfo.connect(depth).connect(trem.gain);
+    lfo.start(t);
+    lfo.stop(t + d + 0.4);
+    const hp = filter(a, 'highpass', 1500, 0.7);
+    for (const k of [1, 1.059, 1.122]) {
+      const o = a.ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f * k, t);
+      o.frequency.exponentialRampToValueAtTime(f * k * 1.06, t + d);
+      o.connect(hp);
+      o.start(t);
+      o.stop(t + d + 0.4);
+    }
+    hp.connect(trem).connect(g).connect(out);
   },
   // Gillende violen (heel snel heen en weer tussen twee noten)
   strings: (a, f, t, d, v, out) => osc(a, 'sawtooth', f, t, d, v, out, { attack: 0.005, release: 0.03, filter: 3000 }),
@@ -400,6 +523,88 @@ const DRUMS = {
     o.connect(g).connect(out);
     o.start(t);
     o.stop(t + 0.15);
+  },
+  // Taiko: een enorme Japanse trom (DOEM)
+  taiko: (a, t, v, out) => {
+    const o = a.ctx.createOscillator();
+    const g = a.ctx.createGain();
+    o.frequency.setValueAtTime(95, t);
+    o.frequency.exponentialRampToValueAtTime(48, t + 0.35);
+    g.gain.setValueAtTime(v, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+    o.connect(g).connect(out);
+    o.start(t);
+    o.stop(t + 0.55);
+    hiss(a, t, 0.1, v * 0.5, out, 'lowpass', 300);
+  },
+  // Orkest-snaredrum (strak, voor roffels)
+  osnare: (a, t, v, out) => {
+    hiss(a, t, 0.15, v * 0.35, out, 'bandpass', 2600, 0.8);
+    hiss(a, t, 0.06, v * 0.15, out, 'highpass', 6000);
+  },
+  // Heel diepe dreun die je voelt (aan het begin van een stuk)
+  subdrop: (a, t, v, out) => {
+    const o = a.ctx.createOscillator();
+    const g = a.ctx.createGain();
+    o.frequency.setValueAtTime(58, t);
+    o.frequency.exponentialRampToValueAtTime(26, t + 1.3);
+    g.gain.setValueAtTime(v * 1.1, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.7);
+    o.connect(g).connect(out);
+    o.start(t);
+    o.stop(t + 1.8);
+  },
+  // Aanzwellend gesis: "er komt iets aan!" (precies één maat lang)
+  riser: (a, t, v, out, bar) => {
+    const src = a.ctx.createBufferSource();
+    src.buffer = a.noise;
+    src.loop = true;
+    const hp = filter(a, 'highpass', 400, 1);
+    hp.frequency.setValueAtTime(400, t);
+    hp.frequency.exponentialRampToValueAtTime(6000, t + bar);
+    const g = a.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(v * 0.35, t + bar * 0.95);
+    g.gain.linearRampToValueAtTime(0.0001, t + bar);
+    src.connect(hp).connect(g).connect(out);
+    src.start(t);
+    src.stop(t + bar + 0.05);
+  },
+  // Gefluister: ruis die als een stem klinkt, ergens links of rechts van je
+  whisper: (a, t, v, out) => {
+    const src = a.ctx.createBufferSource();
+    src.buffer = a.noise;
+    src.loop = true;
+    const bp = filter(a, 'bandpass', 2500, 7);
+    const g = a.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    let k = t;
+    for (let i = 0; i < 9; i++) {
+      bp.frequency.setValueAtTime(1800 + Math.random() * 2200, k);
+      g.gain.linearRampToValueAtTime(v * (0.15 + Math.random() * 0.25), k + 0.05);
+      g.gain.linearRampToValueAtTime(v * 0.02, k + 0.13);
+      k += 0.14;
+    }
+    g.gain.linearRampToValueAtTime(0.0001, k + 0.1);
+    let node = src.connect(bp).connect(g);
+    if (a.ctx.createStereoPanner) {
+      const pan = a.ctx.createStereoPanner();
+      pan.pan.value = Math.random() < 0.5 ? -0.7 : 0.7;
+      node = node.connect(pan);
+    }
+    node.connect(out);
+    src.start(t);
+    src.stop(k + 0.2);
+  },
+  // Omar lacht, diep en eng: "HA... HA... HA... HAAA"
+  laugh: (a, t, v, out) => {
+    for (let i = 0; i < 4; i++) {
+      const at = t + i * 0.22;
+      const len = i === 3 ? 0.4 : 0.13;
+      const f = 118 - i * 9;
+      voices(a, f, at, len, v * 0.25, out, VOWELS.a, 6);
+      hiss(a, at, len, v * 0.05, out, 'bandpass', 1200, 2);
+    }
   },
   // Grote, harde snaredrum
   bigsnare: (a, t, v, out) => {
@@ -570,7 +775,7 @@ export class Music {
       if (track.kit) {
         for (const [drum, tokens] of Object.entries(track.kitTokens)) {
           const i = (bar * STEPS + inBar) / every;
-          if (tokens[i % tokens.length] === 'x') DRUMS[drum](a, t, track.vol, out);
+          if (tokens[i % tokens.length] === 'x') DRUMS[drum](a, t, track.vol, out, stepTime * STEPS);
         }
         continue;
       }

@@ -98,7 +98,7 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
   Diamanten zwaard en álle krachten: dash, wervelslag, dubbele sprong met grondslag, vuurzwaard, rollen en zelf flesjes
   drinken. Hij kan zelfs **teleporteren** ("Achter je!") en roept de hele tijd dingen naar je. Verlies je? Dan ben je niks
   kwijt. Win je? Dan krijg je de **Kroon van Omar** en een gek feest met confetti, disco-lampen en vuurwerk
-- **Muziek**: elk level heeft zijn eigen deuntje, bosses hebben enge, gevaarlijke muziek en tegen Omar speelt er **enge boss-muziek** met een spookkoor, kerkklokken en een grommende bas
+- **Muziek**: elk level heeft zijn eigen deuntje, bosses hebben enge, gevaarlijke muziek en tegen Omar speelt er **enge boss-muziek**: een duister orkest met een groot koor, lage hoorns, pauken, taiko-trommels, kerkklokken, gefluister en een lachende Omar
   (die nog sneller wordt als hij boos wordt). Alles zelfgemaakt in de code, zonder muziekbestanden
 - **Geluidseffecten**: zwaarden, dashen, drinken, kisten, checkpoints, menu's, praatgeluidjes als iemand iets zegt
   (iedereen heeft zijn eigen stem), vogeltjes overdag, krekels 's nachts, een uil in het Spookwoud en wind in de bergen
