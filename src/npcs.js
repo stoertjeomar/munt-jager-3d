@@ -12,7 +12,7 @@ import { CHARACTERS, otherPlayable } from './player.js';
 // NPC's: personages die in de wereld wonen. Praat met ze (E) en ze geven je een zij-quest.
 // Welke NPC waar staat, staat per level in levels.js (npcs = [personage, x, z, quest]).
 // Koopman Kobus staat met zijn kraampje bij het begin van elk level: bij hem geef je je munten uit.
-// Omar de Baas staat ook in elk level: hij geeft geen quest, maar daagt je uit voor een gevecht (zie omar.js).
+// Omar staat ook in elk level: hij geeft geen quest, maar daagt je uit voor een gevecht (zie omar.js).
 
 const PEOPLE = {
   mila: { name: 'Mila', file: 'models/personages/mila.glb', height: 1.45 },
@@ -324,7 +324,7 @@ export function makeBubble() {
 }
 
 /**
- * Omar de Baas in een level: hij doet stoer, laat zijn zwaard zien, roept dingen en wacht tot je hem uitdaagt (E).
+ * Omar in een level: hij doet stoer, laat zijn zwaard zien, roept dingen en wacht tot je hem uitdaagt (E).
  * Het uitdagen, de reis naar zijn kasteel en het gevecht staan in omar.js.
  */
 class OmarNPC extends NPC {

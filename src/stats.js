@@ -83,7 +83,7 @@ function freshSave() {
     chests: [], // geopende kisten
     diamonds: [], // gevonden diamanten
     shop: {}, // hoe vaak je iets in de winkel kocht: { zaadje: 1, hart: 2, ... }
-    // Omar de Baas (zie omar.js): hoe vaak je van hem won of verloor, en waar je vandaan kwam
+    // Omar (zie omar.js): hoe vaak je van hem won of verloor, en waar je vandaan kwam
     omar: {
       wins: 0, // zo vaak heb jij Omar verslagen
       losses: 0, // zo vaak won Omar

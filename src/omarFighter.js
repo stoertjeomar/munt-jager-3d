@@ -7,7 +7,7 @@ import { SwordTrail } from './trail.js';
 import { play } from './audio.js';
 import { SAVE_KEY } from './levels.js';
 
-// Omar de Baas: de baas van het hele spel. Hij woont in zijn Gekke Kasteel (castle.js) en vecht in de arena.
+// Omar: de maker van het spel. Hij woont in zijn Gekke Kasteel (castle.js) en vecht in de arena.
 // Omar is een echte "speler": hij heeft hetzelfde lijf, dezelfde animaties en dezelfde krachten als jij
 // (zwaard-combo's, dash, wervelslag, dubbele sprong + grondslag, vuurzwaard, rollen, sprinten en drinken).
 // Alleen bestuurt de computer hem, in plaats van een toetsenbord.
@@ -21,30 +21,35 @@ import { SAVE_KEY } from './levels.js';
 // ---------- Instellingen: hiermee maak je Omar makkelijker of moeilijker ----------
 // Bij twee getallen [a, b] is a voor fase 1 en b voor fase 2 (als hij boos is, onder de helft van zijn leven).
 export const OMAR = {
-  level: 15, // alleen om op te scheppen in de gesprekken
+  level: 30, // alleen om op te scheppen in de gesprekken
   size: 1.12, // Omar is iets groter dan jij
   hipHeight: 0.95, // hoogte van zijn heupen (om hem goed op de troon te laten zitten)
   // Leven: zoveel klappen met JOUW wapen kan Omar hebben. Hoe hoger jouw level, hoe minder klappen het zijn.
-  hp: { hits: 28, perLevel: 0.4, minHits: 20, min: 360 },
-  speed: [1.1, 1.25], // hoe snel hij loopt (1 = net zo snel als jij)
-  sprintFrom: 9, // verder weg dan dit (meter)? Dan sprint hij naar je toe
-  // Hoeveel van JOUW leven een klap kost (0.08 = 8%). Zo is hij op elk level even eng.
-  damagePct: { slag: 0.08, dash: 0.1, wervelslag: 0.12, grondslag: 0.15, boos: 0.05 },
-  phase2Damage: 1.2, // in fase 2 doet alles 20% meer pijn
+  hp: { hits: 36, perLevel: 0.4, minHits: 26, min: 520 },
+  speed: [1.35, 1.55], // hoe snel hij loopt (1 = net zo snel als jij): hij is sneller dan jij!
+  sprintFrom: 6, // verder weg dan dit (meter)? Dan sprint hij naar je toe
+  swingSpeed: 0.78, // zijn zwaard zwaait sneller dan dat van jou (0.78 = in 78% van de tijd)
+  // Hoeveel van JOUW leven een klap kost (0.11 = 11%). Zo is hij op elk level even eng.
+  damagePct: { slag: 0.11, dash: 0.14, wervelslag: 0.16, grondslag: 0.2, boos: 0.08 },
+  phase2Damage: 1.3, // in fase 2 doet alles 30% meer pijn
   fireDamage: 1.35, // met zijn vuurzwaard 35% meer
-  // Zo lang laat hij eerst zien wat hij gaat doen (seconden)
-  windup: { combo: [0.38, 0.28], dash: [0.5, 0.38], spin: [0.5, 0.38], slam: [0.55, 0.42], fire: 0.6 },
-  // Zo lang staat hij daarna te hijgen: dan kun jij slaan!
-  recover: { combo: [0.8, 0.6], dash: [0.85, 0.65], spin: [0.8, 0.55], slam: [1.05, 0.8] },
+  // Zo lang laat hij eerst zien wat hij gaat doen (seconden): kort, maar je kunt het altijd zien aankomen
+  windup: { combo: [0.3, 0.22], dash: [0.38, 0.28], spin: [0.4, 0.3], slam: [0.45, 0.35], fire: 0.45 },
+  // Zo lang staat hij daarna te hijgen: dan kun jij slaan! (niet lang...)
+  recover: { combo: [0.55, 0.4], dash: [0.55, 0.4], spin: [0.55, 0.4], slam: [0.75, 0.55] },
   // Zo lang moet hij wachten voordat hij een aanval nog een keer mag doen
-  cooldown: { dash: [3.5, 2.5], spin: [4, 3], slam: [6, 4.5], dodge: [2.2, 1.6], taunt: [7, 10], mercy: 8, fire: 18 },
-  comboHits: [2, 3], // zoveel klappen achter elkaar
-  dodgeChance: [0.25, 0.4], // kans dat hij wegrolt als jij slaat
-  reaction: [0.08, 0.05], // zo snel ziet hij jouw klap aankomen (seconden)
-  think: [0.35, 0.25], // zo vaak bedenkt hij een nieuwe aanval
-  gap: [0.6, 0.45], // minimale pauze tussen twee aanvallen
+  cooldown: { dash: [1.6, 1.0], spin: [2.6, 1.8], slam: [4, 2.8], dodge: [1.4, 0.9], taunt: [12, 99], mercy: 20, fire: 12, drink: [9, 7] },
+  comboHits: [3, 4], // zoveel klappen achter elkaar
+  dodgeChance: [0.45, 0.6], // kans dat hij wegrolt of wegdasht als jij slaat
+  dashDodge: 0.65, // kans dat hij wegdasht in plaats van wegrolt
+  counterChance: 0.6, // kans dat hij na het ontwijken meteen terugslaat
+  spinAfterCombo: [0.3, 0.55], // kans op een wervelslag na zijn combo
+  reaction: [0.06, 0.04], // zo snel ziet hij jouw klap aankomen (seconden)
+  think: [0.25, 0.18], // zo vaak bedenkt hij een nieuwe aanval
+  gap: [0.35, 0.25], // minimale pauze tussen twee aanvallen
   poise: [3, 2], // zoveel klappen in 1.6 seconden en hij wil weg (of slaat terug met een wervelslag)
-  drinkBelow: 0.3, // onder 30% leven drinkt hij zijn ene flesje...
+  flasks: 3, // zoveel flesjes heeft hij (sla hem als hij drinkt: dan is dat flesje weg!)
+  drinkBelow: 0.5, // onder de helft van zijn leven gaat hij drinken...
   drinkHeal: 0.2, // ...en krijgt dan 20% van zijn leven terug
   reach: 0.4, // zoveel verder dan zijn zwaard lang is raakt hij jou (jouw lijf is ook dik)
   spinRadius: 3.6, // zo ver raakt zijn wervelslag (de rode cirkel is precies zo groot)
@@ -99,7 +104,7 @@ export class OmarStats {
   get level() { return OMAR.level; }
   get maxHealth() { return 9999; }
   get maxStamina() { return 999; } // de computer houdt zichzelf in met de wachttijden hierboven
-  get flasksMax() { return 1; } // hij drinkt maar één keer
+  get flasksMax() { return OMAR.flasks; }
   get damageMultiplier() { return 1; }
   get speedMultiplier() { return OMAR.speed[this.phase] * this.boost; }
   get defenseBonus() { return 0; }
@@ -205,7 +210,8 @@ export class OmarFighter extends Boss {
     this.hp = this.info.hp;
     p.stats.phase = 0;
     p.stats.boost = 1;
-    p.respawnAt(this.seatedPosition); // ook: vuurzwaard uit, flesje vol, Diamanten zwaard en kroon
+    p.respawnAt(this.seatedPosition); // ook: vuurzwaard uit, flesjes vol, Diamanten zwaard en kroon
+    p.sword.swingTime *= OMAR.swingSpeed; // Omar slaat sneller dan jij
     this.mesh.rotation.y = 0; // kijkt naar de arena (het zuiden)
     this.mesh.scale.setScalar(OMAR.size);
     this.mesh.visible = true;
@@ -217,7 +223,7 @@ export class OmarFighter extends Boss {
     this.introT = 0;
     this.setState('start', 1.2);
     // Wachttijden (seconden). Aan het begin even rustig: geen aanval in de eerste seconde.
-    this.cd = { think: 0, gap: 0.4, dash: 1.5, spin: 2.5, slam: 3.5, dodge: 1, taunt: 5, mercy: 0, fire: 4, say: 0, raak: 0 };
+    this.cd = { think: 0, gap: 0.3, dash: 0.8, spin: 1.8, slam: 2.5, dodge: 0.6, taunt: 6, mercy: 0, fire: 2.5, drink: 0, say: 0, raak: 0 };
     this.swingsLeft = 0;
     this.after = OMAR.recover.combo[0];
     this.lastSwordHit = null;
@@ -720,16 +726,17 @@ export class OmarFighter extends Boss {
         if (player.drinkTimer > 0 && !this.seenDrink) {
           this.seenDrink = true;
           const mercy = cd.mercy > OMAR.cooldown.mercy - 3; // net "bijna!" geroepen: dan mag je even drinken
-          if (!mercy && dist < 10 && cd.dash <= 0 && p.dashCooldown <= 0 && Math.random() < (ph ? 0.75 : 0.5)) {
+          if (!mercy && dist < 12 && p.dashCooldown <= 0 && Math.random() < (ph ? 0.95 : 0.8)) {
             this.say('Niet drinken!', 1.6, true);
             this.startDash(ph);
             break;
           }
         }
         if (player.drinkTimer <= 0) this.seenDrink = false;
-        // Zelf bijna dood? Wegrennen en een slokje nemen (één keer)
-        if (this.hp < this.info.hp * OMAR.drinkBelow && p.flasks > 0 && p.onGround) {
-          this.say('Even een slokje...', 2, true);
+        // Weinig leven over? Wegdashen en een slokje nemen (hij heeft een paar flesjes!)
+        if (this.hp < this.info.hp * OMAR.drinkBelow && p.flasks > 0 && p.onGround && cd.drink <= 0) {
+          cd.drink = OMAR.cooldown.drink[ph];
+          this.say(pick(['Even een slokje...', 'Pauze! Hehe.', 'Ik heb nog meer flesjes hoor!']), 2, true);
           if (dist < 5 && p.dashCooldown <= 0) {
             p.tryDash(dir.clone().negate());
             this.log('ontwijk-dash');
@@ -742,7 +749,7 @@ export class OmarFighter extends Boss {
           this.say('Wacht even... dit klopt niet!', 2.2, true);
         }
         // Jij bent bijna dood? Dan doet Omar even stoer (en kun jij drinken)
-        if (player.health < player.maxHealth * 0.2 && cd.mercy <= 0) {
+        if (!ph && player.health < player.maxHealth * 0.2 && cd.mercy <= 0) {
           cd.mercy = OMAR.cooldown.mercy;
           this.setState('uitdagen', 1.5);
           this.say('Bijna! Hehe. Drink maar gauw een flesje!', 2.4, true);
@@ -795,8 +802,8 @@ export class OmarFighter extends Boss {
           }
           break;
         }
-        // Klaar met slaan. In fase 2 soms nog een wervelslag erachteraan!
-        if (ph && dist < OMAR.spinRadius + 0.5 && cd.spin <= 0 && p.spinCooldown <= 0 && Math.random() < 0.4) {
+        // Klaar met slaan. Soms nog een wervelslag erachteraan (in fase 2 vaker)!
+        if (dist < OMAR.spinRadius + 0.5 && p.spinCooldown <= 0 && Math.random() < OMAR.spinAfterCombo[ph]) {
           this.startSpin(ph, 0.32);
           break;
         }
@@ -844,7 +851,7 @@ export class OmarFighter extends Boss {
           this.swingsLeft = 0;
           this.after = OMAR.recover.dash[ph];
           this.setState('combo');
-        } else if (ph && dist < 8.5) {
+        } else if (dist < 8.5) {
           this.after = OMAR.recover.combo[ph];
           this.setState('aanlopen', 1.5);
         } else this.setState('herstel', OMAR.recover.dash[ph]);
@@ -1072,19 +1079,21 @@ export class OmarFighter extends Boss {
     const canDash = cd.dash <= 0 && p.dashCooldown <= 0;
     const canSlam = cd.slam <= 0 && p.onGround;
     // Vuurzwaard aanzetten (in fase 2 staat hij altijd aan). Van dichtbij liever niet: dan kun jij hem slaan.
-    if (!ph && cd.fire <= 0 && p.fireCooldown <= 0 && p.fireTimer <= 0) add('vuurzwaard', dist > 5 ? 0.8 : 0.2);
+    if (!ph && cd.fire <= 0 && p.fireCooldown <= 0 && p.fireTimer <= 0) add('vuurzwaard', dist > 5 ? 1.2 : 0.5);
     if (dist <= 3.4) {
-      add('combo', 0.5);
-      if (canSpin) add('wervelslag', ph ? 0.35 : 0.25);
-      if (canSlam) add('grondslag', 0.15);
-      if (!ph && cd.taunt <= 0) add('uitdagen', 0.1);
-    } else if (dist <= 8.5) {
-      if (canDash) add('dash', 0.4);
+      add('combo', 0.45);
+      if (canSpin) add('wervelslag', ph ? 0.55 : 0.45);
       if (canSlam) add('grondslag', 0.3);
-      add('aanlopen', 0.3);
+      if (canDash) add('dash', 0.3); // dwars door je heen flitsen en van achteren slaan
+      if (!ph && cd.taunt <= 0) add('uitdagen', 0.05);
+    } else if (dist <= 8.5) {
+      if (canDash) add('dash', 0.9);
+      if (canSlam) add('grondslag', 0.45);
+      add('aanlopen', 0.2);
     } else {
-      if (canDash) add('dash', 0.35);
-      add(null, 0.65); // gewoon verder sprinten
+      if (canDash) add('dash', 0.8);
+      if (canSlam) add('grondslag', 0.3);
+      add(null, 0.25); // gewoon verder sprinten
     }
     let roll = Math.random() * options.reduce((sum, [, w]) => sum + w, 0);
     let move = null;
@@ -1166,7 +1175,7 @@ export class OmarFighter extends Boss {
     const away = dir.clone().negate();
     const side = Math.random() < 0.5 ? 1 : -1;
     let ok = false;
-    if ((threat !== 'slag' || !p.onGround) && p.dashCooldown <= 0) {
+    if ((threat !== 'slag' || !p.onGround || Math.random() < OMAR.dashDodge) && p.dashCooldown <= 0) {
       ok = p.tryDash(away.clone().applyAxisAngle(UP, side * 0.4));
       if (ok) this.log('ontwijk-dash');
     }
@@ -1175,7 +1184,7 @@ export class OmarFighter extends Boss {
       if (ok) this.log('rol');
     }
     if (!ok) return false;
-    this.counter = threat === 'slag' && Math.random() < 0.3;
+    this.counter = threat === 'slag' && Math.random() < OMAR.counterChance;
     this.setState('ontwijk');
     return true;
   }
