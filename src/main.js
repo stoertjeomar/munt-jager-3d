@@ -131,11 +131,10 @@ function giveKills(amount, announce = true) {
   const before = stats.unlockedPowers();
   const perksBefore = stats.unlockedPerks();
   if (!stats.addKills(amount)) return null;
-  // Sterker geworden: meteen weer vol leven en stamina, en de nieuwe flesjes erbij
+  // Sterker geworden: meteen weer vol leven en stamina
   const newPerks = stats.unlockedPerks().filter((k) => !perksBefore.includes(k));
   player.health = player.maxHealth;
   player.stamina = player.maxStamina;
-  player.flasks += newPerks.reduce((n, k) => n + (PERKS[k].flasks ?? 0), 0);
   play('win');
   effects.burst(player.position.clone().setY(player.position.y + 1.2), 0xffd76a, { count: 40, speed: 5, size: 0.12, life: 1, up: 4 });
   if (announce) {
@@ -291,8 +290,7 @@ function openShop(npc) {
           player.stamina = player.maxStamina;
           player.flasks = stats.flasksMax;
           play('heal');
-        } else if (key === 'zaadje') player.flasks++;
-        else if (key === 'hart') player.health += 20;
+        } else if (key === 'hart') player.health += 20;
         effects.burst(player.position.clone().setY(player.position.y + 1.2), 0xffd76a, { count: 20, speed: 3, size: 0.09, life: 0.7, up: 3 });
         ui.toast(`Gekocht: <b>${item.icon} ${item.name}</b>`, 2.5);
       },

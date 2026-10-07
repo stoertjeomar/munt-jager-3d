@@ -10,6 +10,11 @@ import { WEAPONS } from './weapons.js';
 // Zoveel sterker word je per level
 const PER_LEVEL = { health: 12, stamina: 6, damage: 0.08 };
 
+// Meer flesjes dan dit heb je nooit, in het hele spel (Omar heeft er ook 3)
+export const MAX_FLASKS = 3;
+// Een Gouden Appel (uit een kist, van een boss of een quest) geeft je voor altijd zoveel extra leven
+export const APPLE_HEALTH = 15;
+
 // Hoeveel vijanden een boss waard is (de eerste keer, en daarna)
 export const BOSS_KILLS = { first: 10, again: 3 };
 
@@ -38,14 +43,15 @@ export const POWERS = {
 };
 
 // Bonussen die je vrijspeelt door te levelen (naast de krachten hierboven)
-//   flasks = extra flesjes · speed = sneller lopen · defense = minder schade · heal = flesjes helen meer
+//   health = meer leven · speed = sneller lopen · defense = minder schade · heal = flesjes helen meer
+// (Extra flesjes bestaan niet: je hebt er altijd maximaal MAX_FLASKS.)
 export const PERKS = {
-  flask1: { name: 'Extra flesje', level: 2, flasks: 1, info: 'Je kunt één flesje meer meenemen.' },
+  hart1: { name: 'Sterk hart', level: 2, health: 20, info: '+20 levenspunten.' },
   speed: { name: 'Snelle benen', level: 4, speed: 0.1, info: 'Je loopt 10% sneller.' },
-  flask2: { name: 'Extra flesje', level: 5, flasks: 1, info: 'Je kunt nog een flesje meer meenemen.' },
+  hart2: { name: 'Groot hart', level: 5, health: 25, info: '+25 levenspunten.' },
   skin: { name: 'Taaie huid', level: 7, defense: 0.1, info: 'Je krijgt 10% minder schade.' },
-  heal: { name: 'Sterke flesjes', level: 8, heal: 0.15, info: 'Een flesje geeft 60% leven terug in plaats van 45%.' },
-  flask3: { name: 'Extra flesje', level: 10, flasks: 1, info: 'Je kunt nog een flesje meer meenemen.' },
+  heal: { name: 'Sterke flesjes', level: 8, heal: 0.15, info: 'Een flesje geeft 15% meer leven terug.' },
+  hart3: { name: 'Leeuwenhart', level: 10, health: 30, info: '+30 levenspunten.' },
   master: { name: 'Meester-jager', level: 12, speed: 0.1, defense: 0.1, info: 'Nog 10% sneller en 10% minder schade.' },
 };
 
@@ -53,7 +59,7 @@ export const PERKS = {
 // Een item met repeat koop je zo vaak als je wilt (altijd dezelfde prijs).
 export const SHOP_ITEMS = {
   soep: { name: 'Herstel-soep', icon: '🍲', price: [40], repeat: true, info: 'Meteen al je leven en flesjes terug.' },
-  zaadje: { name: 'Gouden Zaadje', icon: '🧪', price: [200, 450, 800], info: 'Je kunt één flesje meer meenemen.' },
+  zaadje: { name: 'Gouden Zaadje', icon: '🧪', price: [200, 450, 800], info: 'Je flesjes helen 10% meer.' },
   hart: { name: 'Hartversterker', icon: '❤', price: [150, 300, 500, 800, 1200], info: '+20 levenspunten.' },
   slijpen: { name: 'Wapen slijpen', icon: '⚔', price: [150, 300, 500, 800, 1200], info: '+10% schade met al je wapens.' },
 };
@@ -77,7 +83,8 @@ function freshSave() {
     weapon: 'shortsword',
     helmet: 'geen',
     inventory: [{ kind: 'weapon', key: 'shortsword' }, { kind: 'helmet', key: 'geen' }],
-    flasksMax: 3,
+    flasksMax: 3, // (oud: zo ging je vroeger met extra flesjes om, nu altijd MAX_FLASKS)
+    apples: 0, // gevonden Gouden Appels: elk +15 leven
     checkpoint: null, // hier kom je terug als je doodgaat (null = begin van het level)
     bosses: [], // verslagen bosses
     chests: [], // geopende kisten
@@ -106,13 +113,13 @@ export class Stats {
   get runes() { return this.data.runes; }
   get xp() { return this.data.xp; }
   get xpNeeded() { return killsNeeded(this.data.level); }
-  get maxHealth() { return 150 + (this.data.level - 1) * PER_LEVEL.health + this.bought('hart') * 20; }
+  get maxHealth() { return 150 + (this.data.level - 1) * PER_LEVEL.health + this.bought('hart') * 20 + this.perkBonus('health') + this.data.apples * APPLE_HEALTH; }
   get maxStamina() { return 100 + (this.data.level - 1) * PER_LEVEL.stamina; }
   get damageMultiplier() { return 1 + (this.data.level - 1) * PER_LEVEL.damage + this.bought('slijpen') * 0.1; }
-  get flasksMax() { return this.data.flasksMax + this.perkBonus('flasks') + this.bought('zaadje'); }
+  get flasksMax() { return MAX_FLASKS; }
   get speedMultiplier() { return 1 + this.perkBonus('speed'); }
   get defenseBonus() { return this.perkBonus('defense'); }
-  get healBonus() { return this.perkBonus('heal'); }
+  get healBonus() { return this.perkBonus('heal') + this.bought('zaadje') * 0.1; }
 
   addRunes(amount) {
     this.data.runes += amount;
@@ -183,7 +190,7 @@ export class Stats {
 
   addItem(item) {
     if (item.kind === 'flask') {
-      this.data.flasksMax++;
+      this.data.apples++; // een "flesje" uit een kist of quest is nu een Gouden Appel (zie gear.js)
       return;
     }
     if (!this.hasItem(item)) this.data.inventory.push({ kind: item.kind, key: item.key });
@@ -207,6 +214,11 @@ export class Stats {
         delete this.data.lostRunes;
       }
       this.removeOldWeapons();
+      // Oude save met extra flesjes? Je houdt er 3, de rest worden Gouden Appels.
+      if (this.data.flasksMax > MAX_FLASKS) {
+        this.data.apples += this.data.flasksMax - MAX_FLASKS;
+        this.data.flasksMax = MAX_FLASKS;
+      }
     } catch {
       // geen of kapotte save: nieuw spel
     }

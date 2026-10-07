@@ -25,28 +25,29 @@ export const OMAR = {
   size: 1.12, // Omar is iets groter dan jij
   hipHeight: 0.95, // hoogte van zijn heupen (om hem goed op de troon te laten zitten)
   // Leven: zoveel klappen met JOUW wapen kan Omar hebben. Hoe hoger jouw level, hoe minder klappen het zijn.
-  hp: { hits: 36, perLevel: 0.4, minHits: 26, min: 520 },
-  speed: [1.35, 1.55], // hoe snel hij loopt (1 = net zo snel als jij): hij is sneller dan jij!
+  hp: { hits: 31, perLevel: 0.4, minHits: 23, min: 480 },
+  speed: [1.45, 1.65], // hoe snel hij loopt (1 = net zo snel als jij): hij is veel sneller dan jij!
   sprintFrom: 6, // verder weg dan dit (meter)? Dan sprint hij naar je toe
-  swingSpeed: 0.78, // zijn zwaard zwaait sneller dan dat van jou (0.78 = in 78% van de tijd)
+  swingSpeed: 0.72, // zijn zwaard zwaait sneller dan dat van jou (0.72 = in 72% van de tijd)
   // Hoeveel van JOUW leven een klap kost (0.11 = 11%). Zo is hij op elk level even eng.
-  damagePct: { slag: 0.11, dash: 0.14, wervelslag: 0.16, grondslag: 0.2, boos: 0.08 },
+  damagePct: { slag: 0.12, dash: 0.15, wervelslag: 0.17, grondslag: 0.21, boos: 0.09 },
   phase2Damage: 1.3, // in fase 2 doet alles 30% meer pijn
   fireDamage: 1.35, // met zijn vuurzwaard 35% meer
   // Zo lang laat hij eerst zien wat hij gaat doen (seconden): kort, maar je kunt het altijd zien aankomen
-  windup: { combo: [0.3, 0.22], dash: [0.38, 0.28], spin: [0.4, 0.3], slam: [0.45, 0.35], fire: 0.45 },
+  // teleport = zo lang staat hij achter je (met een "ting!") voordat hij slaat
+  windup: { combo: [0.28, 0.2], dash: [0.34, 0.26], spin: [0.38, 0.3], slam: [0.42, 0.34], fire: 0.45, teleport: [0.42, 0.34] },
   // Zo lang staat hij daarna te hijgen: dan kun jij slaan! (niet lang...)
   recover: { combo: [0.55, 0.4], dash: [0.55, 0.4], spin: [0.55, 0.4], slam: [0.75, 0.55] },
   // Zo lang moet hij wachten voordat hij een aanval nog een keer mag doen
-  cooldown: { dash: [1.6, 1.0], spin: [2.6, 1.8], slam: [4, 2.8], dodge: [1.4, 0.9], taunt: [12, 99], mercy: 20, fire: 12, drink: [9, 7] },
+  cooldown: { dash: [1.5, 0.9], spin: [2.4, 1.7], slam: [3.8, 2.6], dodge: [1.3, 0.8], taunt: [12, 99], mercy: 20, fire: 12, drink: [9, 7], teleport: [4.5, 3.2] },
   comboHits: [3, 4], // zoveel klappen achter elkaar
-  dodgeChance: [0.45, 0.6], // kans dat hij wegrolt of wegdasht als jij slaat
+  dodgeChance: [0.5, 0.65], // kans dat hij wegrolt, wegdasht of wegteleporteert als jij slaat
   dashDodge: 0.65, // kans dat hij wegdasht in plaats van wegrolt
   counterChance: 0.6, // kans dat hij na het ontwijken meteen terugslaat
   spinAfterCombo: [0.3, 0.55], // kans op een wervelslag na zijn combo
   reaction: [0.06, 0.04], // zo snel ziet hij jouw klap aankomen (seconden)
-  think: [0.25, 0.18], // zo vaak bedenkt hij een nieuwe aanval
-  gap: [0.35, 0.25], // minimale pauze tussen twee aanvallen
+  think: [0.22, 0.16], // zo vaak bedenkt hij een nieuwe aanval
+  gap: [0.32, 0.22], // minimale pauze tussen twee aanvallen
   poise: [3, 2], // zoveel klappen in 1.6 seconden en hij wil weg (of slaat terug met een wervelslag)
   flasks: 3, // zoveel flesjes heeft hij (sla hem als hij drinkt: dan is dat flesje weg!)
   drinkBelow: 0.5, // onder de helft van zijn leven gaat hij drinken...
@@ -54,6 +55,12 @@ export const OMAR = {
   reach: 0.4, // zoveel verder dan zijn zwaard lang is raakt hij jou (jouw lijf is ook dik)
   spinRadius: 3.6, // zo ver raakt zijn wervelslag (de rode cirkel is precies zo groot)
   slamRadius: 4.2, // zo ver raakt zijn grondslag (spring erover, of ren de cirkel uit!)
+  // Teleporteren: "Achter je!", poef, weg... en dan staat hij opeens achter je
+  teleportDist: 1.8, // zo ver achter je komt hij te staan
+  teleportGone: 0.22, // zo lang is hij helemaal weg (seconden)
+  teleportHits: [2, 3], // zoveel klappen doet hij daarna
+  teleportDodge: [0.3, 0.45], // kans dat hij wegteleporteert als jij slaat (in plaats van rollen)
+  talk: [4, 7], // zo vaak (seconden) roept hij iets tijdens het gevecht
 };
 
 const tmp = new THREE.Vector3();
@@ -63,7 +70,7 @@ const BASE_SPEED = 6.5; // loopsnelheid van een speler (player.js)
 const ZERO_CONTROLS = { move: new THREE.Vector3(), sprint: false, jumpPressed: false, faceTarget: null };
 const NO_BOUNDS = { x: 999, z: 999 }; // de arena houdt hem binnen (zie Boss.update)
 // Hierin trekt hij zich niks aan van jouw klappen (hij wordt niet weggeduwd)
-const SUPER_ARMOUR = ['spinWindup', 'spin', 'dash', 'sprong1', 'sprong2', 'zweven', 'hangen', 'vallen', 'boos'];
+const SUPER_ARMOUR = ['spinWindup', 'spin', 'dash', 'sprong1', 'sprong2', 'zweven', 'hangen', 'vallen', 'boos', 'verdwijnen', 'achter'];
 // Hierin kan hij jouw klappen zien aankomen en wegrollen
 const CAN_DODGE = ['neutraal', 'aanlopen'];
 
@@ -72,6 +79,13 @@ const TAUNTS = {
   raak: ['Hehe!', 'Te langzaam!', 'Pats!', 'Baas!', 'Boem!'],
   mis: ['Te langzaam!', 'Hihi, mis!', 'Hier ben ik!', 'Waar sla je op?'],
   au: ['Au! Valsspeler!', 'Hé! Dat deed pijn!', 'Auw! Niet zo hard!'],
+  // Tussendoor, tijdens het gevecht
+  praten: [
+    'Kleine speler, kom hier!', 'Denk je echt dat je mij gaat verslaan?', 'Ik heb deze game gemaakt. Ik ken al je trucjes!',
+    'Is dat alles wat je kan?', 'Kom hier, kleintje!', 'Ik ben veel te snel voor jou!', 'Niemand verslaat Omar!',
+    'Hehe, ben je nu al moe?', 'Mijn goudvis vecht beter dan jij!', 'Kijk maar uit... ik kan teleporteren!',
+  ],
+  boos: ['Nu is het menens, kleine speler!', 'Jij maakt me echt boos!', 'Denk je nou echt dat je kan winnen?!', 'Ik ben de maker van dit spel!'],
 };
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
@@ -223,7 +237,7 @@ export class OmarFighter extends Boss {
     this.introT = 0;
     this.setState('start', 1.2);
     // Wachttijden (seconden). Aan het begin even rustig: geen aanval in de eerste seconde.
-    this.cd = { think: 0, gap: 0.3, dash: 0.8, spin: 1.8, slam: 2.5, dodge: 0.6, taunt: 6, mercy: 0, fire: 2.5, drink: 0, say: 0, raak: 0 };
+    this.cd = { think: 0, gap: 0.3, dash: 0.8, spin: 1.8, slam: 2.5, dodge: 0.6, taunt: 6, mercy: 0, fire: 2.5, drink: 0, say: 0, raak: 0, teleport: 2, praat: 3 };
     this.swingsLeft = 0;
     this.after = OMAR.recover.combo[0];
     this.lastSwordHit = null;
@@ -506,6 +520,7 @@ export class OmarFighter extends Boss {
   // ---------- Geraakt worden ----------
 
   hit(from, swingId, damage) {
+    if (this.state === 'weg') return null; // weggeteleporteerd: er is niks om te raken
     // Aan het rollen of dashen? Dan mis je hem echt.
     if (this.alive && this.awake && this.puppet.invincible) {
       if (this.lastDodgeId !== swingId) {
@@ -624,6 +639,11 @@ export class OmarFighter extends Boss {
 
     const threat = this.watchPlayer(player, dist);
     this.brain(dt, ctx, c, dist, dir, ph, threat);
+    // Tussendoor iets roepen ("Kleine speler, kom hier!")
+    if (this.cd.praat <= 0 && this.bubbleTimer <= 0 && this.state !== 'weg') {
+      this.cd.praat = THREE.MathUtils.randFloat(...OMAR.talk);
+      this.say(pick(ph && Math.random() < 0.5 ? TAUNTS.boos : TAUNTS.praten), 2.4);
+    }
 
     // Tijdens een klap draait hij mee tot de klap "vastligt": daarna kun je nog opzij stappen
     const swing = p.sword.attackProgress;
@@ -1003,6 +1023,38 @@ export class OmarFighter extends Boss {
         break;
       }
 
+      case 'verdwijnen': {
+        // Paarse rook om hem heen... zo meteen is hij weg!
+        this.patch = 'hurken';
+        this.smokeTimer = (this.smokeTimer ?? 0) - dt;
+        if (this.smokeTimer <= 0) {
+          this.smokeTimer = 0.05;
+          ctx.effects.burst(this.center, 0xb04dff, { count: 4, speed: 2.5, size: 0.14, life: 0.4, up: 1, gravity: 0 });
+        }
+        if (this.timer <= 0) this.vanish(ctx);
+        break;
+      }
+
+      case 'weg': {
+        // Onzichtbaar... waar is hij?
+        this.face = false;
+        if (this.timer <= 0) this.appearBehind(ctx, ph);
+        break;
+      }
+
+      case 'achter': {
+        // Hij staat opeens achter je! Zwaard naar achteren, "ting!", en dan slaat hij
+        this.patch = 'uithalen';
+        this.turnRate = 25;
+        this.bladeSparks(dt, 0xd9a3ff, 0.06);
+        if (this.timer <= 0) {
+          this.after = OMAR.recover.combo[ph];
+          this.swingsLeft = OMAR.teleportHits[ph];
+          this.setState('combo');
+        }
+        break;
+      }
+
       case 'uitdagen': {
         // Stoer doen. Hij let even niet op: sla hem!
         this.patch = 'wenken';
@@ -1078,6 +1130,7 @@ export class OmarFighter extends Boss {
     const canSpin = cd.spin <= 0 && p.spinCooldown <= 0;
     const canDash = cd.dash <= 0 && p.dashCooldown <= 0;
     const canSlam = cd.slam <= 0 && p.onGround;
+    const canTeleport = cd.teleport <= 0 && p.onGround;
     // Vuurzwaard aanzetten (in fase 2 staat hij altijd aan). Van dichtbij liever niet: dan kun jij hem slaan.
     if (!ph && cd.fire <= 0 && p.fireCooldown <= 0 && p.fireTimer <= 0) add('vuurzwaard', dist > 5 ? 1.2 : 0.5);
     if (dist <= 3.4) {
@@ -1085,14 +1138,17 @@ export class OmarFighter extends Boss {
       if (canSpin) add('wervelslag', ph ? 0.55 : 0.45);
       if (canSlam) add('grondslag', 0.3);
       if (canDash) add('dash', 0.3); // dwars door je heen flitsen en van achteren slaan
+      if (canTeleport) add('teleport', 0.25);
       if (!ph && cd.taunt <= 0) add('uitdagen', 0.05);
     } else if (dist <= 8.5) {
       if (canDash) add('dash', 0.9);
       if (canSlam) add('grondslag', 0.45);
+      if (canTeleport) add('teleport', 0.55);
       add('aanlopen', 0.2);
     } else {
       if (canDash) add('dash', 0.8);
       if (canSlam) add('grondslag', 0.3);
+      if (canTeleport) add('teleport', 0.7);
       add(null, 0.25); // gewoon verder sprinten
     }
     let roll = Math.random() * options.reduce((sum, [, w]) => sum + w, 0);
@@ -1110,6 +1166,7 @@ export class OmarFighter extends Boss {
     else if (move === 'wervelslag') this.startSpin(ph);
     else if (move === 'grondslag') this.startJumpSlam(null, ph);
     else if (move === 'dash') this.startDash(ph);
+    else if (move === 'teleport') this.startTeleport(ph);
     else if (move === 'vuurzwaard') {
       cd.fire = OMAR.cooldown.fire;
       this.setState('vuurWindup', OMAR.windup.fire);
@@ -1148,6 +1205,62 @@ export class OmarFighter extends Boss {
     this.telegraph('charge');
   }
 
+  /** Teleporteren: even paarse rook, dan poef... en hij staat achter je. */
+  startTeleport(ph, windup = 0.3) {
+    this.cd.teleport = OMAR.cooldown.teleport[ph];
+    this.smokeTimer = 0;
+    this.setState('verdwijnen', windup);
+    play('charge');
+  }
+
+  /** Poef: weg in een wolk paarse rook. */
+  vanish(ctx) {
+    this.poof(ctx.effects, this.position);
+    this.say('Achter je!', 1.6, true);
+    this.mesh.visible = false;
+    this.trail.cut();
+    this.puppet.velocity.set(0, 0, 0);
+    this.log('teleport');
+    this.setState('weg', OMAR.teleportGone);
+  }
+
+  /** En opeens staat hij achter je (een beetje opzij, zodat je hem ook echt ziet verschijnen). */
+  appearBehind(ctx, ph) {
+    const player = ctx.player;
+    const back = player.facing.negate();
+    const side = Math.random() < 0.5 ? 1 : -1;
+    const spot = new THREE.Vector3();
+    let found = false;
+    // Achter je, of anders ergens naast je (hij moet wel in de arena blijven)
+    for (const turn of [0.5, 0.9, 1.4, 2, 2.6]) {
+      spot.copy(player.position).addScaledVector(back.clone().applyAxisAngle(UP, turn * side), OMAR.teleportDist);
+      if (flatDist(spot, this.arena.center) < this.arena.radius - 1.2) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) spot.copy(player.position).addScaledVector(tmp.copy(this.arena.center).sub(player.position).setY(0).normalize(), OMAR.teleportDist);
+    spot.y = this.position.y;
+    this.position.copy(spot);
+    this.puppet.velocity.set(0, 0, 0);
+    this.puppet.knockback?.set(0, 0, 0);
+    tmp.copy(player.position).sub(spot);
+    this.mesh.rotation.y = Math.atan2(tmp.x, tmp.z);
+    this.mesh.visible = true;
+    this.poof(ctx.effects, spot);
+    this.telegraph('glint');
+    this.setState('achter', OMAR.windup.teleport[ph]);
+  }
+
+  /** Een wolk paarse rook (verdwijnen en verschijnen). */
+  poof(effects, at) {
+    const c = at.clone().setY(at.y + 1);
+    effects.burst(c, 0xb04dff, { count: 26, speed: 4, size: 0.2, life: 0.55, up: 1.5, gravity: 0 });
+    effects.burst(c, 0x2a0a3a, { count: 14, speed: 2.5, size: 0.28, life: 0.7, up: 1, gravity: -0.2 });
+    effects.shockwave(at, 0xd04dff, 1.6);
+    play('poef');
+  }
+
   startJumpSlam(ctx, ph, again = false) {
     if (!again) this.cd.slam = OMAR.cooldown.slam[ph];
     // Mikken op waar jij straks bent (maar wel binnen de arena)
@@ -1174,6 +1287,12 @@ export class OmarFighter extends Boss {
     const p = this.puppet;
     const away = dir.clone().negate();
     const side = Math.random() < 0.5 ? 1 : -1;
+    // Soms: poef, weg... en dan staat hij achter je
+    if (threat === 'slag' && this.cd.teleport <= 0 && p.onGround && !p.isBusy && Math.random() < OMAR.teleportDodge[this.phase2 ? 1 : 0]) {
+      this.cd.teleport = OMAR.cooldown.teleport[this.phase2 ? 1 : 0];
+      this.vanish(this.lastCtx);
+      return true;
+    }
     let ok = false;
     if ((threat !== 'slag' || !p.onGround || Math.random() < OMAR.dashDodge) && p.dashCooldown <= 0) {
       ok = p.tryDash(away.clone().applyAxisAngle(UP, side * 0.4));
@@ -1199,6 +1318,7 @@ export class OmarFighter extends Boss {
       this.trail.cut();
       p.spinTimer = p.rollTimer = p.dashTimer = p.drinkTimer = 0;
       p.body.rotation.set(0, 0, 0);
+      this.mesh.visible = true; // (net weggeteleporteerd? dan komt hij terug)
       p.stats.boost = 1;
       this.say('HAHAHA! Ik ben de baas!', 3, true);
     }

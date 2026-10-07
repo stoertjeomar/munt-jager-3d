@@ -159,6 +159,11 @@ const SOUNDS = {
   whoosh: () => noise({ from: 200, to: 3000, duration: 0.9, volume: 0.35, q: 1 }),
   // "Ting!": Omars zwaard glinstert vlak voordat hij aanvalt (dan weet je: nu opletten!)
   glint: () => tone({ type: 'triangle', from: 1900, to: 2600, duration: 0.14, volume: 0.13 }),
+  // "Poef!": Omar teleporteert (verdwijnt in paarse rook)
+  poef: () => {
+    noise({ from: 3200, to: 300, duration: 0.25, volume: 0.35, q: 2 });
+    tone({ type: 'sine', from: 900, to: 180, duration: 0.22, volume: 0.15 });
+  },
 };
 
 /** Speel een geluid, bijvoorbeeld play('hit'). */
