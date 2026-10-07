@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { loadGLB } from './assets.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
+import { createMixamoRig } from './mixamo.js';
+import { CharacterAnimator } from './animator.js';
 
 // Het Gekke Kasteel van Omar: een kasteel op een rotseiland midden in een meer van lava,
 // onder een paarse lucht. Binnen de muren: een ronde arena, een rode loper en een gouden troon.
@@ -508,6 +510,18 @@ export function createCastleWorld(scene, { tex, texturedBox }) {
           if (c.isSkinnedMesh) c.frustumCulled = false;
         });
         scene.add(model);
+        // Een stoere houding in plaats van de T-houding: zwaard-arm omhoog, andere hand in de zij
+        model.updateMatrixWorld(true);
+        const rig = createMixamoRig(model);
+        if (rig) {
+          new CharacterAnimator(rig).update(0.016, { moving: false, onGround: true, attack: null, pickup: null });
+          rig.armR.rotation.set(-0.2, 0, -2.75);
+          rig.elbowR.rotation.x = -0.25;
+          rig.armL.rotation.set(-0.3, 0, 0.75);
+          rig.elbowL.rotation.x = -1.7;
+          rig.hips.rotation.set(-0.08, i === 0 ? 0.15 : -0.15, 0);
+          rig.apply();
+        }
       }
     }).catch(() => {});
   }
@@ -516,6 +530,8 @@ export function createCastleWorld(scene, { tex, texturedBox }) {
     colliders,
     bounds: { x: WALL_X - 0.5, z: WALL_Z - 0.5 }, // verder kun je niet lopen (de muren)
     night: 0.85, // het is altijd nacht in het kasteel (de pluisjes worden vuurvliegjes)
+    lampsOn: 1, // het warme lichtje bij de speler is altijd aan (main.js)
+    exposure: 1.25, // beeld iets feller: het kasteel is donker (graphics.js)
     timeOfDay: 0.95,
     sunDir: moonDir, // waar het licht vandaan komt (hier: de maan)
     isMoon: true,
