@@ -296,7 +296,7 @@ export class OmarFighter extends Boss {
   prepare(stats) {
     const weapon = WEAPONS[stats.data.weapon] ?? WEAPONS[START_WEAPON];
     const hits = Math.max(this.cfg.hp.minHits, this.cfg.hp.hits - this.cfg.hp.perLevel * (stats.level - 1));
-    this.info.hp = Math.max(this.cfg.hp.min, Math.round((weapon.damage * stats.damageMultiplier * hits) / 10) * 10);
+    this.info.hp = Math.max(this.cfg.hp.min, Math.round((weapon.damage * stats.normalDamageMultiplier * hits) / 10) * 10);
     const want = this.costumeFor(stats.data.character);
     if (want !== this.puppet.stats.data.character) {
       this.puppet.stats.data.character = want;
@@ -677,7 +677,7 @@ export class OmarFighter extends Boss {
   /** Schade voor de speler: een deel van zijn maximale leven (dan is elke klap even eng, op elk level). */
   damageFor(player, kind) {
     const pct = this.cfg.damagePct[kind] * (this.phase2 ? this.cfg.phase2Damage : 1) * (this.puppet.fireTimer > 0 ? this.cfg.fireDamage : 1);
-    return Math.max(1, Math.round(player.maxHealth * pct));
+    return Math.max(1, Math.round((player.stats.normalMaxHealth ?? player.maxHealth) * pct)); // (zonder het admin-menu)
   }
 
   /** Probeer de speler te raken (via main.js, dus rollen, dashen en je helm helpen gewoon). */

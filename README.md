@@ -56,6 +56,7 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 | G | Graphics: Laag / Normaal / Hoog (wordt onthouden) |
 | Scrollen | In- en uitzoomen (je begint helemaal ingezoomd) |
 | Esc | Pauze / muis vrij |
+| Enter | Admin-menu (met de geheime code) |
 
 **Op de draak:** WASD = vliegen · Spatie = omhoog · kijk omlaag met de muis = dalen · Shift = extra snel ·
 klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, dat doet geen pijn).
@@ -182,6 +183,7 @@ munt-jager-3d/
     ├── sites.js      → checkpoint-vlaggen en kisten
     ├── pickups.js    → munten, hartjes, diamanten
     ├── stats.js      → level (door vijanden te verslaan), bonussen, krachten, opslaan
+    ├── admin.js      → het admin-menu (Enter + code): sterkte, oneindig stamina/geld/levels, alle items
     ├── ui.js         → balken, menu's, banners, minimap en de wereldkaart
     ├── effects.js    → deeltjes, schokgolven, waarschuwingscirkels
     ├── omar.js       → alles rond Omar: uitdagen, het kasteel-filmpje, winnen (feest!) en verliezen
@@ -216,6 +218,9 @@ munt-jager-3d/
   Wat hij zegt → `LINES` bovenaan `src/rames.js` (en `BARKS` in `src/ramesFighter.js`). Testen: begin met `?level=3`, en typ
   in de console (F12) `game.rames.skipToFight()` of `game.rames.setHp(0.01)` (één klap en hij "sterft")
 - **Muziek** → `SONGS` in `src/music.js`: schrijf je eigen liedje met noten als `C5 - E5 G5`
+- **Admin-menu** → druk op **Enter** en typ `123123`. Kies hoe sterk je bent (*Normaal*, *Matig sterk* = 300 leven,
+  *OP!!!* = alles op max), zet oneindig stamina, geld en levels aan, en pak elk wapen en elke helm die je wilt.
+  Het wordt bewaard in je save. De code staat in `ADMIN_CODE` (`src/admin.js`), de sterktes in `ADMIN_KRACHT` (`src/stats.js`)
 - **Opnieuw beginnen** → uitrusting (I) → *Nieuw spel beginnen*
 
 ## Credits

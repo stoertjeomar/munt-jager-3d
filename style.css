@@ -429,6 +429,22 @@ canvas {
   color: #ff7a7a;
 }
 
+/* Het vakje voor de admin-code (Enter) */
+.admin-code {
+  display: block;
+  width: 100%;
+  margin: 6px 0;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid #f3d27a;
+  color: #f1e6c4;
+  font: inherit;
+  font-size: 22px;
+  letter-spacing: 6px;
+  text-align: center;
+  outline: none;
+}
+
 .power-row {
   display: grid;
   grid-template-columns: 110px 130px 1fr;
