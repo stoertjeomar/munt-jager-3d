@@ -7,7 +7,7 @@ import { SwordTrail } from './trail.js';
 import { play } from './audio.js';
 import { SAVE_KEY } from './levels.js';
 import { loadGLB } from './assets.js';
-import { makeBolt } from './lightning.js';
+import { makeBolt, Bolts } from './lightning.js';
 
 // Omar: de maker van het spel. Hij woont in zijn Gekke Kasteel (castle.js) en vecht in de arena.
 // Omar is een echte "speler": hij heeft hetzelfde lijf, dezelfde animaties en dezelfde krachten als jij
@@ -68,6 +68,23 @@ export const OMAR = {
   bliksem: { windup: [0.7, 0.55], strikes: [3, 5], delay: 0.8, every: 0.18, radius: 1.8, cooldown: [8, 5.5] },
   // Schaduwklonen (alleen als hij boos is): zwarte schaduwen met rode ogen verschijnen om je heen en stormen op je af
   schaduwen: { count: 3, appear: 0.9, speed: 16, dashTime: 0.6, cooldown: 11 },
+  // Welke grote aanvallen hij kan (Sky in skyFighter.js heeft er een paar andere)
+  moves: { bliksem: true, schaduwen: true, vuur: true },
+  // Zijn kleuren: rook, vonken, schokgolven, mistmuur, aura en bliksem
+  colors: {
+    main: 0xb04dff, // rook bij teleporteren, dash, grondslag
+    light: 0xd9a3ff, // tekst, vonken op het zwaard, wervelslag
+    glow: 0xd04dff, // schokgolven
+    spark: 0xc9a0ff, // bliksemvonken
+    dark: 0x2a0a3a, // donkere rook
+    text: '#d9a3ff', // kleur van "HA!" en zijn kreten
+    fog: 'vec3(0.75, 0.35, 1.0)', // kleur van de mistmuur (in de shader)
+    phase2: 0x5a1030, // zo gloeit hij als hij boos is
+    bolt: 'paars', // kleur van zijn bliksem (zie lightning.js)
+  },
+  // Duistere aura om hem heen: rookwolkjes in deze kleuren (rood als hij boos is)
+  aura: { colors: [0x4a1070, 0x14031f, 0x7a2ab0], boos: [0xb0101e, 0x1a0006, 0xff3b2a], size: [0.15, 0.2], every: [0.05, 0.03], life: 0.8 },
+  swingSound: 'swing', // het geluid van zijn zwaard
 };
 
 const tmp = new THREE.Vector3();
@@ -97,8 +114,25 @@ const TAUNTS = {
     'Nu is het menens, kleine speler!', 'Jij maakt me echt boos!', 'Denk je nou echt dat je kan winnen?!', 'Ik ben de maker van dit spel!',
     'Mijn schaduwen hebben honger...', 'Jouw einde is begonnen!', 'Niemand ontsnapt aan Omar!',
   ],
+  // Bij bepaalde momenten in het gevecht
+  start: ['Kom dan, mannetje!'],
+  drankjeWeg: ['Mijn drankje!'],
+  verslagen: ['Au... sterretjes...'],
+  loslaten: ['Laat me los!'],
+  nietDrinken: ['Niet drinken!'],
+  slokje: ['Even een slokje...', 'Pauze! Hehe.', 'Ik heb nog meer flesjes hoor!'],
+  bijnaDood: ['Wacht even... dit klopt niet!'],
+  genade: ['Bijna! Hehe. Drink maar gauw een flesje!'],
+  nogEens: ['Nog een keer!'],
+  vuur: ['Mijn zwaard staat in de fik!'],
+  bliksem: ['Voel de bliksem!', 'Hoor je de donder? Dat ben IK!', 'De hemel luistert naar mij!'],
+  schaduwen: ['Mijn schaduwen... PAK HEM!', 'Kom maar, schaduwen!'],
+  teleport: ['Achter je!'],
+  winnen: ['HAHAHA! Ik ben de baas!'],
+  fase2: ['NU WORD IK BOOS!'],
+  geheeld: ['Ahh, lekker! Nu ben ik weer sterk!'],
 };
-const pick = (list) => list[Math.floor(Math.random() * list.length)];
+export const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
 /** Welk personage koos de speler? (uit de save; Omar neemt dan het andere) */
 function savedCharacter() {
@@ -161,7 +195,7 @@ export function makeEye() {
 }
 
 /** Naambordje boven zijn hoofd ("Omar", of een andere naam en kleuren). */
-function makeNameTag({ text = 'Omar', stroke = '#5a1a8a', fill = '#ffd23a' } = {}) {
+export function makeNameTag({ text = 'Omar', stroke = '#5a1a8a', fill = '#ffd23a' } = {}) {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 64;
@@ -193,20 +227,22 @@ const STAND_TIME = 0.45;
 const LEAP_END = 1.45;
 
 export class OmarFighter extends Boss {
-  constructor(scene, arena) {
-    super(scene, arena, 'omar');
-    this.type = { name: 'Omar', radius: 0.5, height: 1.85, color: 0xb04dff, damage: 0, stompable: false, noContact: true };
-    this.info = { ...BOSS_INFO.omar };
+  /** id = 'omar', of een andere boss die net zo vecht (Sky in skyFighter.js) */
+  constructor(scene, arena, id = 'omar') {
+    super(scene, arena, id);
+    this.info = { ...BOSS_INFO[id] };
+    this.type = { name: this.info.name, radius: 0.5, height: 1.85, color: this.cfg.colors.main, damage: 0, stompable: false, noContact: true };
+    this.special = true; // geen BOSS_POWER uit main.js: hij heeft zijn eigen instellingen
     // De "pop": een echte Player, maar bestuurd door de computer (een eigen exemplaar, los van jou)
-    this.puppet = new Player(scene, new OmarStats(otherPlayable(savedCharacter())));
+    this.puppet = new Player(scene, this.makeStats());
     scene.remove(this.mesh);
     this.mesh = this.puppet.mesh;
     this.trail = new SwordTrail(scene);
-    // Een paarse mistmuur in plaats van een gouden (en wat doorzichtiger: de arena is kleiner, de camera staat er vaak achter)
+    // Een mistmuur in zijn eigen kleur in plaats van een gouden (en wat doorzichtiger: de camera staat er vaak achter)
     this.fog.material.fragmentShader = this.fog.material.fragmentShader
-      .replace('vec3(1.0, 0.85, 0.45)', 'vec3(0.75, 0.35, 1.0)')
+      .replace('vec3(1.0, 0.85, 0.45)', this.cfg.colors.fog)
       .replace('* opacity;', '* opacity * 0.5;');
-    this.nameTag = makeNameTag();
+    this.nameTag = makeNameTag(this.tagStyle);
     this.mesh.add(this.nameTag);
     // Tekstwolkje voor zijn grappen tijdens het gevecht
     this.bubble = makeBubble();
@@ -223,11 +259,28 @@ export class OmarFighter extends Boss {
     scene.add(this.eyes);
     this.auraTimer = 0;
     this.strikes = []; // bliksems die nog moeten inslaan: { pos, t, first }
-    this.bolts = []; // bliksemschichten in beeld: { mesh, life }
+    this.bolts = new Bolts(scene); // bliksemschichten in beeld (lightning.js)
     this.clones = []; // schaduwklonen: { mesh, eyes, t, dir, hit }
-    loadGLB('models/extra/schaduw.glb').then((g) => { this.shadowModel = g.scene; }).catch(() => {});
+    if (this.cfg.moves.schaduwen) loadGLB('models/extra/schaduw.glb').then((g) => { this.shadowModel = g.scene; }).catch(() => {});
     this.resetFight();
   }
+
+  // ---------- Wat er anders is aan wie er vecht (Sky overschrijft deze in skyFighter.js) ----------
+
+  /** De instellingen (zie OMAR bovenaan). */
+  get cfg() { return OMAR; }
+
+  /** Wat hij roept (zie TAUNTS bovenaan). */
+  get taunts() { return TAUNTS; }
+
+  /** Kleuren van zijn naambordje. */
+  get tagStyle() { return { text: 'Omar', stroke: '#5a1a8a', fill: '#ffd23a' }; }
+
+  /** De nep-stats van de pop: Omar draagt het personage dat jij NIET koos. */
+  makeStats() { return new OmarStats(otherPlayable(savedCharacter())); }
+
+  /** Welk personage moet de pop dragen, als jij met `character` speelt? */
+  costumeFor(character) { return otherPlayable(character); }
 
   /** Waar Omar staat als hij op zijn troon zit (zijn voeten hangen boven het trapje). */
   get seatedPosition() {
@@ -244,7 +297,7 @@ export class OmarFighter extends Boss {
     const weapon = WEAPONS[stats.data.weapon] ?? WEAPONS[START_WEAPON];
     const hits = Math.max(this.cfg.hp.minHits, this.cfg.hp.hits - this.cfg.hp.perLevel * (stats.level - 1));
     this.info.hp = Math.max(this.cfg.hp.min, Math.round((weapon.damage * stats.damageMultiplier * hits) / 10) * 10);
-    const want = otherPlayable(stats.data.character);
+    const want = this.costumeFor(stats.data.character);
     if (want !== this.puppet.stats.data.character) {
       this.puppet.stats.data.character = want;
       this.puppet.setCharacter(want);
@@ -336,15 +389,19 @@ export class OmarFighter extends Boss {
       c.material = Array.isArray(c.material) ? c.material.map((m) => m.clone()) : c.material.clone();
       for (const m of [].concat(c.material)) if (m.emissive) mats.push(m);
     });
+    this.styleMaterials(mats);
     this.rememberMaterials(mats);
     this.baseEmissive = this.materials.map((e) => e.color.clone());
     if (this.phase2) this.tintPhase2();
   }
 
+  /** Zijn eigen huid (Sky: donkere stormhuid met gele bliksemaders). Omar ziet er gewoon uit. */
+  styleMaterials() {}
+
   tintPhase2() {
     for (const entry of this.materials) {
-      entry.color.set(0x5a1030);
-      entry.m.emissive.set(0x5a1030);
+      entry.color.set(this.cfg.colors.phase2);
+      entry.m.emissive.set(this.cfg.colors.phase2);
     }
   }
 
@@ -366,7 +423,7 @@ export class OmarFighter extends Boss {
   }
 
   /** Korte zwevende tekst boven zijn hoofd. */
-  shout(text, color = '#d9a3ff', size = 0.55) {
+  shout(text, color = this.cfg.colors.text, size = 0.55) {
     this.effects?.floatText(this.center.setY(this.position.y + 2.5), text, color, size);
   }
 
@@ -592,7 +649,7 @@ export class OmarFighter extends Boss {
     // Drinken wordt onderbroken (en zijn flesje is op!)
     if (p.drinkTimer > 0) {
       p.drinkTimer = 0;
-      if (!p.healed) this.say('Mijn drankje!', 2, true);
+      if (!p.healed) this.say(pick(this.taunts.drankjeWeg), 2, true);
     }
     if (!result.killed && damage >= this.info.hp * 0.08 && Math.random() < 0.6) this.say(pick(this.taunts.au));
     if (result.killed) {
@@ -610,7 +667,7 @@ export class OmarFighter extends Boss {
       p.slamming = false;
       p.body.rotation.set(0, 0, 0);
       p.stats.boost = 1;
-      this.say('Au... sterretjes...', 4, true);
+      this.say(pick(this.taunts.verslagen), 4, true);
     }
     return result;
   }
@@ -642,11 +699,11 @@ export class OmarFighter extends Boss {
     const p = this.puppet;
     p.stats.phase = 1;
     this.tintPhase2();
-    p.fireTimer = 9999; // vanaf nu staat zijn zwaard altijd in brand
+    if (this.cfg.moves.vuur) p.fireTimer = 9999; // vanaf nu staat zijn zwaard altijd in brand
     this.pending = null;
     this.chained = false;
     this.trail.cut();
-    this.say('NU WORD IK BOOS!', 2.5, true);
+    this.say(pick(this.taunts.fase2), 2.5, true);
     this.shout('GRRR!', '#ff5a5a', 0.8);
     ctx.effects.warnCircle(this.position, 4, 0.6);
     this.setState('boos', 1.1);
@@ -773,7 +830,7 @@ export class OmarFighter extends Boss {
     if (this.recentHits.length >= this.cfg.poise[ph] && calm && ['neutraal', 'aanlopen', 'herstel', 'uitdagen'].includes(this.state)) {
       this.recentHits.length = 0;
       if (dist < this.cfg.spinRadius && p.spinCooldown <= 0 && p.onGround) {
-        this.say('Laat me los!', 1.6, true);
+        this.say(pick(this.taunts.loslaten), 1.6, true);
         this.startSpin(ph, 0.32);
       } else this.dodge(dir, 'wervel');
       return;
@@ -783,7 +840,7 @@ export class OmarFighter extends Boss {
       case 'start': {
         // Even wenken: "kom dan!" (hij valt nog niet aan)
         this.patch = 'wenken';
-        if (this.stateT <= dt) this.say('Kom dan, mannetje!', 2, true);
+        if (this.stateT <= dt) this.say(pick(this.taunts.start), 2, true);
         if (this.timer <= 0) this.setState('neutraal');
         break;
       }
@@ -795,7 +852,7 @@ export class OmarFighter extends Boss {
           this.seenDrink = true;
           const mercy = cd.mercy > this.cfg.cooldown.mercy - 3; // net "bijna!" geroepen: dan mag je even drinken
           if (!mercy && dist < 12 && p.dashCooldown <= 0 && Math.random() < (ph ? 0.95 : 0.8)) {
-            this.say('Niet drinken!', 1.6, true);
+            this.say(pick(this.taunts.nietDrinken), 1.6, true);
             this.startDash(ph);
             break;
           }
@@ -804,7 +861,7 @@ export class OmarFighter extends Boss {
         // Weinig leven over? Wegdashen en een slokje nemen (hij heeft een paar flesjes!)
         if (this.hp < this.info.hp * this.cfg.drinkBelow && p.flasks > 0 && p.onGround && cd.drink <= 0) {
           cd.drink = this.cfg.cooldown.drink[ph];
-          this.say(pick(['Even een slokje...', 'Pauze! Hehe.', 'Ik heb nog meer flesjes hoor!']), 2, true);
+          this.say(pick(this.taunts.slokje), 2, true);
           if (dist < 5 && p.dashCooldown <= 0) {
             p.tryDash(dir.clone().negate());
             this.log('ontwijk-dash');
@@ -814,13 +871,13 @@ export class OmarFighter extends Boss {
         }
         if (ph && !this.lowSaid && this.hp < this.info.hp * 0.2) {
           this.lowSaid = true;
-          this.say('Wacht even... dit klopt niet!', 2.2, true);
+          this.say(pick(this.taunts.bijnaDood), 2.2, true);
         }
         // Jij bent bijna dood? Dan doet Omar even stoer (en kun jij drinken)
         if (!ph && player.health < player.maxHealth * 0.2 && cd.mercy <= 0) {
           cd.mercy = this.cfg.cooldown.mercy;
           this.setState('uitdagen', 1.5);
-          this.say('Bijna! Hehe. Drink maar gauw een flesje!', 2.4, true);
+          this.say(pick(this.taunts.genade), 2.4, true);
           this.log('uitdagen');
           break;
         }
@@ -865,7 +922,7 @@ export class OmarFighter extends Boss {
           if (p.tryAttack()) {
             this.swingsLeft--;
             this.log('slag');
-            play('swing');
+            play(this.cfg.swingSound);
             this.trail.cut();
           }
           break;
@@ -874,7 +931,7 @@ export class OmarFighter extends Boss {
         const chain = this.fromTeleport && ph && p.onGround && Math.random() < this.cfg.teleportChain;
         this.fromTeleport = false;
         if (chain) {
-          this.say('Nog een keer!', 1.2, true);
+          this.say(pick(this.taunts.nogEens), 1.2, true);
           this.startTeleport(ph, 0.2);
           this.cd.teleport = this.cfg.cooldown.teleport[ph];
           break;
@@ -902,7 +959,7 @@ export class OmarFighter extends Boss {
           const aim = player.position.clone().addScaledVector(player.velocity, 0.15).sub(this.position).setY(0);
           if (p.tryDash(aim)) {
             this.log('dash');
-            play('swing');
+            play(this.cfg.swingSound);
             this.dashHit = false;
             this.setState('dash');
           } else this.setState('neutraal');
@@ -923,7 +980,7 @@ export class OmarFighter extends Boss {
         if (this.timer > 0) break;
         if (dist <= p.sword.range + this.cfg.reach + 0.6 && p.tryAttack()) {
           this.log('slag');
-          play('swing');
+          play(this.cfg.swingSound);
           this.trail.cut();
           this.swingsLeft = 0;
           this.after = this.cfg.recover.dash[ph];
@@ -938,7 +995,7 @@ export class OmarFighter extends Boss {
       case 'spinWindup': {
         // Zwaard opzij gestrekt, rode cirkel op de grond: zo meteen draait hij rond!
         this.patch = 'wervelKlaar';
-        this.bladeSparks(dt, 0xd9a3ff, 0.06);
+        this.bladeSparks(dt, this.cfg.colors.light, 0.06);
         if (this.timer <= 0) {
           if (p.trySpin()) {
             this.log('wervelslag');
@@ -993,7 +1050,7 @@ export class OmarFighter extends Boss {
       case 'hangen': {
         this.face = false;
         this.patch = 'zwaardOmhoog';
-        this.bladeSparks(dt, 0xd04dff, 0.05);
+        this.bladeSparks(dt, this.cfg.colors.glow, 0.05);
         if (this.timer <= 0) {
           if (p.trySlam()) {
             this.log('grondslag');
@@ -1033,7 +1090,7 @@ export class OmarFighter extends Boss {
         if (this.timer <= 0) {
           if (p.tryFire()) {
             this.log('vuurzwaard');
-            this.say('Mijn zwaard staat in de fik!', 2);
+            this.say(pick(this.taunts.vuur), 2);
           }
           this.setState('neutraal');
           cd.gap = this.cfg.gap[ph];
@@ -1081,9 +1138,9 @@ export class OmarFighter extends Boss {
       }
 
       case 'bliksemWindup': {
-        // Zeis naar de hemel, paarse vonken: zo meteen slaat de bliksem in!
+        // Zeis naar de hemel, vonken: zo meteen slaat de bliksem in!
         this.patch = 'zwaardOmhoog';
-        this.bladeSparks(dt, 0xc9a0ff, 0.04);
+        this.bladeSparks(dt, this.cfg.colors.spark, 0.04);
         if (this.timer <= 0) {
           this.callLightning(ctx, ph);
           this.setState('herstel', 0.5);
@@ -1094,7 +1151,7 @@ export class OmarFighter extends Boss {
       case 'schaduwWindup': {
         // Armen wijd: de schaduwen komen eraan
         this.patch = 'wenken';
-        if (Math.random() < 0.6) ctx.effects.burst(this.center, 0x2a0a3a, { count: 2, speed: 2, size: 0.2, life: 0.6, up: 1, gravity: -0.3 });
+        if (Math.random() < 0.6) ctx.effects.burst(this.center, this.cfg.colors.dark, { count: 2, speed: 2, size: 0.2, life: 0.6, up: 1, gravity: -0.3 });
         if (this.timer <= 0) {
           this.summonShadows(ctx);
           this.setState('neutraal');
@@ -1104,12 +1161,12 @@ export class OmarFighter extends Boss {
       }
 
       case 'verdwijnen': {
-        // Paarse rook om hem heen... zo meteen is hij weg!
+        // Rook om hem heen... zo meteen is hij weg!
         this.patch = 'hurken';
         this.smokeTimer = (this.smokeTimer ?? 0) - dt;
         if (this.smokeTimer <= 0) {
           this.smokeTimer = 0.05;
-          ctx.effects.burst(this.center, 0xb04dff, { count: 4, speed: 2.5, size: 0.14, life: 0.4, up: 1, gravity: 0 });
+          ctx.effects.burst(this.center, this.cfg.colors.main, { count: 4, speed: 2.5, size: 0.14, life: 0.4, up: 1, gravity: 0 });
         }
         if (this.timer <= 0) this.vanish(ctx);
         break;
@@ -1126,7 +1183,7 @@ export class OmarFighter extends Boss {
         // Hij staat opeens achter je! Zwaard naar achteren, "ting!", en dan slaat hij
         this.patch = 'uithalen';
         this.turnRate = 25;
-        this.bladeSparks(dt, 0xd9a3ff, 0.06);
+        this.bladeSparks(dt, this.cfg.colors.light, 0.06);
         if (this.timer <= 0) {
           this.after = this.cfg.recover.combo[ph];
           this.swingsLeft = this.cfg.teleportHits[ph];
@@ -1151,7 +1208,7 @@ export class OmarFighter extends Boss {
         this.patch = 'boos';
         if (!this.burstDone && this.stateT >= 0.6) {
           this.burstDone = true;
-          ctx.effects.shockwave(this.position, 0xd04dff, 4);
+          ctx.effects.shockwave(this.position, this.cfg.colors.glow, 4);
           ctx.effects.burst(this.center, 0xff3b6b, { count: 30, speed: 7, size: 0.16, life: 0.7, up: 2 });
           ctx.effects.shake(0.5);
           play('slam');
@@ -1212,11 +1269,11 @@ export class OmarFighter extends Boss {
     const canDash = cd.dash <= 0 && p.dashCooldown <= 0;
     const canSlam = cd.slam <= 0 && p.onGround;
     const canTeleport = cd.teleport <= 0 && p.onGround;
-    const canBolt = cd.bliksem <= 0 && p.onGround;
+    const canBolt = this.cfg.moves.bliksem && cd.bliksem <= 0 && p.onGround;
     if (canBolt) add('bliksem', dist > 5 ? 0.6 : 0.25);
     if (ph && cd.schaduwen <= 0 && this.shadowModel) add('schaduwen', 0.55);
     // Vuurzwaard aanzetten (in fase 2 staat hij altijd aan). Van dichtbij liever niet: dan kun jij hem slaan.
-    if (!ph && cd.fire <= 0 && p.fireCooldown <= 0 && p.fireTimer <= 0) add('vuurzwaard', dist > 5 ? 1.2 : 0.5);
+    if (this.cfg.moves.vuur && !ph && cd.fire <= 0 && p.fireCooldown <= 0 && p.fireTimer <= 0) add('vuurzwaard', dist > 5 ? 1.2 : 0.5);
     if (dist <= 3.4) {
       add('combo', 0.45);
       if (canSpin) add('wervelslag', ph ? 0.55 : 0.45);
@@ -1235,6 +1292,7 @@ export class OmarFighter extends Boss {
       if (canTeleport) add('teleport', 0.7);
       add(null, 0.25); // gewoon verder sprinten
     }
+    this.extraMoves(add, dist, ph); // eigen aanvallen (Sky: bliksemwolven)
     let roll = Math.random() * options.reduce((sum, [, w]) => sum + w, 0);
     let move = null;
     for (const [m, w] of options) {
@@ -1254,13 +1312,13 @@ export class OmarFighter extends Boss {
     else if (move === 'bliksem') {
       cd.bliksem = this.cfg.bliksem.cooldown[ph];
       this.setState('bliksemWindup', this.cfg.bliksem.windup[ph]);
-      this.say(pick(['Voel de bliksem!', 'Hoor je de donder? Dat ben IK!', 'De hemel luistert naar mij!']), 1.8, true);
+      this.say(pick(this.taunts.bliksem), 1.8, true);
       play('charge');
       this.log('bliksem');
     } else if (move === 'schaduwen') {
       cd.schaduwen = this.cfg.schaduwen.cooldown;
       this.setState('schaduwWindup', 0.7);
-      this.say(pick(['Mijn schaduwen... PAK HEM!', 'Kom maar, schaduwen!']), 1.8, true);
+      this.say(pick(this.taunts.schaduwen), 1.8, true);
       play('charge');
       this.log('schaduwen');
     }
@@ -1278,8 +1336,14 @@ export class OmarFighter extends Boss {
       this.setState('uitdagen', 1.2);
       this.say(pick(this.taunts.uitdagen), 1.8);
       this.log('uitdagen');
-    }
+    } else this.startExtra(move, ph);
   }
+
+  /** Eigen aanvallen erbij (Sky). add(naam, kans) */
+  extraMoves() {}
+
+  /** Een eigen aanval beginnen (Sky). */
+  startExtra() {}
 
   startCombo(ph, windupScale = 1) {
     this.fromTeleport = false;
@@ -1303,7 +1367,7 @@ export class OmarFighter extends Boss {
     this.telegraph('charge');
   }
 
-  /** Teleporteren: even paarse rook, dan poef... en hij staat achter je. */
+  /** Teleporteren: even rook, dan poef... en hij staat achter je. */
   startTeleport(ph, windup = 0.3) {
     this.cd.teleport = this.cfg.cooldown.teleport[ph];
     this.smokeTimer = 0;
@@ -1314,7 +1378,7 @@ export class OmarFighter extends Boss {
   /** Poef: weg in een wolk paarse rook. */
   vanish(ctx) {
     this.poof(ctx.effects, this.position);
-    this.say('Achter je!', 1.6, true);
+    this.say(pick(this.taunts.teleport), 1.6, true);
     this.mesh.visible = false;
     this.trail.cut();
     this.puppet.velocity.set(0, 0, 0);
@@ -1350,12 +1414,12 @@ export class OmarFighter extends Boss {
     this.setState('achter', this.cfg.windup.teleport[ph]);
   }
 
-  /** Een wolk paarse rook (verdwijnen en verschijnen). */
+  /** Een wolk rook (verdwijnen en verschijnen). */
   poof(effects, at) {
     const c = at.clone().setY(at.y + 1);
-    effects.burst(c, 0xb04dff, { count: 26, speed: 4, size: 0.2, life: 0.55, up: 1.5, gravity: 0 });
-    effects.burst(c, 0x2a0a3a, { count: 14, speed: 2.5, size: 0.28, life: 0.7, up: 1, gravity: -0.2 });
-    effects.shockwave(at, 0xd04dff, 1.6);
+    effects.burst(c, this.cfg.colors.main, { count: 26, speed: 4, size: 0.2, life: 0.55, up: 1.5, gravity: 0 });
+    effects.burst(c, this.cfg.colors.dark, { count: 14, speed: 2.5, size: 0.28, life: 0.7, up: 1, gravity: -0.2 });
+    effects.shockwave(at, this.cfg.colors.glow, 1.6);
     play('poef');
   }
 
@@ -1431,11 +1495,9 @@ export class OmarFighter extends Boss {
 
   /** BOEM: de bliksem slaat in. */
   strike(ctx, s) {
-    const bolt = makeBolt(s.pos);
-    this.scene.add(bolt);
-    this.bolts.push({ mesh: bolt, life: 0.25 });
+    this.bolts.add(makeBolt(s.pos, { color: this.cfg.colors.bolt }), 0.25);
     if (s.first) play('donder');
-    ctx.effects.shockwave(s.pos, 0xc9a0ff, 2.4);
+    ctx.effects.shockwave(s.pos, this.cfg.colors.spark, 2.4);
     ctx.effects.burst(s.pos.clone().setY(s.pos.y + 0.3), 0xe8d0ff, { count: 22, speed: 8, size: 0.14, life: 0.5, up: 4 });
     ctx.effects.shake(0.35);
     const player = ctx.player;
@@ -1490,15 +1552,7 @@ export class OmarFighter extends Boss {
         this.strike(ctx, s);
       }
     }
-    for (let i = this.bolts.length - 1; i >= 0; i--) {
-      const b = this.bolts[i];
-      b.life -= dt;
-      b.mesh.visible = b.life > 0 && Math.random() < 0.8; // flikkeren
-      if (b.life <= 0) {
-        this.scene.remove(b.mesh);
-        this.bolts.splice(i, 1);
-      }
-    }
+    this.bolts.update(dt);
     // Schaduwklonen: verschijnen, op je af stormen, verdwijnen
     const C = this.cfg.schaduwen;
     const player = ctx.player;
@@ -1531,7 +1585,7 @@ export class OmarFighter extends Boss {
     this.updateLook(dt, ctx.effects);
   }
 
-  /** Gloeiende rode ogen op zijn hoofd, en een duistere aura van paarse rook (rood als hij boos is). */
+  /** Gloeiende rode ogen op zijn hoofd, en een duistere aura van rook (rood als hij boos is). */
   updateLook(dt, effects) {
     const slot = this.puppet.headSlot;
     const show = !!slot && this.mesh.visible && this.mode !== 'verslagen';
@@ -1550,19 +1604,19 @@ export class OmarFighter extends Boss {
     if (!effects || this.mode === 'troon') return;
     this.auraTimer -= dt;
     if (this.auraTimer > 0) return;
-    this.auraTimer = this.phase2 ? 0.03 : 0.05;
+    const A = this.cfg.aura;
+    const ph = this.phase2 ? 1 : 0;
+    this.auraTimer = A.every[ph];
     const a = Math.random() * Math.PI * 2;
     const r = 0.25 + Math.random() * 0.35;
     const at = this.position.clone().add(new THREE.Vector3(Math.sin(a) * r, 0.2 + Math.random() * 1.7, Math.cos(a) * r));
-    const colors = this.phase2 ? [0xb0101e, 0x1a0006, 0xff3b2a] : [0x4a1070, 0x14031f, 0x7a2ab0];
-    effects.burst(at, colors[Math.floor(Math.random() * colors.length)], { count: 1, speed: 0.3, size: this.phase2 ? 0.2 : 0.15, life: 0.8, up: 1.4, gravity: -0.3 });
+    effects.burst(at, pick(ph ? A.boos : A.colors), { count: 1, speed: 0.3, size: A.size[ph], life: A.life, up: 1.4, gravity: -0.3 });
   }
 
   /** Alle bliksems en schaduwen weg (nieuw gevecht, of hij is verslagen). */
   clearMagic() {
     this.strikes.length = 0;
-    for (const b of this.bolts) this.scene.remove(b.mesh);
-    this.bolts.length = 0;
+    this.bolts.clear();
     for (const c of this.clones) this.scene.remove(c.mesh);
     this.clones.length = 0;
   }
@@ -1579,7 +1633,7 @@ export class OmarFighter extends Boss {
       p.body.rotation.set(0, 0, 0);
       this.mesh.visible = true; // (net weggeteleporteerd? dan komt hij terug)
       p.stats.boost = 1;
-      this.say('HAHAHA! Ik ben de baas!', 3, true);
+      this.say(pick(this.taunts.winnen), 3, true);
     }
     if (!this.laughed) {
       this.laughed = true;
@@ -1588,7 +1642,7 @@ export class OmarFighter extends Boss {
     this.laughTimer -= dt;
     if (this.laughTimer <= 0) {
       this.laughTimer = 0.7;
-      ctx.effects.floatText(this.center.setY(this.position.y + 2.4), Math.random() < 0.5 ? 'HA!' : 'HAHA!', '#d9a3ff', 0.55);
+      ctx.effects.floatText(this.center.setY(this.position.y + 2.4), Math.random() < 0.5 ? 'HA!' : 'HAHA!', this.cfg.colors.text, 0.55);
     }
     if (p.onGround) this.animateMode(dt);
     else {
@@ -1671,13 +1725,13 @@ export class OmarFighter extends Boss {
     for (const ev of p.events) {
       if (ev === 'dash') {
         play('dash'); // (zo hoor je hem ook aankomen als je hem niet ziet)
-        ctx.effects.burst(this.position.clone().setY(this.position.y + 0.9), 0xb04dff, { count: 16, speed: 3, size: 0.1, life: 0.35, gravity: 0 });
+        ctx.effects.burst(this.position.clone().setY(this.position.y + 0.9), this.cfg.colors.main, { count: 16, speed: 3, size: 0.1, life: 0.35, gravity: 0 });
       } else if (ev === 'roll') play('swing');
       else if (ev === 'drink') play('gulp');
       else if (ev === 'doubleJump') {
         play('jump');
         this.log('dubbele sprong');
-        ctx.effects.shockwave(this.position, 0xd9a3ff, 1.2);
+        ctx.effects.shockwave(this.position, this.cfg.colors.light, 1.2);
       } else if (ev === 'slamLand') this.slamImpact(ctx);
       else if (ev === 'heal') {
         const heal = Math.round(this.info.hp * this.cfg.drinkHeal);
@@ -1685,7 +1739,7 @@ export class OmarFighter extends Boss {
         play('heal');
         ctx.effects.burst(this.center, 0x7dff9a, { count: 18, speed: 3, size: 0.09, life: 0.7, up: 3, gravity: -0.3 });
         ctx.effects.floatText(this.center.setY(this.position.y + 2.3), `+${heal}`, '#7dff9a', 0.55);
-        this.say('Ahh, lekker! Nu ben ik weer sterk!', 2.2, true);
+        this.say(pick(this.taunts.geheeld), 2.2, true);
       } else if (ev === 'fire') {
         play('charge');
         ctx.effects.burst(this.center, 0xff7a1a, { count: 24, speed: 4, size: 0.12, life: 0.6, up: 3, gravity: -0.2 });
@@ -1699,8 +1753,8 @@ export class OmarFighter extends Boss {
     const pos = this.position.clone().setY(0);
     this.slamLanded = true;
     play('slam');
-    ctx.effects.shockwave(pos, 0xb04dff, this.cfg.slamRadius);
-    ctx.effects.burst(pos.clone().setY(0.3), 0xb04dff, { count: 26, speed: 8, size: 0.16, life: 0.7, up: 2 });
+    ctx.effects.shockwave(pos, this.cfg.colors.main, this.cfg.slamRadius);
+    ctx.effects.burst(pos.clone().setY(0.3), this.cfg.colors.main, { count: 26, speed: 8, size: 0.16, life: 0.7, up: 2 });
     ctx.effects.burst(pos.clone().setY(0.3), 0x9a8f7a, { count: 14, speed: 6, size: 0.18, life: 0.6, up: 2 });
     const player = ctx.player;
     const d = flatDist(player.position, pos);
@@ -1738,7 +1792,7 @@ export class OmarFighter extends Boss {
     const tip = new THREE.Vector3();
     if (swinging) {
       p.sword.getBladeWorld(base, tip);
-      this.trail.setColor(p.fireTimer > 0 ? 0xff7a1a : p.spinTimer > 0 ? 0xd9a3ff : 0xb04dff);
+      this.trail.setColor(p.fireTimer > 0 ? 0xff7a1a : p.spinTimer > 0 ? this.cfg.colors.light : this.cfg.colors.main);
       this.trail.addSample(base, tip);
     }
     if (p.fireTimer > 0 && this.effects && Math.random() < 0.7) {
