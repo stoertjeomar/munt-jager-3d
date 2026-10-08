@@ -1001,7 +1001,8 @@ function updateBossFights() {
 
 // ---------- Game loop ----------
 const clock = new THREE.Clock();
-const bossCtx = { player, effects, hurtPlayer, spawnEnemy: addSummon, camera, projectiles };
+// hitstop(t): het spel staat heel even stil (bijv. als Sky's flits je raakt)
+const bossCtx = { player, effects, hurtPlayer, spawnEnemy: addSummon, camera, projectiles, hitstop: (t) => { state.hitstop = Math.max(state.hitstop, t); } };
 // Gewone bosses doen meer schade (ook met vuurballen) en zijn sneller: zie BOSS_POWER in bosses.js
 const strongBossCtx = {
   ...bossCtx,

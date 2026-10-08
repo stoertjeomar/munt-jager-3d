@@ -188,8 +188,8 @@ export class Boss {
       return;
     }
 
-    // Fase 2 bij de helft van het leven
-    if (!this.phase2 && this.hp <= this.info.hp / 2) {
+    // Fase 2 bij de helft van het leven (of een ander deel: phase2At, zie Sky in skyFighter.js)
+    if (!this.phase2 && this.hp <= this.info.hp * (this.phase2At ?? 0.5)) {
       this.phase2 = true;
       play('charge');
       ctx.effects.shake(0.4);

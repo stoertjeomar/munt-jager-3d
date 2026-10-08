@@ -886,7 +886,7 @@ export class Music {
     // Muziek gaat via een eigen volumeknop, met een echo voor de melodie (dat klinkt ruimtelijker)
     this.out = a.ctx.createGain();
     this.out.gain.value = 0.75; // muziek-volume (hoger = harder)
-    this.out.connect(a.master);
+    this.out.connect(a.music); // (via de muziekknop in audio.js: zo kan een boss de muziek even zachter zetten)
     this.fx = a.ctx.createGain();
     const delay = a.ctx.createDelay(1);
     delay.delayTime.value = 0.28;

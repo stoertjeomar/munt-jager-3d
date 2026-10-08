@@ -154,9 +154,9 @@ export function createSkyWorld(scene) {
       side: THREE.BackSide,
       depthWrite: false,
       fog: false,
-      uniforms: { time: { value: 0 }, flash: { value: 0 }, flashDir: { value: new THREE.Vector3(0, 0.3, -1).normalize() } },
+      uniforms: { time: { value: 0 }, flash: { value: 0 }, dark: { value: 0 }, flashDir: { value: new THREE.Vector3(0, 0.3, -1).normalize() } },
       vertexShader: `varying vec3 vPos; void main() { vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `uniform float time; uniform float flash; uniform vec3 flashDir; varying vec3 vPos;
+      fragmentShader: `uniform float time; uniform float flash; uniform float dark; uniform vec3 flashDir; varying vec3 vPos;
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float noise(vec2 p) {
           vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -179,6 +179,7 @@ export function createSkyWorld(scene) {
           float clouds = smoothstep(0.45, 0.8, c * 0.7 + c2 * 0.4);
           col = mix(col, vec3(0.32, 0.35, 0.46), clouds * smoothstep(-0.05, 0.2, h) * 0.8);
           col *= 0.85 + 0.25 * c2;
+          col *= 1.0 - dark * 0.55; // fase 2 van Sky: de lucht wordt donker
           // Bliksemflits: de wolken lichten op (vooral waar de bliksem insloeg)
           float near = pow(max(dot(dir, normalize(flashDir)), 0.0), 6.0);
           col += vec3(0.75, 0.78, 1.0) * flash * (0.25 + clouds * 0.6 + near * 1.2);
@@ -368,7 +369,11 @@ export function createSkyWorld(scene) {
 
   // ---------- Onweer: de bliksem slaat in (vooral in de verte) en de donder rommelt ----------
   const bolts = new Bolts(scene);
-  const storm = { next: 2, flash: 0, thunder: [] }; // thunder = donder die nog moet klinken: { t, sound }
+  // thunder = donder die nog moet klinken: { t, sound }. mood = hoe donker en wild (0 = gewoon, 1 = fase 2 van Sky)
+  const storm = { next: 2, flash: 0, thunder: [], mood: 0, wantMood: 0 };
+  const hemiBase = hemi.intensity;
+  const sunBase = sun.intensity;
+  const fogDark = new THREE.Color(0x3a4256);
   let lastTime = performance.now() / 1000;
 
   /** Een bliksem slaat in, ergens om je heen. Hoe verder weg, hoe later je de donder hoort. */
@@ -409,6 +414,11 @@ export function createSkyWorld(scene) {
       partyLights: glowLights.map((g) => g.light), // voor het feest als je Sky verslaat (sky.js)
       /** Nu meteen een bliksem (voor het filmpje). */
       strike: (pos) => strike(pos),
+      /** Hoe wild het onweer is: 0 = gewoon, 1 = donker en veel meer bliksem (fase 2 van Sky, zie skyFighter.js). */
+      setStorm(mood) {
+        storm.wantMood = mood;
+        if (mood > storm.mood) storm.next = Math.min(storm.next, 0.3);
+      },
     },
     /**
      * Elke frame: lucht en licht reizen mee met de speler, wolken drijven, kristallen dobberen,
@@ -436,7 +446,7 @@ export function createSkyWorld(scene) {
       if (!document.hidden) {
         storm.next -= dt;
         if (storm.next <= 0) {
-          storm.next = 3 + Math.random() * 6;
+          storm.next = (3 + Math.random() * 6) * (1 - 0.7 * storm.mood);
           strike(playerPos);
           if (Math.random() < 0.35) storm.next = 0.15 + Math.random() * 0.3; // soms twee vlak na elkaar
         }
@@ -450,10 +460,16 @@ export function createSkyWorld(scene) {
       }
       storm.flash = Math.max(0, storm.flash - dt * 4);
       const f = storm.flash * (0.7 + Math.random() * 0.3); // flikkeren
+      // Langzaam donkerder (of weer lichter)
+      storm.mood += Math.sign(storm.wantMood - storm.mood) * Math.min(Math.abs(storm.wantMood - storm.mood), dt * 0.5);
+      const m = storm.mood;
       sky.material.uniforms.flash.value = f;
+      sky.material.uniforms.dark.value = m;
       sea.material.uniforms.flash.value = f;
       flashLight.intensity = f * 3;
-      scene.fog.color.copy(fogColor).lerp(fogFlash, Math.min(1, f * 0.5));
+      hemi.intensity = hemiBase * (1 - 0.45 * m);
+      sun.intensity = sunBase * (1 - 0.5 * m);
+      scene.fog.color.copy(fogColor).lerp(fogDark, m * 0.7).lerp(fogFlash, Math.min(1, f * 0.5));
       bolts.update(dt);
     },
   };
