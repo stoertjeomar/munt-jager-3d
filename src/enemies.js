@@ -20,7 +20,13 @@ import { seededRandom } from './world.js';
 //   modelYaw      = het 3D-model een stukje draaien (als het niet naar voren kijkt)
 //   tint / glow   = het 3D-model een andere kleur geven (en laten gloeien)
 //   build         = zelfgebouwd poppetje van een andere soort (bijv. 'spook': de Wolkenwacht ziet eruit als een spook)
+//   heart         = kans op een hartje als je hem verslaat, ook als een boss hem opriep (0.25 = 1 op de 4)
 export const ENEMY_TYPES = {
+  // De bullys van Rames: skeletten die uit de grond komen als hij ze roept (zie ramesFighter.js)
+  skelet: {
+    name: 'Bully', hp: 70, radius: 0.45, height: 1.8, color: 0xe6dfc8, ai: 'zombie',
+    patrolSpeed: 1.6, chaseSpeed: 4, sight: 40, knockback: 1, damage: 16, noContact: true, stompable: false, runes: 0, heart: 0.25,
+  },
   // Omars schaduwkrijgers: ze komen alleen bij een Omar-invasie (zie invasions.js)
   schaduw: {
     name: 'Schaduwkrijger', hp: 120, radius: 0.5, height: 1.95, color: 0x7a2ab0, model: 'models/extra/schaduw.glb', ai: 'zombie',
@@ -316,6 +322,56 @@ export function buildGolem(type) {
   return { body, materials: [stone, dark, moss], eyes, eyeMat, arms, pebbles };
 }
 
+/** Een skelet (een bully van Rames): schedel met groene ogen, ribben, losse armen en benen, en een bot als knuppel. */
+function buildSkeleton(type) {
+  const body = new THREE.Group();
+  const bone = mat(type.color, { roughness: 0.65 });
+  const dark = new THREE.MeshBasicMaterial({ color: 0x08060c });
+  const glow = new THREE.MeshBasicMaterial({ color: 0x7dff8a, toneMapped: false });
+  const part = (geo, m, x, y, z, parent = body) => {
+    const mesh = new THREE.Mesh(geo, m);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = m === bone;
+    parent.add(mesh);
+    return mesh;
+  };
+  // Ruggengraat, bekken en ribben
+  part(new THREE.CylinderGeometry(0.035, 0.035, 0.55, 6), bone, 0, 1.12, -0.03);
+  part(new THREE.BoxGeometry(0.3, 0.12, 0.14), bone, 0, 0.84, 0);
+  for (let i = 0; i < 4; i++) part(new THREE.TorusGeometry(0.15 - i * 0.012, 0.018, 5, 12), bone, 0, 1.33 - i * 0.09, 0.02).rotation.x = Math.PI / 2;
+  part(new THREE.BoxGeometry(0.44, 0.05, 0.08), bone, 0, 1.42, 0); // schouders
+  // Schedel: holle ogen met een groen lichtje, en een kaak
+  const head = new THREE.Group();
+  head.position.y = 1.6;
+  body.add(head);
+  part(new THREE.SphereGeometry(0.15, 12, 10), bone, 0, 0.05, 0, head).scale.set(1, 1.1, 1.05);
+  part(new THREE.BoxGeometry(0.15, 0.08, 0.13), bone, 0, -0.09, 0.03, head);
+  for (const side of [-1, 1]) {
+    part(new THREE.SphereGeometry(0.042, 8, 6), dark, side * 0.058, 0.05, 0.125, head);
+    part(new THREE.SphereGeometry(0.018, 6, 6), glow, side * 0.058, 0.05, 0.155, head);
+  }
+  // Armen en benen: draaien om de schouder en de heup
+  const limb = (x, y, length) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, y, 0);
+    body.add(pivot);
+    part(new THREE.CylinderGeometry(0.03, 0.025, length, 6), bone, 0, -length / 2, 0, pivot);
+    part(new THREE.SphereGeometry(0.045, 6, 6), bone, 0, -length, 0, pivot);
+    return pivot;
+  };
+  const arms = [limb(-0.25, 1.42, 0.6), limb(0.25, 1.42, 0.6)];
+  const legs = [limb(-0.1, 0.8, 0.78), limb(0.1, 0.8, 0.78)];
+  for (const leg of legs) part(new THREE.BoxGeometry(0.09, 0.04, 0.2), bone, 0, -0.78, 0.06, leg);
+  // Een groot bot als knuppel in zijn rechterhand
+  const club = new THREE.Group();
+  club.position.y = -0.6;
+  club.rotation.x = Math.PI / 2;
+  arms[0].add(club);
+  part(new THREE.CylinderGeometry(0.035, 0.03, 0.7, 6), bone, 0, 0.3, 0, club);
+  for (const side of [-1, 1]) part(new THREE.SphereGeometry(0.06, 6, 6), bone, side * 0.04, 0.66, 0, club);
+  return { body, materials: [bone], head, arms, legs };
+}
+
 // ---------- Levensbalk boven de vijand ----------
 
 function buildHealthBar(width) {
@@ -342,6 +398,7 @@ class Enemy {
     this.mesh = new THREE.Group();
     let model;
     if (type.model) model = { body: new THREE.Group(), materials: [] };
+    else if (typeKey === 'skelet') model = buildSkeleton(type);
     else if (typeKey === 'spook' || type.build === 'spook') model = buildGhost(type);
     else if (typeKey === 'golem') model = buildGolem(type);
     else model = buildSlime(type, typeKey === 'slijmbal');
@@ -743,6 +800,7 @@ class Enemy {
       if (this.anim <= 0) this.playAnim(speed === 0 ? 'Idle' : this.chasing ? 'Run' : 'Walk');
       this.mixer.update(dt);
     } else if (type.model) this.animateModel(dt, speed);
+    else if (this.typeKey === 'skelet') this.animateSkeleton(dt, speed);
     else if (this.typeKey === 'golem') this.animateGolem(dt, ctx.time);
     else if (type.flies) this.animateGhost(ctx.time);
     else this.animateSlime(dt, ctx.time);
@@ -926,6 +984,11 @@ class Enemy {
           const k = Math.sin(Math.min(1, (0.77 - this.stateTimer) / 0.5) * Math.PI);
           this.body.rotation.x = 0.4 * k;
           this.body.position.z = 0.35 * k;
+          if (this.typeKey === 'skelet') {
+            // Skelet: knuppel hoog boven zijn hoofd, en dan met een klap naar beneden
+            const t = 0.77 - this.stateTimer;
+            this.model.arms[0].rotation.x = -2.7 * Math.min(1, t / 0.2) + 2.1 * THREE.MathUtils.clamp((t - 0.3) / 0.12, 0, 1);
+          }
         }
         if (!this.hitDone && this.stateTimer < 0.42) {
           this.hitDone = true;
@@ -1072,6 +1135,22 @@ class Enemy {
       return false;
     }
     return false;
+  }
+
+  /** Skelet: rammelend lopen, met zwaaiende armen en benen. */
+  animateSkeleton(dt, speed) {
+    const { arms, legs, head } = this.model;
+    const moving = speed > 0 ? 1 : 0;
+    this.gait += dt * (this.chasing ? 11 : 6);
+    const step = Math.sin(this.gait + this.phase) * moving;
+    legs[0].rotation.x = step * 0.7;
+    legs[1].rotation.x = -step * 0.7;
+    arms[0].rotation.x = -0.5 - step * 0.5; // de arm met de knuppel houdt hij omhoog
+    arms[1].rotation.x = step * 0.6;
+    this.body.position.set(0, Math.abs(step) * 0.05, 0);
+    this.body.rotation.x = THREE.MathUtils.lerp(this.body.rotation.x, this.chasing ? 0.2 : 0.05, Math.min(1, 8 * dt));
+    this.body.rotation.z = step * 0.05;
+    head.rotation.z = Math.sin(this.gait * 0.5 + this.phase) * 0.12; // zijn hoofd wiebelt los op zijn nek
   }
 
   animateSlime(dt, time) {

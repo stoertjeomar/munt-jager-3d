@@ -108,6 +108,8 @@ function freshSave() {
       kelken: 0, // Wolkenkelken (van de Wolkenwachten in het Rotshoogland)
       drops: 0, // zo vaak liet Sky NightWalker vallen
     },
+    // Rames (zie rames.js): heb je zijn lange filmpje al gezien, en hoe vaak je won of verloor
+    rames: { seen: false, wins: 0, losses: 0 },
     victory: false,
   };
 }

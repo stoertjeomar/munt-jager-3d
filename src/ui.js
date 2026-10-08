@@ -39,12 +39,13 @@ function drawLand(ctx, toMap, scale, bosses) {
     const [mx, my] = toMap(hx - w / 2, hz - d / 2);
     ctx.fillRect(mx, my, w * scale, d * scale);
   }
-  // Arena's (doodshoofd, of een vinkje als je die boss al versloeg; bij Omar een paarse kroon)
+  // Arena's (doodshoofd, of een vinkje als je die boss al versloeg; bij Omar een paarse kroon, het Knekelhof een paars kruis)
   for (const a of ARENAS) {
     const [mx, my] = toMap(a.center.x, a.center.z);
     const beaten = bosses.includes(a.id);
-    ctx.fillStyle = a.id === 'omar' ? '#c77dff' : beaten ? '#8dff9a' : '#ff5a5a';
-    ctx.fillText(a.id === 'omar' ? '♛' : beaten ? '✔' : '☠', mx, my);
+    const grave = a.kind === 'kerkhof';
+    ctx.fillStyle = a.id === 'omar' || (grave && !beaten) ? '#c77dff' : beaten ? '#8dff9a' : '#ff5a5a';
+    ctx.fillText(a.id === 'omar' ? '♛' : beaten ? '✔' : grave ? '✝' : '☠', mx, my);
   }
 }
 

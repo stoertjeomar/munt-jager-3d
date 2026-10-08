@@ -17,6 +17,7 @@
 //               Hij staat in elk level vlak bij het begin.
 //   blocks    = losse stenen blokken / platforms [x, y, z, breedte, hoogte, diepte, kleur]
 //   houses    = huizen (alleen in level 1: Muntdorp)
+//   secret    = een geheime boss met een eigen arena naast het pad: { boss, name, arena: [x, z, straal], path: zijpad ernaartoe }
 
 export const SAVE_KEY = 'munt-jager-3d-save-v3';
 
@@ -101,7 +102,9 @@ export const LEVELS = [
     npcs: [['ridder', 22, 82, 'ridder-zombies'], ['omar', 1.5, 80]],
     questItems: {},
     blocks: [[-26, 1.2, 36, 6, 2.4, 1], [-30, 1.2, 40, 1, 2.4, 6], [24, 1.5, -10, 8, 3, 1]],
-    animals: [['bear', [[-24, 60], [24, 0], [-24, -30]], 4]],
+    // Het Knekelhof: het kerkhof van Rames, de ondode boss (zie rames.js). Een zijpad bij de Woudruïne loopt ernaartoe.
+    secret: { boss: 'rames', name: 'Het Knekelhof', arena: [19, 7, 14], path: [[-13.3, 7], [4.5, 7]] },
+    animals: [['bear', [[-24, 60], [27, -26], [-24, -30]], 4]],
     trees: 170,
   },
   {
@@ -185,6 +188,17 @@ function buildOpenWorld() {
     const a = world.paths[i];
     const b = world.paths[i + 1];
     world.paths.push([a[a.length - 2], b[0]]);
+  }
+  // Geheime bosses (Rames op het Knekelhof): een eigen arena met een zijpad ernaartoe. Ze komen ná de gewone
+  // arena's en paden, zodat de volgorde daarvan hetzelfde blijft. `gate` = aan welke kant de poort zit (waar het zijpad aankomt).
+  for (const r of regions) {
+    const secret = r.level.secret;
+    if (!secret) continue;
+    const [x, z] = r.t(secret.arena[0], secret.arena[1]);
+    const path = secret.path.map(([px, pz]) => r.t(px, pz));
+    const [gx, gz] = path[path.length - 1];
+    world.arenas.push({ id: secret.boss, name: secret.name, x, z, radius: secret.arena[2], region: r.index, kind: 'kerkhof', gate: Math.atan2(gx - x, gz - z) });
+    world.paths.push(path);
   }
   return world;
 }

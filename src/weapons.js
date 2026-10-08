@@ -85,6 +85,13 @@ export const WEAPONS = {
     build: 'nightwalker', blade: [0.3, 1.0], trail: 0xffd23a, lightning: true,
     info: 'Het bliksemzwaard van Sky. Elke 3e klap slaat de bliksem in, en met C word je een wolk.',
   },
+  //   paint = een onderdeel van het model een andere kleur geven: { naam van het materiaal: [kleur, gloei-kleur, hoe fel] }
+  schaduwkatana: {
+    name: 'Schaduwkatana', rarity: 'legendarisch', damage: 44, stamina: 11, range: 3.0, swingTime: 0.24,
+    file: 'models/wapens/Katana.glb', scale: 0.36, blade: [0.3, 1.2], trail: 0xa64dff,
+    paint: { Metal: [0x1a1030, 0x8a3dff, 1.6], Golden: [0x5b3fc4, 0x2a1466, 0.6] },
+    info: 'De katana van Rames, vol duistere magie. Niet het zwaarste wapen, wel het snelste.',
+  },
 };
 
 export const START_WEAPON = 'shortsword';
@@ -123,6 +130,13 @@ export function createWeaponMesh(key, scaleMultiplier = 1) {
           child.material.emissiveMap = child.material.map;
           child.material.emissive?.set(0xffffff);
           child.material.emissiveIntensity = weapon.glow;
+        }
+        // Eigen kleuren (de zwarte, paars gloeiende kling van de Schaduwkatana)
+        const paint = weapon.paint?.[child.material.name];
+        if (paint) {
+          child.material.color.set(paint[0]);
+          child.material.emissive?.set(paint[1]);
+          child.material.emissiveIntensity = paint[2];
         }
       });
       group.add(model);

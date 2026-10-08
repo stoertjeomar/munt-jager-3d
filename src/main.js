@@ -27,6 +27,7 @@ import { NightWalker, NIGHTWALKER } from './nightwalker.js';
 import { Dragon } from './dragon.js';
 import { Pet, PET } from './pet.js';
 import { Invasions } from './invasions.js';
+import { RamesFlow } from './rames.js';
 
 // ---------- Basis: renderer, scene, camera ----------
 // Geen "antialias" hier: alles gaat eerst door de nabewerking, daar zitten de gladde randjes (zie graphics.js).
@@ -231,7 +232,7 @@ function onDefeated(target) {
     giveRunes(target.type.runes);
     pickups.coinBurst(target.center, target.type.runes);
     if (Math.random() < 0.2) pickups.dropHeart(target.position);
-  }
+  } else if (Math.random() < (target.type.heart ?? 0)) pickups.dropHeart(target.position); // de bullys van Rames laten soms een hartje vallen
   if (state.lockTarget === target) state.lockTarget = null;
 }
 
@@ -246,6 +247,7 @@ const BOSS_REWARDS = {
 function onBossDefeated(boss) {
   if (boss.id === 'omar') return omar.onWin(boss); // Omar verslagen: eigen feest, beloning en terugreis (omar.js)
   if (boss.id === 'sky') return sky.onWin(boss); // Sky ook (sky.js)
+  if (boss.id === 'rames') return rames.onWin(boss); // Rames verslagen: zijn laatste filmpje en zijn katana (rames.js)
   const firstTime = !stats.data.bosses.includes(boss.id);
   play('win');
   effects.shake(0.5);
@@ -622,7 +624,8 @@ function die() {
   if (invasions.active) invasions.finish(false, 'dood');
   state.deathTimer = 4;
   play('lose');
-  ui.banner('JE BENT GESTORVEN', 'Je komt terug bij het laatste checkpoint.', 'death', 3.8);
+  // (ga je dood tegen Rames, dan lacht hij je uit: rames.js)
+  ui.banner('JE BENT GESTORVEN', rames.onPlayerDeath() ?? 'Je komt terug bij het laatste checkpoint.', 'death', 3.8);
 }
 
 function respawnAfterDeath() {
@@ -923,9 +926,11 @@ music.preload(IN_CASTLE ? 'omar' : IN_SKY ? 'sky' : 'boss');
 /** Welk liedje past nu? Elk gebied heeft zijn eigen deuntje, bosses hebben enge muziek en Omar de engste. */
 function updateMusic() {
   const boss = state.activeBoss;
+  const ramesMusic = rames.musicWanted(); // Rames regelt zijn eigen muziek (ook stilte, als hij "dood" neervalt)
   if (!gameStarted) music.play(null);
   else if (IN_CASTLE) music.play(...omar.musicWanted());
   else if (IN_SKY) music.play(...sky.musicWanted());
+  else if (ramesMusic) music.play(...ramesMusic);
   else if (boss && boss.awake && !boss.dead) music.play('boss');
   else music.play(currentRegion()?.music ?? LEVEL.music ?? 'weide');
   music.update();
@@ -969,6 +974,10 @@ function updateBossFights() {
       if (b.dead || b.awake) continue;
       const d = player.position.clone().setY(0).distanceTo(b.arena.center);
       if (d < b.arena.radius - 1.5) {
+        if (b.id === 'rames') {
+          rames.enter(); // Rames begint met een filmpje, en start daarna zelf het gevecht (rames.js)
+          continue;
+        }
         b.wake();
         state.activeBoss = b;
         ui.banner(b.name.toUpperCase(), BOSS_INFO[b.id].title, 'gold', 3);
@@ -1006,6 +1015,8 @@ const sky = new SkyFlow({ scene, camera, cameraRig, input, state, stats, ui, pla
 const nightwalker = new NightWalker({ scene, player, effects });
 // Af en toe valt Omars schaduwleger een kamp aan (invasions.js)
 const invasions = new Invasions({ scene, ui, stats, effects, giveRunes, addEnemy: addSummon, removeEnemy });
+// Rames, de ondode boss op het Knekelhof in het Spookwoud: zijn filmpjes en zijn beloning (rames.js)
+const rames = new RamesFlow({ camera, cameraRig, input, state, stats, ui, player, bosses, world, effects, pickups, projectiles, dragon, omar, giveKills, giveRunes, announceNewPowers, removeSummons });
 
 function gameLoop() {
   // realDt = tijd sinds vorige frame. Begrensd zodat een lag-piek je niet door de vloer laat vallen.
@@ -1167,6 +1178,7 @@ function gameLoop() {
   ui.update(realDt, player, state.activeBoss, elapsed);
   omar.update(realDt); // Omar: keuzes, reizen en tussenfilmpjes (mag de camera overnemen)
   sky.update(realDt); // Sky: de Donderpoort, de Wolkenkelken en het Wolkenrijk (sky.js)
+  rames.update(realDt); // Rames: zijn filmpjes (mag de camera ook overnemen)
   updateRegion(realDt);
   updateMusic();
   updateAmbience(dt, { theme: currentRegion()?.theme ?? LEVEL.theme, night: world.night ?? 0 });
@@ -1228,5 +1240,5 @@ window.game = { scene, player, enemies, bosses, sites, npcs, stats, ui, world, s
 window.game.omar = omar;
 window.game.sky = sky;
 window.game.nightwalker = nightwalker;
-Object.assign(window.game, { dragon, pet, invasions, travelTo, hatchPet });
+Object.assign(window.game, { dragon, pet, invasions, rames, travelTo, hatchPet });
 window.game.music = music;

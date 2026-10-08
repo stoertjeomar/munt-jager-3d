@@ -10,7 +10,10 @@ import { play } from './audio.js';
 // Loop je de arena in, dan gaat er een mistmuur omhoog en begint het gevecht.
 // Elke boss heeft een eigen set aanvallen, en wordt bij de helft van zijn leven sneller en gemener (fase 2).
 // Omar woont niet in een level maar in zijn eigen kasteel: hij staat in omarFighter.js
-// en meldt zich zelf aan in BOSS_CLASSES (onderaan dit bestand). Sky (skyFighter.js) doet hetzelfde in het Wolkenrijk.
+// en meldt zich zelf aan in BOSS_CLASSES (onderaan dit bestand).
+// Rames is een geheime, ondode boss op het Knekelhof in het Spookwoud: hij staat in ramesFighter.js
+// (en zijn filmpjes in rames.js) en meldt zich ook zelf aan.
+// Sky (skyFighter.js) doet hetzelfde in het Wolkenrijk.
 
 export const BOSS_INFO = {
   koning: { name: 'Koning Slijm', title: 'Heerser van de Ruïnevallei', hp: 900, runes: 600 },
@@ -19,6 +22,8 @@ export const BOSS_INFO = {
   mario: { name: 'Budget Mario', title: 'De Vliegende Loodgieter', hp: 650, runes: 300 },
   omar: { name: 'Omar', title: 'De maker van dit spel', hp: 1600, runes: 3000 }, // hp hangt af van jouw level (omarFighter.js)
   sky: { name: 'Sky', title: 'Heer van de Storm', hp: 1700, runes: 1500 }, // vecht zoals Omar (skyFighter.js)
+  // fog = kleur van zijn mistmuur. Als zijn leven op is staat hij nog één keer op (hij is ondood): zie RAMES in ramesFighter.js
+  rames: { name: 'Rames', title: 'Heer van de Ondoden', hp: 1800, runes: 2500, fog: 0x9b4dff },
 };
 
 // Hoe sterk de gewone bosses zijn (Omar en Sky niet: die hebben hun eigen instellingen in omarFighter.js en skyFighter.js)
@@ -42,19 +47,19 @@ function flatDist(a, b) {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
 
-/** De gouden mistmuur rondom een arena. */
-function createFogWall(arena) {
+/** De mistmuur rondom een arena: goud, of de kleur van de boss (BOSS_INFO.fog). */
+function createFogWall(arena, color) {
   const material = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     side: THREE.DoubleSide,
-    uniforms: { time: { value: 0 }, opacity: { value: 0 } },
+    uniforms: { time: { value: 0 }, opacity: { value: 0 }, tint: { value: color === undefined ? new THREE.Color(1.0, 0.85, 0.45) : new THREE.Color(color) } },
     vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-    fragmentShader: `uniform float time; uniform float opacity; varying vec2 vUv;
+    fragmentShader: `uniform float time; uniform float opacity; uniform vec3 tint; varying vec2 vUv;
       void main() {
         float wave = sin(vUv.x * 60.0 + time * 1.5) * 0.5 + sin(vUv.x * 23.0 - time * 2.3 + vUv.y * 6.0) * 0.5;
         float a = (1.0 - vUv.y) * (0.45 + 0.25 * wave) * opacity;
-        gl_FragColor = vec4(mix(vec3(1.0, 0.85, 0.45), vec3(1.0), vUv.y), a);
+        gl_FragColor = vec4(mix(tint, vec3(1.0), vUv.y), a);
         #include <colorspace_fragment>
       }`,
   });
@@ -73,7 +78,7 @@ export class Boss {
     this.scene = scene;
     this.mesh = new THREE.Group();
     scene.add(this.mesh);
-    this.fog = createFogWall(arena);
+    this.fog = createFogWall(arena, this.info.fog);
     scene.add(this.fog);
     this.materials = [];
     this.events = []; // geplande gebeurtenissen: { t, fn }
@@ -1021,7 +1026,7 @@ class FlyingMario extends Boss {
   }
 }
 
-// Welke boss hoort bij welke arena-id. Omar (omarFighter.js) zet zichzelf hier ook bij.
+// Welke boss hoort bij welke arena-id. Omar (omarFighter.js) en Rames (ramesFighter.js) zetten zichzelf hier ook bij.
 export const BOSS_CLASSES = { koning: KingSlime, ridder: FallenKnight, reus: StoneGiant, mario: FlyingMario };
 
 /** Maak alle bosses. `defeated` = lijst met id's van bosses die al verslagen zijn (uit de save). */
