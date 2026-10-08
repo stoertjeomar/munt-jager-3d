@@ -311,7 +311,7 @@ export class UI {
         <span style="color:${itemColor(item)}">${item.kind === 'weapon' ? '⚔' : '⛑'} ${info.name}</span>
         <small>${stat} · ${info.info}</small>${equipped ? '<em>uitgerust</em>' : ''}</button>`;
     };
-    const diamonds = `<p class="menu-info">💎 Diamanten gevonden: <b>${(d.diamonds ?? []).length} / ${LEVELS.reduce((n, l) => n + l.diamonds.length, 0)}</b> · Kisten geopend: <b>${d.chests.length}</b></p>`;
+    const diamonds = `<p class="menu-info">💎 Diamanten gevonden: <b>${(d.diamonds ?? []).length} / ${LEVELS.reduce((n, l) => n + l.diamonds.length, 0)}</b> · Kisten geopend: <b>${d.chests.length}</b>${d.sky?.kelken ? ` · ⚡ Wolkenkelken: <b>${d.sky.kelken}</b>` : ''}</p>`;
     return diamonds + `<h3>Wapens</h3>${d.inventory.filter((i) => i.kind === 'weapon').map(row).join('')}
       <h3>Helmen</h3>${d.inventory.filter((i) => i.kind === 'helmet').map(row).join('')}`;
   }
@@ -339,7 +339,7 @@ export class UI {
 
   /** Checkpoints: een vlaggetje (goud als je er al was: daar kun je heen snelreizen). */
   drawFlags(ctx, toMap) {
-    if (LEVEL.castle) return; // in Omars kasteel zijn er geen vlaggen
+    if (LEVEL.special) return; // in Omars kasteel en het Wolkenrijk zijn er geen vlaggen
     const d = this.stats.data;
     for (const c of CHECKPOINTS) {
       const [mx, my] = toMap(c.position.x, c.position.z);

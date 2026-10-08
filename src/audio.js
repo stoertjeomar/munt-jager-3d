@@ -123,11 +123,12 @@ function tone({ type = 'sine', from, to = from, duration, volume = 0.3, delay = 
   osc.stop(t + duration + 0.02);
 }
 
-/** Ruis door een filter (bandpass) waarvan de frequentie verschuift. */
-function noise({ from, to = from, duration, volume = 0.3, q = 1, delay = 0 }) {
+/** Ruis door een filter (bandpass) waarvan de frequentie verschuift. loop = voor geluiden langer dan een seconde. */
+function noise({ from, to = from, duration, volume = 0.3, q = 1, delay = 0, loop = false }) {
   const t = ctx.currentTime + delay;
   const src = ctx.createBufferSource();
   src.buffer = noiseBuffer;
+  src.loop = loop; // langer dan een seconde? Dan de ruis herhalen
   const filter = ctx.createBiquadFilter();
   filter.type = 'bandpass';
   filter.Q.value = q;
@@ -232,6 +233,19 @@ const SOUNDS = {
     noise({ from: 3200, to: 300, duration: 0.25, volume: 0.35, q: 2 });
     tone({ type: 'sine', from: 900, to: 180, duration: 0.22, volume: 0.15 });
   },
+  // Zap! Een knetterende elektrische klap (Sky's zwaard, NightWalker en de bliksemwolven)
+  zap: () => {
+    noise({ from: 5200, to: 900, duration: 0.16, volume: 0.32, q: 3 });
+    tone({ type: 'sawtooth', from: 1900, to: 140, duration: 0.14, volume: 0.1 });
+    tone({ type: 'square', from: 2600, to: 1800, duration: 0.05, volume: 0.05, delay: 0.03 });
+    noise({ from: 2400, to: 3800, duration: 0.07, volume: 0.15, q: 6, delay: 0.06 });
+  },
+  // Donder in de verte (het onweer in het Wolkenrijk): een lang, diep gerommel
+  rommel: () => {
+    noise({ from: 120, to: 60, duration: 2.6, volume: 0.34, q: 0.6, loop: true });
+    noise({ from: 260, to: 90, duration: 1.8, volume: 0.18, q: 0.8, delay: 0.25, loop: true });
+    tone({ type: 'sine', from: 52, to: 38, duration: 2.2, volume: 0.12 });
+  },
   // De draak brult: een diepe, rauwe grom die omhoog gaat en weer zakt
   roar: () => {
     tone({ type: 'sawtooth', from: 70, to: 140, duration: 0.5, volume: 0.22 });
@@ -278,7 +292,7 @@ export function talk(name = '', text = '') {
 // ---------- Geluiden van de wereld om je heen ----------
 const amb = { bird: 2, cricket: 1, wind: 5, owl: 6, crackle: 0.3 };
 
-/** Elke frame: vogeltjes overdag, krekels 's nachts, een uil in het Spookwoud, wind in de bergen, knetterende fakkels in het kasteel. */
+/** Elke frame: vogeltjes overdag, krekels 's nachts, een uil in het Spookwoud, wind in de bergen en in het Wolkenrijk, knetterende fakkels in het kasteel. */
 export function updateAmbience(dt, { theme, night = 0 }) {
   if (!ready() || dt <= 0) return;
   for (const key in amb) amb[key] -= dt;
@@ -287,6 +301,14 @@ export function updateAmbience(dt, { theme, night = 0 }) {
     if (amb.crackle <= 0) {
       amb.crackle = 0.12 + Math.random() * 0.5;
       noise({ from: 2000 + Math.random() * 2500, duration: 0.04, volume: 0.03, q: 3 });
+    }
+    return;
+  }
+  if (theme === 'wolken') {
+    // Het Wolkenrijk: gierende wind (de donder komt van het onweer zelf, zie skyworld.js)
+    if (amb.wind <= 0) {
+      amb.wind = 3 + Math.random() * 4;
+      noise({ from: 300 + Math.random() * 200, to: 1100, duration: 2.5, volume: 0.06, q: 0.6, loop: true });
     }
     return;
   }

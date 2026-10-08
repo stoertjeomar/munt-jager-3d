@@ -19,6 +19,7 @@ import { seededRandom } from './world.js';
 //   ai            = gedraagt zich als deze vijand (bijv. 'spierbonk' = aanloop nemen en op je af stormen)
 //   modelYaw      = het 3D-model een stukje draaien (als het niet naar voren kijkt)
 //   tint / glow   = het 3D-model een andere kleur geven (en laten gloeien)
+//   build         = zelfgebouwd poppetje van een andere soort (bijv. 'spook': de Wolkenwacht ziet eruit als een spook)
 //   heart         = kans op een hartje als je hem verslaat, ook als een boss hem opriep (0.25 = 1 op de 4)
 export const ENEMY_TYPES = {
   // De bullys van Rames: skeletten die uit de grond komen als hij ze roept (zie ramesFighter.js)
@@ -66,6 +67,12 @@ export const ENEMY_TYPES = {
   spook: {
     name: 'Spook', hp: 80, radius: 0.5, height: 1.1, color: 0xa98bff, flies: true,
     patrolSpeed: 1.8, chaseSpeed: 4.3, sight: 10, knockback: 1.2, damage: 18, stompable: false, runes: 28,
+  },
+  // Wolkenwacht: een zwevende onweerswolk met boze oogjes in het Rotshoogland. Soms laat hij een
+  // Wolkenkelk vallen: daarmee open je de Donderpoort naar het Wolkenrijk van Sky (zie sky.js).
+  wolkenwacht: {
+    name: 'Wolkenwacht', hp: 140, radius: 0.6, height: 1.2, color: 0xc8d4e8, flies: true, build: 'spook',
+    patrolSpeed: 1.6, chaseSpeed: 3.9, sight: 11, knockback: 1, damage: 22, stompable: false, runes: 40,
   },
   golem: {
     name: 'Rotsgolem', hp: 260, radius: 0.9, height: 2.0, color: 0x8a8f99,
@@ -392,7 +399,7 @@ class Enemy {
     let model;
     if (type.model) model = { body: new THREE.Group(), materials: [] };
     else if (typeKey === 'skelet') model = buildSkeleton(type);
-    else if (typeKey === 'spook') model = buildGhost(type);
+    else if (typeKey === 'spook' || type.build === 'spook') model = buildGhost(type);
     else if (typeKey === 'golem') model = buildGolem(type);
     else model = buildSlime(type, typeKey === 'slijmbal');
     this.model = model;

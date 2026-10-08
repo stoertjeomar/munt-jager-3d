@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { LEVEL, REGIONS, REGION_WIDTH, regionIndexAt } from './levels.js';
 import { createCastleWorld } from './castle.js';
+import { createSkyWorld } from './skyworld.js';
 
 // De open wereld: grond, paden, huizen (waar je in kunt!), ruïnes, natuur,
 // de boss-arena's, de checkpoints en de kisten. Wat er in elk gebied staat, staat in levels.js.
@@ -14,7 +15,7 @@ const v3 = (x, z, y = 0) => new THREE.Vector3(x, y, z);
 export const CHECKPOINTS = LEVEL.checkpoints.map(([id, name, x, z]) => ({ id, name, position: v3(x, z) }));
 
 // De boss-arena's: aan het eind van het pad van elk gebied één. `open` = aan welke kant de ingang is (+z of -z).
-// In Omars kasteel staat er één arena midden op de binnenplaats.
+// In Omars kasteel en in het Wolkenrijk staat er één arena in het midden.
 // kind 'kerkhof' = het Knekelhof van Rames: geen pilaren maar grafstenen, met de poort aan de kant van `gate` (een hoek).
 export const ARENAS = LEVEL.arenas
   ? LEVEL.arenas.map((a) => ({ id: a.id, name: a.name, center: v3(a.x, a.z), radius: a.radius, open: a.open, region: a.region, kind: a.kind, gate: a.gate }))
@@ -1256,6 +1257,7 @@ function createArena(scene, colliders, arena) {
 
 export function createWorld(scene) {
   if (LEVEL.castle) return createCastleWorld(scene, { tex, texturedBox }); // Omars Gekke Kasteel bouwt zijn eigen wereld (castle.js)
+  if (LEVEL.sky) return createSkyWorld(scene); // het Wolkenrijk van Sky ook (skyworld.js)
   const sky = createSky(scene);
   const mountains = createMountains(scene, sky.material.uniforms);
   // Mist: in het Spookwoud dikker (main.js verandert hem als je een ander gebied in loopt, zie setFog)

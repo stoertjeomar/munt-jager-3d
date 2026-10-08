@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { loadGLB } from './assets.js';
+import { buildNightWalker } from './nightwalkerModel.js';
 
 // Alle wapens in het spel. Pas de getallen aan om ze sterker of sneller te maken!
 //   damage    = schade per klap (wordt nog groter naarmate je level hoger is)
@@ -76,6 +77,14 @@ export const WEAPONS = {
     file: 'models/extra/zeis.glb', scale: 1.6, grip: -0.32, glow: 1.2, blade: [0.6, 1.35], trail: 0x3dff6a,
     info: 'De zeis van Omar zelf. Het sterkste wapen dat er is.',
   },
+  // ---------- NightWalker: het bliksemzwaard van Sky (zeldzame buit, zie sky.js) ----------
+  // Het model (een cartoon-zwaard) staat in nightwalkerModel.js, de extra krachten (zap, blikseminslag
+  // bij elke 3e klap, wolk-dash) in nightwalker.js.
+  nightwalker: {
+    name: 'NightWalker', rarity: 'legendarisch', damage: 45, stamina: 13, range: 2.9, swingTime: 0.27,
+    build: 'nightwalker', blade: [0.3, 1.0], trail: 0xffd23a, lightning: true,
+    info: 'Het bliksemzwaard van Sky. Elke 3e klap slaat de bliksem in, en met C word je een wolk.',
+  },
   //   paint = een onderdeel van het model een andere kleur geven: { naam van het materiaal: [kleur, gloei-kleur, hoe fel] }
   schaduwkatana: {
     name: 'Schaduwkatana', rarity: 'legendarisch', damage: 44, stamina: 11, range: 3.0, swingTime: 0.24,
@@ -95,6 +104,7 @@ export const RARITY_COLORS = { gewoon: '#d8d8d8', zeldzaam: '#6fb7ff', episch: '
  */
 export function createWeaponMesh(key, scaleMultiplier = 1) {
   const weapon = WEAPONS[key];
+  if (weapon.build === 'nightwalker') return buildNightWalker(scaleMultiplier); // zelfgebouwd, zie nightwalkerModel.js
   if (!weapon.file) {
     const block = buildBlockWeapon(PIXEL_ART[weapon.pixels]);
     block.scale.setScalar(scaleMultiplier);
