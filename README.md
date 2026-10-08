@@ -132,9 +132,17 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
 - **Sky, de Heer van de Storm** (de eindbaas): in het Rotshoogland woont **Opa Donder** met de quest *De storm van Sky*.
   **Wolkenwachten** (zwevende onweerswolkjes) laten soms een **Wolkenkelk** vallen. Met 4 kelken brengt de **Donderpoort**
   je naar het **Wolkenrijk**: een wolkenplateau onder een onweerslucht vol bliksem en donder. Sky zit op een troon van
-  wolken, wordt een wolk en slaat als bliksem de arena in. Hij draagt een gele **haori** met witte driehoekjes, is
-  supersnel, heeft een stormhuid met gele bliksemaders, rode ogen en een wolken-aura, **teleporteert als een wolk vóór óf achter je**, laat gele bliksem inslaan
-  en roept **bliksemwolven** op. Win je? Altijd **1500 munten**, en 1 op de 10 keer laat hij zijn bliksemzwaard
+  wolken, wordt een wolk en slaat als bliksem de arena in. In de grote balk onderin heet hij
+  **SKY, THUNDERBORN DEVIL OF THE SEVERED HEAVENS**. Hij draagt een gele **haori** met witte driehoekjes, heeft een
+  stormhuid met gele bliksemaders, rode ogen en een wolken-aura. Hij is **doodstil**, hand op zijn zwaard in de schede...
+  en dan **bliksemsnel**: elke aanval begint met een waarschuwing, en daarna staat hij even uit te blazen (dán slaan!).
+  Zijn aanvallen: **Thunderclap and Flash** (door de knieën, de muziek valt stil, een zoem, "ting!"... en in één flits staat
+  hij achter je, met een bliksemspoor), **Chain Lightning** (3 flitsen achter elkaar), **Heaven's Fall** (hij springt uit
+  beeld, de bliksem slaat in in rode cirkels en hij landt met een schokgolf) en **Storm Crescent** (een waaier
+  bliksemsikkels: ren ertussendoor of rol erdoorheen). Raak je hem vaak terwijl hij stilstaat, dan **wankelt** hij.
+  Op de helft van zijn leven slaat de bliksem in op hem: **witte ogen**, wit-hete aders, een donkere lucht, snellere
+  aanvallen en 6 flitsen per ketting. Alle getallen staan in `src/skyConfig.js`.
+  Win je? Altijd **1500 munten**, en 1 op de 10 keer laat hij zijn bliksemzwaard
   **NightWalker** vallen: elke klap zapt, elke 3e raak-klap slaat de bliksem in en met **C** word je even een wolk
 - **Muziek** (zie Credits): bij **alle boss-gevechten** speelt *Where Is Your God Now* (bij Rames komt hij al zachtjes op
   tijdens zijn filmpje, en gaat hij sneller als hij herrezen is), tegen **Omar** zijn eigen epische
@@ -190,8 +198,10 @@ munt-jager-3d/
     ├── omarFighter.js→ Omar zelf in het gevecht: zijn brein, aanvallen, teleporteren en praatjes
     ├── castle.js     → het Gekke Kasteel van Omar met de arena en zijn troon
     ├── sky.js        → alles rond Sky: Opa Donder, Wolkenkelken, de Donderpoort, het filmpje en de beloning
-    ├── skyFighter.js → Sky zelf in het gevecht (een Omar-vechter met wolkenteleport en bliksemwolven)
-    ├── skyworld.js   → het Wolkenrijk met onweer · skyLook.js → Sky's stormhuid · haori.js → zijn jasje · wolf.js → de bliksemwolven
+    ├── skyFighter.js → Sky zelf in het gevecht: stil → waarschuwen → aanval → uitblazen, zijn vier aanvallen en fase 2
+    ├── skyConfig.js  → alle getallen van het gevecht tegen Sky (leven, schade, tijden, kansen): pas hier aan!
+    ├── skyworld.js   → het Wolkenrijk met onweer · skyLook.js → Sky's stormhuid · haori.js → zijn jasje
+    ├── wolf.js       → bliksemwolven (niet meer in gebruik sinds Sky's nieuwe gevecht)
     ├── nightwalkerModel.js → het cartoon-model van NightWalker
     ├── lightning.js  → bliksemschichten (Omar, Sky, NightWalker en het onweer)
     ├── nightwalker.js→ de krachten van NightWalker: zap, blikseminslag en de wolk-dash
@@ -212,7 +222,9 @@ munt-jager-3d/
 - **Krachten en levelen** → `POWERS`, `PERKS` en `killsNeeded` in `src/stats.js`
 - **Personages** → `CHARACTERS` en `PLAYABLE` bovenaan `src/player.js`
 - **Omar sterker of zwakker maken** → `OMAR` bovenaan `src/omarFighter.js`. Test het kasteel met `?level=omar`
-- **Sky sterker of zwakker maken** → `SKY` bovenaan `src/skyFighter.js`, de beloning en kelken in `SKY_LOOT` in `src/sky.js`.
+- **Sky sterker of zwakker maken** → `SKY_BOSS` in `src/skyConfig.js` (leven, schade, hoe lang hij waarschuwt, hoeveel
+  flitsen, kansen per aanval...), de beloning en kelken in `SKY_LOOT` in `src/sky.js`. Eigen geluiden voor Sky (bijv. een
+  echte donderklap) zet je in `sounds/` en geef je op bij `audio.files` in `src/skyConfig.js`.
   Test het Wolkenrijk met `?level=sky`
 - **Rames sterker of zwakker maken** → `RAMES` bovenaan `src/ramesFighter.js` (zijn leven: `BOSS_INFO` in `src/bosses.js`).
   Wat hij zegt → `LINES` bovenaan `src/rames.js` (en `BARKS` in `src/ramesFighter.js`). Testen: begin met `?level=3`, en typ

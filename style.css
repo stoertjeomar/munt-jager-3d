@@ -204,6 +204,42 @@ canvas {
   background: linear-gradient(#b0202a, #6a0f15);
 }
 
+/* Elden Ring-stijl (Sky): een brede, dunne balk helemaal onderin, met een grote naam in hoofdletters */
+#boss.elden {
+  bottom: 46px;
+  width: min(1100px, 70vw); /* (niet over je flesjes en wapen linksonder) */
+}
+
+#boss.elden #boss-name {
+  font-family: 'Trajan Pro', 'Cinzel', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+  font-size: clamp(14px, 1.7vw, 22px);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: #f1ead6;
+  margin-bottom: 6px;
+  text-shadow: 0 0 6px #000, 0 1px 2px #000;
+}
+
+#boss.elden .boss-bar {
+  height: 6px;
+  border: 1px solid rgba(200, 185, 140, 0.6);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7);
+}
+
+#boss.elden #boss-fill {
+  background: linear-gradient(#a3141c, #5a080d);
+}
+
+/* Sky's flits: het hele scherm even wit (skyFighter.js zet de doorzichtigheid) */
+#sky-flits {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
 /* ---------- Teksten in beeld ---------- */
 #prompt {
   position: fixed;

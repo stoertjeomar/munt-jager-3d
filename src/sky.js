@@ -60,14 +60,14 @@ const THRONE_LINES = {
       'Zo... iemand heeft de Donderpoort gevonden. Welkom in mijn <b>Wolkenrijk</b>.',
       'Ik ben <b>SKY</b>. Heer van de Storm. De <b>nieuwe baas</b> van deze game.',
       'Omar heeft dit spel gebouwd... maar ik heb de <b>bliksem</b> erin gestopt. Hoor je hem rommelen?',
-      'Ik word een <b>wolk</b> en verschijn <b>vóór</b> of <b>achter</b> je. Mijn <b>bliksemwolven</b> hebben honger. En dit is <b>NightWalker</b>.',
+      'Ik sta stil. Héél stil. En dan... <b>één flits</b>, en ik sta achter je. Dit is <b>NightWalker</b>.',
       'Versla mij, en je krijgt <b>1500 munten</b>. En wie weet... laat ik NightWalker vallen. Hehe. Héél misschien.',
       'Genoeg gepraat. Laat de storm beginnen!',
     ],
     gestures: ['zitten', 'wijzen', 'lachen', 'zwaard', 'lachen', 'zwaard'],
   },
   kortVerloren: {
-    lines: ['Jij weer? De vorige keer was je zo snel weg als een windvlaag.', 'Ik hoop dat je deze keer beter oplet. Vóór... of achter?'],
+    lines: ['Jij weer? De vorige keer was je zo snel weg als een windvlaag.', 'Ik hoop dat je deze keer beter oplet. Eén flits, weet je nog?'],
     gestures: ['lachen', 'wijzen'],
   },
   kortGewonnen: {
@@ -127,8 +127,8 @@ export class SkyFlow extends OmarFlow {
 
   get fightTexts() {
     return {
-      tip: 'Tip: kijk naar het <b>wolkje</b> als Sky verdwijnt: daar komt hij tevoorschijn, <b>vóór</b> of <b>achter</b> je!<br>Rode cirkels = daar slaat de bliksem in. Rol opzij als de wolven komen!',
-      boos: ['SKY WORDT BOOS!', 'De storm barst los: zijn aders gloeien wit en hij is nog sneller!'],
+      tip: 'Tip: zakt Sky door zijn knieën en wordt het <b>stil</b>? Dan flitst hij: stap op het <b>laatste moment opzij</b>, of rol!<br>Na elke aanval staat hij even stil: <b>dán</b> moet je slaan. Rode cirkels = daar slaat de bliksem in.',
+      boos: ['SKY WORDT BOOS!', 'De storm barst los: zijn ogen worden wit en hij is nóg sneller!'],
     };
   }
 
@@ -272,7 +272,7 @@ export class SkyFlow extends OmarFlow {
     this.phase = 'kiezen';
     document.exitPointerLock?.();
     const html = `De Donderpoort brengt je naar het <b>Wolkenrijk</b>. Daar vecht je tegen <b>Sky</b>, de Heer van de Storm.
-      <br><small>Sky teleporteert als een wolk (vóór of achter je!), laat de bliksem inslaan en roept bliksemwolven op.
+      <br><small>Sky staat doodstil... en flitst dan als de bliksem door de arena. Hij laat de hemel vallen en schiet bliksemsikkels.
       De reis kost <b>${SKY_LOOT.kelken} Wolkenkelken</b>. Verlies je? Dan kom je gewoon hier terug en raak je verder niks kwijt.</small>
       <br><br>Jij: level <b>${stats.level}</b> · Sky: level <b>${SKY.level}</b> · Wolkenkelken <b>${this.kelken}</b> · Gewonnen <b>${d.wins}</b> · Verloren <b>${d.losses}</b>`;
     ui.openLevelComplete('NAAR HET WOLKENRIJK?', html, [
@@ -436,6 +436,7 @@ export class SkyFlow extends OmarFlow {
     const { stats, state, sites, player, cameraRig } = this;
     this.fighter = this.bosses.find((b) => b.id === 'sky');
     this.fighter.effects = this.effects;
+    this.fighter.world = this.spots; // (in fase 2 wordt het onweer donker en wild, zie setStorm in skyworld.js)
     this.fighter.prepare(stats);
     this.fighter.setThrone(this.spots.seat);
     this.wonThisVisit = false;
@@ -606,7 +607,7 @@ export class SkyFlow extends OmarFlow {
     cameraRig.yaw = 0;
     cameraRig.pitch = 0.35;
     cameraRig.snapTo(player.position);
-    ui.banner('SKY', 'Heer van de Storm — de nieuwe baas van het spel!', 'sky', 3.5);
+    ui.banner('SKY', 'Thunderborn Devil of the Severed Heavens', 'sky', 3.5);
     play('gong');
     play('donder');
     this.tipShown = this.d.wins + this.d.losses > 0;

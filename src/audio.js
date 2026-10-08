@@ -4,6 +4,7 @@
 
 let ctx = null;
 let master = null;
+let musicBus = null; // alle muziek gaat hierdoor: zo kan een boss de muziek even zachter zetten (duckMusic)
 let noiseBuffer = null;
 let muted = false;
 
@@ -22,16 +23,32 @@ const SAMPLE_FILES = {
 const SAMPLE_VOLUME = { lose: 0.8, boing: 1, punch: 0.15, defeat: 0.35, wow: 0.7, faaah: 0.6, shine: 0.7, donder: 0.9 };
 const MASTER = 0.9; // hoofdvolume (hoger = harder)
 const samples = {};
+const extraFiles = {}; // geluiden die een ander bestand zelf aanmeldt (zie loadSounds): { naam: relatief pad }
 let footsteps = null;
 
+async function loadSample(name, path) {
+  try {
+    const data = await (await fetch(path)).arrayBuffer();
+    samples[name] = await ctx.decodeAudioData(data);
+  } catch {
+    // geen probleem: dan gebruiken we het zelfgemaakte geluid
+  }
+}
+
 async function loadSamples() {
-  for (const [name, file] of Object.entries(SAMPLE_FILES)) {
-    try {
-      const data = await (await fetch(`sounds/${file}`)).arrayBuffer();
-      samples[name] = await ctx.decodeAudioData(data);
-    } catch {
-      // geen probleem: dan gebruiken we het zelfgemaakte geluid
-    }
+  for (const [name, file] of Object.entries(SAMPLE_FILES)) await loadSample(name, `sounds/${file}`);
+  for (const [name, path] of Object.entries(extraFiles)) await loadSample(name, path);
+}
+
+/**
+ * Eigen geluidsbestanden aanmelden: { naam: 'sounds/iets.mp3' } (null = geen bestand, dan het zelfgemaakte geluid).
+ * Ze worden meteen geladen als het geluid al aan mag, anders bij de eerste klik of toets (zie unlockAudio).
+ */
+export function loadSounds(files) {
+  for (const [name, path] of Object.entries(files)) {
+    if (!path || extraFiles[name]) continue;
+    extraFiles[name] = path;
+    if (ctx) loadSample(name, path);
   }
 }
 
@@ -78,6 +95,8 @@ export function unlockAudio() {
     limiter.attack.value = 0.003;
     limiter.release.value = 0.25;
     master.connect(limiter).connect(ctx.destination);
+    musicBus = ctx.createGain();
+    musicBus.connect(master);
 
     // Een seconde witte ruis, voor zwiep- en klap-geluiden
     noiseBuffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
@@ -98,9 +117,19 @@ function ready() {
   return ctx && !muted && ctx.state === 'running';
 }
 
-/** Voor music.js: de geluidskaart, de hoofdvolumeknop en de ruis (of null als het geluid nog niet mag). */
+/** Voor music.js: de geluidskaart, de hoofdvolumeknop, de muziekknop en de ruis (of null als het geluid nog niet mag). */
 export function getAudio() {
-  return ctx && ctx.state === 'running' ? { ctx, master, noise: noiseBuffer } : null;
+  return ctx && ctx.state === 'running' ? { ctx, master, music: musicBus, noise: noiseBuffer } : null;
+}
+
+/** De muziek zachter zetten (level 0.1 = 10%) of weer vol (1), in `fade` seconden. Geluidseffecten blijven even hard. */
+export function duckMusic(level, fade = 0.2) {
+  if (!musicBus) return;
+  const t = ctx.currentTime;
+  const g = musicBus.gain;
+  g.cancelScheduledValues(t);
+  g.setValueAtTime(g.value, t);
+  g.linearRampToValueAtTime(level, t + Math.max(0.01, fade));
 }
 
 /** Toon met een frequentie die verschuift van `from` naar `to`. pan = links (-1) of rechts (1). */
@@ -143,7 +172,67 @@ function noise({ from, to = from, duration, volume = 0.3, q = 1, delay = 0, loop
   src.stop(t + duration + 0.02);
 }
 
+/** Ruis door een laag- of hoogdoorlaatfilter, die meteen hard is en dan uitsterft (`decay` seconden). */
+function burst({ type = 'lowpass', freq, duration, volume = 0.3, attack = 0.005, delay = 0 }) {
+  const t = ctx.currentTime + delay;
+  const src = ctx.createBufferSource();
+  src.buffer = noiseBuffer;
+  src.loop = true; // (de ruis is maar een seconde lang)
+  const filter = ctx.createBiquadFilter();
+  filter.type = type;
+  filter.frequency.value = freq;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(volume, t + attack);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+  src.connect(filter).connect(gain).connect(master);
+  src.start(t, Math.random() * 0.5);
+  src.stop(t + duration + 0.02);
+}
+
 const SOUNDS = {
+  // ---------- Sky (skyFighter.js): stilte → zoem → KRAK → gerommel → klikje ----------
+  // Een elektrisch gezoem dat hoger en harder wordt (zo lang als hij klaarzit: duration)
+  skyBuzz: ({ duration = 0.8 } = {}) => {
+    const t = ctx.currentTime;
+    for (const [type, f, v] of [['sawtooth', 70, 0.11], ['square', 141, 0.035]]) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(f, t);
+      osc.frequency.exponentialRampToValueAtTime(f * 6, t + duration);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(v, t + duration * 0.95);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + duration + 0.03);
+      osc.connect(gain).connect(master);
+      osc.start(t);
+      osc.stop(t + duration + 0.05);
+    }
+    noise({ from: 1500, to: 6000, duration, volume: 0.06, q: 4, loop: true });
+  },
+  // De donderklap: een korte, harde ruisklap die heel snel uitsterft, met een dreun eronder
+  skyCrack: () => {
+    burst({ type: 'highpass', freq: 900, duration: 0.22, volume: 0.9, attack: 0.002 });
+    burst({ type: 'lowpass', freq: 2500, duration: 0.35, volume: 0.6, attack: 0.002 });
+    tone({ type: 'triangle', from: 160, to: 40, duration: 0.3, volume: 0.5 });
+  },
+  // Laag gerommel daarna: lange ruis door een laagdoorlaatfilter (~150Hz) die langzaam uitsterft
+  skyRumble: () => {
+    burst({ type: 'lowpass', freq: 150, duration: 2.6, volume: 0.7, attack: 0.08 });
+    burst({ type: 'lowpass', freq: 90, duration: 3.2, volume: 0.45, attack: 0.3, delay: 0.25 });
+  },
+  // Het zwaard gaat terug in de schede: een zacht schuifje en een klein klikje
+  skySheathe: () => {
+    noise({ from: 2500, to: 5000, duration: 0.16, volume: 0.05, q: 2 });
+    tone({ type: 'square', from: 2300, to: 1900, duration: 0.03, volume: 0.05, delay: 0.17 });
+    tone({ type: 'triangle', from: 900, to: 700, duration: 0.05, volume: 0.06, delay: 0.17 });
+  },
+  // Fase 2: Sky brult, en de donder brult mee
+  skyRoar: () => {
+    SOUNDS.roar();
+    SOUNDS.skyCrack();
+    SOUNDS.skyRumble();
+  },
   // Zwaard door de lucht: ruis die snel van laag naar hoog en weer terug gaat
   swing: () => noise({ from: 500, to: 2600, duration: 0.18, volume: 0.35, q: 1.5 }),
   heavySwing: () => noise({ from: 250, to: 900, duration: 0.3, volume: 0.45, q: 1.2 }),
@@ -336,9 +425,9 @@ export function updateAmbience(dt, { theme, night = 0 }) {
   }
 }
 
-/** Speel een geluid, bijvoorbeeld play('hit'). */
-export function play(name) {
+/** Speel een geluid, bijvoorbeeld play('hit'). Sommige zelfgemaakte geluiden hebben opties, zoals play('skyBuzz', { duration: 0.6 }). */
+export function play(name, options) {
   if (!ready()) return;
   if (samples[name]) playSample(name, SAMPLE_VOLUME[name] ?? 0.6);
-  else SOUNDS[name]?.();
+  else SOUNDS[name]?.(options);
 }

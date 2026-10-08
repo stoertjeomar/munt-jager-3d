@@ -152,7 +152,7 @@ export const QUESTS = {
     offer: [
       'Hohoho! Een avonturier! Ik ben <b>Opa Donder</b>. Ik woon hier al honderd jaar tussen de bliksem.',
       'Hoog boven de wolken ligt het <b>Wolkenrijk</b>. Daar woont <b>Sky</b>, de Heer van de Storm.',
-      'Hij wordt een wolk en verschijnt opeens <b>vóór</b> of <b>achter</b> je. En hij heeft <b>bliksemwolven</b>... brrr.',
+      'Hij staat doodstil... en dan is hij in <b>één flits</b> aan de andere kant van de arena. Let op als het <b>stil</b> wordt... brrr.',
       'Wie Sky verslaat krijgt <b>1500 munten</b>. En héél soms laat hij zijn bliksemzwaard <b>NightWalker</b> vallen!',
       'Mijn <b>Donderpoort</b> brengt je erheen, maar elke reis kost <b>4 Wolkenkelken</b>. De <b>Wolkenwachten</b> hier in het hoogland laten ze soms vallen.',
     ],

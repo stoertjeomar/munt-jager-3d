@@ -128,7 +128,10 @@ export class UI {
     // Boss-balk
     if (boss) {
       this.el.boss.classList.remove('hidden');
-      this.el.bossName.textContent = boss.name;
+      // Een boss kan een eigen naam en stijl voor de balk hebben (Sky: barName en barStyle 'elden', zie skyFighter.js)
+      const name = boss.barName ?? boss.name;
+      if (this.el.bossName.textContent !== name) this.el.bossName.textContent = name;
+      this.el.boss.className = boss.barStyle ?? '';
       const b = boss.hp / boss.info.hp;
       this.bossLag = Math.max(b, this.bossLag - dt * 0.3);
       this.el.bossFill.style.width = `${b * 100}%`;
