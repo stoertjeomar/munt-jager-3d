@@ -123,8 +123,8 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
 - **Sky, de Heer van de Storm** (de eindbaas): in het Rotshoogland woont **Opa Donder** met de quest *De storm van Sky*.
   **Wolkenwachten** (zwevende onweerswolkjes) laten soms een **Wolkenkelk** vallen. Met 4 kelken brengt de **Donderpoort**
   je naar het **Wolkenrijk**: een wolkenplateau onder een onweerslucht vol bliksem en donder. Sky zit op een troon van
-  wolken, wordt een wolk en slaat als bliksem de arena in. Hij is sneller dan Omar, heeft een stormhuid met gele
-  bliksemaders, rode ogen en een wolken-aura, **teleporteert als een wolk vóór óf achter je**, laat gele bliksem inslaan
+  wolken, wordt een wolk en slaat als bliksem de arena in. Hij draagt een gele **haori** met witte driehoekjes, is
+  supersnel, heeft een stormhuid met gele bliksemaders, rode ogen en een wolken-aura, **teleporteert als een wolk vóór óf achter je**, laat gele bliksem inslaan
   en roept **bliksemwolven** op. Win je? Altijd **1500 munten**, en 1 op de 10 keer laat hij zijn bliksemzwaard
   **NightWalker** vallen: elke klap zapt, elke 3e raak-klap slaat de bliksem in en met **C** word je even een wolk
 - **Muziek** (zie Credits): bij **alle boss-gevechten** speelt *Where Is Your God Now*, tegen **Omar** zijn eigen epische
@@ -180,7 +180,8 @@ munt-jager-3d/
     ├── castle.js     → het Gekke Kasteel van Omar met de arena en zijn troon
     ├── sky.js        → alles rond Sky: Opa Donder, Wolkenkelken, de Donderpoort, het filmpje en de beloning
     ├── skyFighter.js → Sky zelf in het gevecht (een Omar-vechter met wolkenteleport en bliksemwolven)
-    ├── skyworld.js   → het Wolkenrijk met onweer · skyLook.js → Sky's stormhuid · wolf.js → de bliksemwolven
+    ├── skyworld.js   → het Wolkenrijk met onweer · skyLook.js → Sky's stormhuid · haori.js → zijn jasje · wolf.js → de bliksemwolven
+    ├── nightwalkerModel.js → het cartoon-model van NightWalker
     ├── lightning.js  → bliksemschichten (Omar, Sky, NightWalker en het onweer)
     ├── nightwalker.js→ de krachten van NightWalker: zap, blikseminslag en de wolk-dash
     ├── music.js      → de muziek: liedjes als "bladmuziek" in tekst en een kleine sequencer

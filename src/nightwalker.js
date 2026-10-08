@@ -109,7 +109,7 @@ export class NightWalker {
     const a = Math.random() * Math.PI * 2;
     const r = 0.35 + Math.random() * 0.3;
     const at = p.position.clone().add(new THREE.Vector3(Math.sin(a) * r, 0.1 + Math.random() * 1.4, Math.cos(a) * r));
-    if (Math.random() < 0.75) this.effects.puff(at, pick(CLOUD), { size: 0.5, life: 1, up: 0.5, opacity: 0.5 });
+    if (Math.random() < 0.75) this.effects.puff(at, pick(CLOUD), { size: 0.32, life: 0.9, up: 0.5, opacity: 0.35 });
     else this.effects.burst(at, 0xffe066, { count: 2, speed: 1.5, size: 0.05, life: 0.3, up: 0.6, gravity: 0 });
   }
 }

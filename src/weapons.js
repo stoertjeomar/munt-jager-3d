@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { loadGLB } from './assets.js';
+import { buildNightWalker } from './nightwalkerModel.js';
 
 // Alle wapens in het spel. Pas de getallen aan om ze sterker of sneller te maken!
 //   damage    = schade per klap (wordt nog groter naarmate je level hoger is)
@@ -77,10 +78,11 @@ export const WEAPONS = {
     info: 'De zeis van Omar zelf. Het sterkste wapen dat er is.',
   },
   // ---------- NightWalker: het bliksemzwaard van Sky (zeldzame buit, zie sky.js) ----------
-  // De extra krachten (zap, blikseminslag bij elke 3e klap, wolk-dash) staan in nightwalker.js.
+  // Het model (een cartoon-zwaard) staat in nightwalkerModel.js, de extra krachten (zap, blikseminslag
+  // bij elke 3e klap, wolk-dash) in nightwalker.js.
   nightwalker: {
     name: 'NightWalker', rarity: 'legendarisch', damage: 45, stamina: 13, range: 2.9, swingTime: 0.27,
-    pixels: 'nacht', blade: [0.3, 1.0], trail: 0xffd23a, lightning: true,
+    build: 'nightwalker', blade: [0.3, 1.0], trail: 0xffd23a, lightning: true,
     info: 'Het bliksemzwaard van Sky. Elke 3e klap slaat de bliksem in, en met C word je een wolk.',
   },
 };
@@ -95,6 +97,7 @@ export const RARITY_COLORS = { gewoon: '#d8d8d8', zeldzaam: '#6fb7ff', episch: '
  */
 export function createWeaponMesh(key, scaleMultiplier = 1) {
   const weapon = WEAPONS[key];
+  if (weapon.build === 'nightwalker') return buildNightWalker(scaleMultiplier); // zelfgebouwd, zie nightwalkerModel.js
   if (!weapon.file) {
     const block = buildBlockWeapon(PIXEL_ART[weapon.pixels]);
     block.scale.setScalar(scaleMultiplier);
@@ -162,42 +165,6 @@ const SWORD_SHAPE = [
   '....ddd....',
 ];
 const PIXEL_ART = {
-  // NightWalker: een nachtzwart lemmet met een gele bliksemschicht erin. n = nachtblauw, k = zwart, y = bliksem, w = wit-heet
-  nacht: {
-    hand: 19,
-    rows: [
-      '.....k.....',
-      '....kyk....',
-      '...knynk...',
-      '...knyyk...',
-      '...knnyk...',
-      '...kyynk...',
-      '...kynnk...',
-      '...knyyk...',
-      '...knwyk...',
-      '...kyynk...',
-      '...kynnk...',
-      '...knyyk...',
-      '...knnyk...',
-      '...kywnk...',
-      'yk.kyynk.ky',
-      'kykknynkkyk',
-      'kkkkkyykkkk',
-      'kkkkkkkkkkk',
-      '....nyn....',
-      '....yny....',
-      '....nyn....',
-      '...kkykk...',
-      '...kyyyk...',
-      '....kkk....',
-    ],
-    colors: {
-      k: { color: 0x07080f, roughness: 0.5, metalness: 0.3 },
-      n: { color: 0x1a2350, roughness: 0.3, emissive: 0x0a1030 },
-      y: { color: 0xffd23a, roughness: 0.3, emissive: 0xffb000, emissiveIntensity: 1.2 },
-      w: { color: 0xffffff, roughness: 0.2, emissive: 0xfff3b0, emissiveIntensity: 1.5 },
-    },
-  },
   // d = donkergroene rand, m = turquoise, l = lichtblauw, g/b = goud
   diamant: {
     hand: 19,

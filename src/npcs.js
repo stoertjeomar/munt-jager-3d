@@ -151,7 +151,7 @@ export const QUESTS = {
     reward: { runes: 500, items: [{ kind: 'flask' }] },
     offer: [
       'Hohoho! Een avonturier! Ik ben <b>Opa Donder</b>. Ik woon hier al honderd jaar tussen de bliksem.',
-      'Hoog boven de wolken ligt het <b>Wolkenrijk</b>. Daar woont <b>Sky</b>, de Heer van de Storm. Hij is nog sterker dan Omar!',
+      'Hoog boven de wolken ligt het <b>Wolkenrijk</b>. Daar woont <b>Sky</b>, de Heer van de Storm.',
       'Hij wordt een wolk en verschijnt opeens <b>vóór</b> of <b>achter</b> je. En hij heeft <b>bliksemwolven</b>... brrr.',
       'Wie Sky verslaat krijgt <b>1500 munten</b>. En héél soms laat hij zijn bliksemzwaard <b>NightWalker</b> vallen!',
       'Mijn <b>Donderpoort</b> brengt je erheen, maar elke reis kost <b>4 Wolkenkelken</b>. De <b>Wolkenwachten</b> hier in het hoogland laten ze soms vallen.',

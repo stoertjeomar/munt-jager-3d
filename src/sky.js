@@ -272,7 +272,7 @@ export class SkyFlow extends OmarFlow {
     this.phase = 'kiezen';
     document.exitPointerLock?.();
     const html = `De Donderpoort brengt je naar het <b>Wolkenrijk</b>. Daar vecht je tegen <b>Sky</b>, de Heer van de Storm.
-      <br><small>Sky is nog sterker dan Omar: hij teleporteert als een wolk (vóór of achter je!), laat de bliksem inslaan en roept bliksemwolven op.
+      <br><small>Sky teleporteert als een wolk (vóór of achter je!), laat de bliksem inslaan en roept bliksemwolven op.
       De reis kost <b>${SKY_LOOT.kelken} Wolkenkelken</b>. Verlies je? Dan kom je gewoon hier terug en raak je verder niks kwijt.</small>
       <br><br>Jij: level <b>${stats.level}</b> · Sky: level <b>${SKY.level}</b> · Wolkenkelken <b>${this.kelken}</b> · Gewonnen <b>${d.wins}</b> · Verloren <b>${d.losses}</b>`;
     ui.openLevelComplete('NAAR HET WOLKENRIJK?', html, [

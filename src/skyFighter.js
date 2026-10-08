@@ -4,6 +4,7 @@ import { OmarFighter, OmarStats, OMAR, pick, LEAP_END } from './omarFighter.js';
 import { makeBolt, makeBoltBetween } from './lightning.js';
 import { buildWolf, animateWolf } from './wolf.js';
 import { applyStormSkin } from './skyLook.js';
+import { dressHaori } from './haori.js';
 import { play } from './audio.js';
 
 // Sky: de Heer van de Storm, en de nieuwe baas van het spel. Hij woont in het Wolkenrijk (skyworld.js)
@@ -13,7 +14,8 @@ import { play } from './audio.js';
 //  - Wolkenteleport: hij wordt een wolk, zweeft weg... en verschijnt VÓÓR of ACHTER je. Je weet nooit welke!
 //  - Gele bliksem: hij steekt NightWalker omhoog en de bliksem slaat in rond jou.
 //  - Bliksemwolven: wolven van wolk en onweer verschijnen met een blikseminslag en stormen op je af.
-//  - Hij is sneller dan Omar, heeft rode ogen, een wolken-aura met bliksem erin, en zijn zwaard zapt bij elke klap.
+//  - Hij draagt een gele haori (een lang Japans jasje met witte driehoekjes, zie haori.js).
+//  - Hij is supersnel, heeft rode ogen, een wolken-aura met bliksem erin, en zijn zwaard zapt bij elke klap.
 //
 // Het filmpje en het gevecht eromheen (aankomen, praten, winnen, verliezen) regelt sky.js.
 
@@ -23,7 +25,7 @@ export const SKY = {
   level: 40,
   size: 1.1,
   hp: { hits: 40, perLevel: 0.3, minHits: 30, min: 650 },
-  speed: [1.75, 1.95], // nog sneller dan Omar!
+  speed: [1.75, 1.95], // supersnel!
   damagePct: { ...OMAR.damagePct, wolf: 0.12 },
   cooldown: { ...OMAR.cooldown, teleport: [2.8, 1.9] }, // hij teleporteert vaker
   teleportDist: 2.2, // zo ver vóór of achter je verschijnt hij
@@ -59,7 +61,6 @@ const TAUNTS = {
     'Hoor je dat gerommel? Dat ben ik.', 'Ik ben de storm!', 'Vóór je of achter je? Raad maar!',
     'NightWalker heeft honger...', 'Kom op, laat eens zien wat je kan!', 'Ik ben de nieuwe baas van deze game!',
     'Ik schrijf de code. Ik ben de code!', 'Ken je mijn wolven al?', 'Elke wolk hier luistert naar mij.',
-    'Omar was nog maar het begin...',
   ],
   boos: [
     'NU WORDT HET ONWEER!', 'Voel de storm!', 'Mijn wolven ruiken je!', 'De hemel scheurt open!',
@@ -107,9 +108,10 @@ export class SkyFighter extends OmarFighter {
   makeStats() { return new OmarStats('soldaat', SKY, 'nightwalker', 'geen'); }
   costumeFor() { return 'soldaat'; }
 
-  /** Donkere stormhuid met gele bliksemaders (skyLook.js). Zijn zwaard NightWalker houdt zijn eigen kleuren. */
+  /** Donkere stormhuid met gele bliksemaders (skyLook.js), en daaroverheen zijn gele haori (haori.js). */
   styleMaterials(mats, model) {
-    applyStormSkin(model, this.puppet.sword.grip);
+    applyStormSkin(model, this.puppet.sword.grip); // (zijn zwaard NightWalker houdt zijn eigen kleuren)
+    dressHaori(model);
   }
 
   resetFight() {
