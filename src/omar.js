@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LEVELS, LEVEL_INDEX, IN_CASTLE } from './levels.js';
+import { LEVELS, LEVEL_INDEX, IN_CASTLE, IN_SPECIAL } from './levels.js';
 
 // Omar woont in Muntdorp (het begin van de wereld): daar kom je ook terug na zijn kasteel
 const HOME_NAME = LEVELS[0].checkpoints[0][1];
@@ -125,16 +125,36 @@ export class OmarFlow {
    */
   constructor(ctx) {
     Object.assign(this, ctx);
-    // Oude save zonder Omar? Dan beginnen we gewoon bij nul.
-    this.stats.data.omar = { wins: 0, losses: 0, visits: 0, seen: false, trip: null, back: null, ...this.stats.data.omar };
+    this.initSave();
     this.phase = 'rust';
     this.t = 0;
     this.fighter = null;
     this.npc = null;
     this.fade = null; // { from, to, time, t }: overgang van het paarse scherm
+    this.cloudTint = [0xc9a0ff, 0.7]; // de wolken in de lucht worden paars
     this.createDom();
+    this.setup();
+  }
+
+  /** Oude save zonder Omar? Dan beginnen we gewoon bij nul. */
+  initSave() {
+    this.stats.data.omar = { wins: 0, losses: 0, visits: 0, seen: false, trip: null, back: null, ...this.stats.data.omar };
+  }
+
+  /** In het kasteel: het filmpje en het gevecht. In de open wereld: Omar staat in Muntdorp. (In het Wolkenrijk: niks.) */
+  setup() {
     if (IN_CASTLE) this.setupCastle();
-    else this.setupLevel();
+    else if (!IN_SPECIAL) this.setupLevel();
+  }
+
+  /** Zijn we nu in het kasteel (de plek van het gevecht)? Sky (sky.js) heeft hier het Wolkenrijk. */
+  get inArena() {
+    return IN_CASTLE;
+  }
+
+  /** Belangrijke plekken van het kasteel (castle.js): troon, landingsplek, waar jij staat... */
+  get spots() {
+    return this.world.castle;
   }
 
   /** De Omar-gegevens in de save. */
@@ -147,7 +167,20 @@ export class OmarFlow {
     return HOME_NAME;
   }
 
+  /** Teksten tijdens het gevecht: een tip na de banner, en de banner als hij boos wordt. */
+  get fightTexts() {
+    return {
+      tip: 'Tip: druk op <b>Q</b> om je camera op Omar vast te zetten.<br>Hij laat altijd eerst zien wat hij gaat doen!',
+      boos: ['OMAR WORDT BOOS!', 'Zijn zwaard staat in brand en hij is nog sneller!'],
+    };
+  }
+
   createDom() {
+    // Is het filmpje-scherm er al (van Omar)? Dan gebruikt Sky (sky.js) hetzelfde.
+    if (document.getElementById('omar-style')) {
+      this.fadeEl = $('omar-fade');
+      return;
+    }
     const style = document.createElement('style');
     style.id = 'omar-style';
     style.textContent = STYLE;
@@ -382,20 +415,20 @@ export class OmarFlow {
   // ======================================================================
 
   setupCastle() {
-    const { world, stats, state, sites, player, cameraRig } = this;
+    const { stats, state, sites, player, cameraRig } = this;
     this.fighter = this.bosses.find((b) => b.id === 'omar');
     this.fighter.effects = this.effects;
     this.fighter.prepare(stats);
-    this.fighter.setThrone(world.castle.seat);
+    this.fighter.setThrone(this.spots.seat);
     this.wonThisVisit = false;
     state.introShown = true; // geen "level"-banner van main.js
     for (const c of sites.checkpoints) c.group.visible = false; // geen vlag in het kasteel
-    player.respawnAt(world.castle.spawn);
+    player.respawnAt(this.spots.spawn);
     player.mesh.rotation.y = Math.PI;
     cameraRig.yaw = 0;
     cameraRig.snapTo(player.position);
     // Twee gouden Omar-beelden naast de troon
-    world.castle.addStatues?.(CHARACTERS.find((c) => c.id === otherPlayable(stats.data.character))?.file);
+    this.spots.addStatues?.(CHARACTERS.find((c) => c.id === otherPlayable(stats.data.character))?.file);
 
     // De uitleg voor nieuwe spelers ("volg het pad...") uit main.js hoort niet in het kasteel
     const toast = this.ui.toast.bind(this.ui);
@@ -476,7 +509,7 @@ export class OmarFlow {
     if (!this.flared && t >= flareAt) {
       this.flared = true;
       play('charge');
-      for (const b of this.world.castle.braziers.slice(-2)) this.effects.burst(b, 0xff7a1a, { count: 30, speed: 4, size: 0.14, life: 0.9, up: 4, gravity: -0.1 });
+      for (const b of this.spots.braziers.slice(-2)) this.effects.burst(b, 0xff7a1a, { count: 30, speed: 4, size: 0.14, life: 0.9, up: 4, gravity: -0.1 });
     }
     if (!short && t < 3.2) this.shot(t / 3.2, V(-30, 24, 52), V(24, 16, 30), V(0, 2, 10), V(0, 3, -8));
     else {
@@ -520,12 +553,12 @@ export class OmarFlow {
     this.t = 0;
     this.landed = false;
     this.fighter.gesture = 'zitten';
-    this.fighter.playIntro(this.world.castle.landing);
+    this.fighter.playIntro(this.spots.landing);
     play('jump');
   }
 
   updateLeap() {
-    const { fighter, effects, player, world } = this;
+    const { fighter, effects, player } = this;
     const t = this.t;
     const omarLook = fighter.position.clone().setY(fighter.position.y + 1.2);
     if (t < 0.45) this.shot(t / 0.45, V(0.45, 2.65, -22.6), V(8.5, 4.5, -7), V(0, 1.95, -26.6), omarLook);
@@ -533,7 +566,7 @@ export class OmarFlow {
     if (t >= 1.45 && !this.landed) {
       // Boem! Omar landt, en trekt je met paarse toverkracht naar zich toe
       this.landed = true;
-      const land = world.castle.landing;
+      const land = this.spots.landing;
       effects.shockwave(land, 0xb04dff, 6);
       effects.burst(land.clone().setY(0.4), 0xb04dff, { count: 40, speed: 8, size: 0.16, life: 0.8, up: 3 });
       effects.shake(0.6);
@@ -548,8 +581,8 @@ export class OmarFlow {
     }
     if (t >= 1.45) {
       const k = smooth((t - 1.45) / 0.55);
-      const spawn = world.castle.spawn;
-      const spot = world.castle.fightSpot;
+      const spawn = this.spots.spawn;
+      const spot = this.spots.fightSpot;
       player.position.lerpVectors(spawn, spot, k);
       player.position.y = 3 * Math.sin(Math.PI * k);
       player.mesh.rotation.y = Math.PI;
@@ -566,8 +599,8 @@ export class OmarFlow {
 
   /** Deel 4: vechten! */
   startFight() {
-    const { player, fighter, state, ui, cameraRig, world } = this;
-    player.position.copy(world.castle.fightSpot);
+    const { player, fighter, state, ui, cameraRig } = this;
+    player.position.copy(this.spots.fightSpot);
     player.velocity.set(0, 0, 0);
     player.mesh.rotation.y = Math.PI;
     fighter.finishIntro();
@@ -663,7 +696,7 @@ export class OmarFlow {
     document.body.append(box);
     setTimeout(() => box.remove(), 10000);
     // Disco: de lampen van het kasteel onthouden, zodat ze straks hun eigen kleur terugkrijgen
-    this.partyLights = (this.world.castle?.partyLights ?? []).map((light) => ({ light, color: light.color.clone() }));
+    this.partyLights = (this.spots?.partyLights ?? []).map((light) => ({ light, color: light.color.clone() }));
   }
 
   /** Feest! Confetti en vuurwerk, munten, disco-lampen, de camera draait om je heen en jij springt van blijdschap. */
@@ -771,7 +804,7 @@ export class OmarFlow {
 
   /** De speler is "dood" in het kasteel (via die() in main.js). Geeft true terug: dan doet main.js niks. */
   onDeath() {
-    if (!IN_CASTLE) return false;
+    if (!this.inArena) return false;
     const { state, stats, ui } = this;
     state.deathTimer = Infinity; // niet terug naar een checkpoint: Omar lacht je eerst uit
     if (this.phase === 'verloren') return true;
@@ -816,14 +849,14 @@ export class OmarFlow {
 
   /** Meteen nog een keer tegen Omar (zonder opnieuw te laden). */
   rematch() {
-    const { ui, cameraRig, state, effects, player, world, fighter } = this;
+    const { ui, cameraRig, state, effects, player, fighter } = this;
     ui.closeMenu();
     cameraRig.lock();
     state.deathTimer = 0;
     state.activeBoss = null;
     state.lockTarget = null;
     effects.clear();
-    player.respawnAt(world.castle.spawn);
+    player.respawnAt(this.spots.spawn);
     player.mesh.rotation.y = Math.PI;
     cameraRig.yaw = 0;
     cameraRig.snapTo(player.position);
@@ -845,7 +878,7 @@ export class OmarFlow {
     this.phase = 'weg';
     this.fade = null;
     this.fadeEl.style.transition = 'opacity 0.6s';
-    this.setFade(1, `Terug naar ${HOME_NAME}...`, result === 'gewonnen' ? 'Als de nieuwe baas!' : '');
+    this.setFade(1, `Terug naar ${this.homeName}...`, result === 'gewonnen' ? 'Als de nieuwe baas!' : '');
     d.back = { level, checkpoint: d.trip?.checkpoint ?? null, result };
     d.trip = null;
     stats.data.currentLevel = level;
@@ -862,7 +895,7 @@ export class OmarFlow {
     // Wolken paars kleuren (zodra ze geladen zijn)
     if (!this.cloudsTinted && decor?.clouds?.length) {
       this.cloudsTinted = true;
-      decor.tintClouds(0xc9a0ff, 0.7);
+      decor.tintClouds(...this.cloudTint);
     }
     // Het spel staat stil door een menu of filmpje: dan laten wij Omar en de effecten bewegen
     const cutscene = ['aankomst', 'praten', 'sprong'].includes(this.phase);
@@ -903,11 +936,11 @@ export class OmarFlow {
         if (running) this.t += dt;
         if (!this.tipShown && this.t > 3.8) {
           this.tipShown = true;
-          ui.toast('Tip: druk op <b>Q</b> om je camera op Omar vast te zetten.<br>Hij laat altijd eerst zien wat hij gaat doen!', 6);
+          ui.toast(this.fightTexts.tip, 6);
         }
         if (fighter.phase2 && !this.phase2Shown) {
           this.phase2Shown = true;
-          ui.banner('OMAR WORDT BOOS!', 'Zijn zwaard staat in brand en hij is nog sneller!', 'omar', 3);
+          ui.banner(...this.fightTexts.boos, this.bannerKind, 3);
         }
         break;
       case 'gewonnen':
@@ -924,17 +957,22 @@ export class OmarFlow {
     this.updateLeaveButton();
   }
 
+  /** Hoe de grote teksten eruitzien (zie style.css en de STYLE hierboven). */
+  get bannerKind() {
+    return 'omar';
+  }
+
   /** Elke frame (na ui.update in main.js). Mag de camera overnemen. */
   update(dt) {
-    if (IN_CASTLE) this.updateCastle(dt);
-    else this.updateLevel(dt);
+    if (this.inArena) this.updateCastle(dt);
+    else if (!IN_SPECIAL) this.updateLevel(dt);
   }
 
   // ---------- Handig voor testen (in de console: game.omar.win()) ----------
 
   /** Filmpje overslaan en meteen vechten. */
   skipToFight() {
-    if (!IN_CASTLE || this.phase === 'gevecht') return;
+    if (!this.inArena || this.phase === 'gevecht') return;
     const { ui } = this;
     if (ui.menuOpen === 'dialog') {
       ui.dialog = null;
@@ -945,13 +983,13 @@ export class OmarFlow {
       this.d.visits++;
       this.fade = null;
     }
-    this.fighter.playIntro(this.world.castle.landing);
+    this.fighter.playIntro(this.spots.landing);
     this.startFight();
   }
 
   /** Meteen winnen. */
   win() {
-    if (!IN_CASTLE) return;
+    if (!this.inArena) return;
     if (!this.fighter.awake) this.skipToFight();
     const p = this.fighter.puppet;
     p.invulnerable = p.rollTimer = p.dashTimer = 0; // niet wegrollen nu
@@ -961,7 +999,7 @@ export class OmarFlow {
 
   /** Meteen verliezen. */
   lose() {
-    if (!IN_CASTLE) return;
+    if (!this.inArena) return;
     if (!this.fighter.awake) this.skipToFight();
     this.player.health = 0;
   }

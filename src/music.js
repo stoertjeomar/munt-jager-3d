@@ -206,6 +206,64 @@ const SONGS = {
     ],
   },
 
+  // Het Wolkenrijk van Sky, terwijl hij op zijn wolkentroon zit: zweverig en groots, met een koor en verre donder
+  wolken: {
+    bpm: 66, gain: 0.6,
+    chords: ['Dm', 'Bb', 'Gm', 'A', 'Dm', 'F', 'C', 'A'],
+    tracks: [
+      { inst: 'pad', vol: 0.05, div: 1, oct: 4, pattern: 'c' },
+      { inst: 'choir', vol: 0.07, div: 1, fx: true, notes: 'A4 F4 G4 E4 F4 A4 G4 C#5' },
+      { inst: 'bell', vol: 0.08, div: 8, oct: 5, fx: true, pattern: '1 . 5 . 8 . . .' },
+      { inst: 'sub', vol: 0.22, div: 1, pattern: 'R' },
+      // Verre donder: een diepe klap om de twee maten
+      { inst: 'drums', vol: 0.5, div: 16, kit: { boom: `x${'.'.repeat(31)}`, subdrop: `${'.'.repeat(16)}x${'.'.repeat(47)}` } },
+    ],
+  },
+
+  // SKY: het gevecht in het Wolkenrijk. Groots en episch, als de baas aan het eind van een groot avontuur:
+  // eerst een donderklap met koor, dan een koor en hoorns in D-mineur boven jagende strijkers en zware trommels.
+  // Op stand 1 (als Sky boos wordt) gaat alles sneller, met een hoog koor en klokken als bliksemflitsen.
+  sky: {
+    bpm: 138, faster: 1.1, gain: 0.74, intro: 2,
+    chords: [
+      'Dm', 'Dm', // de donderklap
+      'Dm', 'Bb', 'Gm', 'A', 'Dm', 'Bb', 'Gm', 'A7',
+    ],
+    tracks: [
+      // ---- De storm komt eraan... BOEM ----
+      { intro: true, inst: 'choirLow', vol: 0.11, div: 1, oct: 3, pattern: 'c', fx: true },
+      { intro: true, inst: 'choir', vol: 0.08, div: 1, oct: 4, pattern: 'c', fx: true },
+      { intro: true, inst: 'tuba', vol: 0.16, div: 1, pattern: 'R' },
+      { intro: true, inst: 'drums', vol: 0.78, div: 16, kit: {
+        subdrop: 'x...............|................', crash: 'x...............|................',
+        taiko: 'x...............|x..x..x.x.x.xxxx', riser: '................|x...............' } },
+      // ---- Het gevecht ----
+      // Het koor zingt de melodie (halve noten), lage hoorns spelen mee een octaaf lager
+      { inst: 'choir', vol: 0.085, div: 2, fx: true, notes: `
+        A4 - | Bb4 D5 | G4 - | A4 C#5 | D5 - | F5 D5 | G5 Bb4 | A4 E4` },
+      { inst: 'horns', vol: 0.1, div: 2, shift: -12, fx: true, sameAs: 4 },
+      { inst: 'choirHi', vol: 0.05, div: 2, min: 1, shift: 12, fx: true, sameAs: 4 },
+      { inst: 'choirLow', vol: 0.08, div: 1, oct: 3, pattern: 'c', fx: true },
+      { inst: 'tuba', vol: 0.13, div: 1, pattern: 'R' },
+      // Jagende strijkers: altijd in beweging, als een storm
+      { inst: 'strings', vol: 0.035, div: 16, oct: 4, pattern: '1 5 8 5 1 5 8 5 1 5 8 5 3 5 8 5' },
+      { inst: 'cello', vol: 0.1, div: 8, max: 0, pattern: 'R . R R O . R .' },
+      { inst: 'cello', vol: 0.1, div: 16, min: 1, pattern: 'R R O R R R O R R R O R b2 R O R' },
+      // Koperstoten
+      { inst: 'trombone', vol: 0.07, div: 8, oct: 3, pattern: 'c . . c . . c .' },
+      { inst: 'timpani', vol: 0.18, div: 16, pattern: 'R . . . R . . . R . R . R . . .' },
+      // Bliksemflitsen (als hij boos is): hoge klokken
+      { inst: 'bell', vol: 0.07, div: 16, min: 1, oct: 5, fx: true, pattern: '8 . . . . . 5 . . . 8 . . . . .' },
+      { inst: 'toll', vol: 0.09, div: 1, fx: true, notes: 'D3 . . . Bb2 . . .' },
+      { inst: 'drums', vol: 0.66, div: 16, max: 0, kit: {
+        taiko: 'x.....x.x.......', bigsnare: '....x.......x...',
+        crash: `x${'.'.repeat(127)}`, subdrop: `x${'.'.repeat(127)}`, riser: `${'.'.repeat(112)}x...............` } },
+      { inst: 'drums', vol: 0.6, div: 16, min: 1, kit: {
+        taiko: 'x.x.x.x.x.x.x.x.', boom: 'x.......x.......', bigsnare: '....x.......x...',
+        crash: `x${'.'.repeat(63)}`, subdrop: `x${'.'.repeat(63)}`, riser: `${'.'.repeat(112)}x...............` } },
+    ],
+  },
+
   // Feest! Je hebt Omar verslagen
   feest: {
     bpm: 128, gain: 0.65,

@@ -10,7 +10,7 @@ import { play } from './audio.js';
 // Loop je de arena in, dan gaat er een mistmuur omhoog en begint het gevecht.
 // Elke boss heeft een eigen set aanvallen, en wordt bij de helft van zijn leven sneller en gemener (fase 2).
 // Omar woont niet in een level maar in zijn eigen kasteel: hij staat in omarFighter.js
-// en meldt zich zelf aan in BOSS_CLASSES (onderaan dit bestand).
+// en meldt zich zelf aan in BOSS_CLASSES (onderaan dit bestand). Sky (skyFighter.js) doet hetzelfde in het Wolkenrijk.
 
 export const BOSS_INFO = {
   koning: { name: 'Koning Slijm', title: 'Heerser van de Ruïnevallei', hp: 900, runes: 600 },
@@ -18,12 +18,13 @@ export const BOSS_INFO = {
   reus: { name: 'Steenreus Gorath', title: 'Hart van het Hoogland', hp: 1800, runes: 2000 },
   mario: { name: 'Budget Mario', title: 'De Vliegende Loodgieter', hp: 650, runes: 300 },
   omar: { name: 'Omar', title: 'De maker van dit spel', hp: 1600, runes: 3000 }, // hp hangt af van jouw level (omarFighter.js)
+  sky: { name: 'Sky', title: 'Heer van de Storm', hp: 1700, runes: 1500 }, // vecht zoals Omar (skyFighter.js)
 };
 
-// Hoe sterk de gewone bosses zijn (Omar niet: die heeft zijn eigen instellingen in omarFighter.js)
+// Hoe sterk de gewone bosses zijn (Omar en Sky niet: die hebben hun eigen instellingen in omarFighter.js en skyFighter.js)
 //   hp = keer zoveel leven · damage = keer zoveel schade · speed = keer zo snel (lopen, aanvallen én wachten)
 export const BOSS_POWER = { hp: 1.6, damage: 1.4, speed: 1.15 };
-for (const [key, info] of Object.entries(BOSS_INFO)) if (key !== 'omar') info.hp = Math.round(info.hp * BOSS_POWER.hp);
+for (const [key, info] of Object.entries(BOSS_INFO)) if (key !== 'omar' && key !== 'sky') info.hp = Math.round(info.hp * BOSS_POWER.hp);
 
 const tmp = new THREE.Vector3();
 

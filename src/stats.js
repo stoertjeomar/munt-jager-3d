@@ -102,6 +102,12 @@ function freshSave() {
       trip: null, // { level, checkpoint }: waar je was toen Omar je meenam
       back: null, // { level, checkpoint, result }: zo kom je terug in je level
     },
+    // Sky (zie sky.js): net als bij Omar, plus je Wolkenkelken (die kosten een reis met de Donderpoort)
+    sky: {
+      wins: 0, losses: 0, visits: 0, seen: false, trip: null, back: null,
+      kelken: 0, // Wolkenkelken (van de Wolkenwachten in het Rotshoogland)
+      drops: 0, // zo vaak liet Sky NightWalker vallen
+    },
     victory: false,
   };
 }

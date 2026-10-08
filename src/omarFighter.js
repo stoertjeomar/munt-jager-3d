@@ -223,8 +223,8 @@ const smooth = (t) => {
 };
 
 // Tijdlijn van zijn sprong van de troon (seconden): eerst opstaan, dan springen
-const STAND_TIME = 0.45;
-const LEAP_END = 1.45;
+export const STAND_TIME = 0.45;
+export const LEAP_END = 1.45;
 
 export class OmarFighter extends Boss {
   /** id = 'omar', of een andere boss die net zo vecht (Sky in skyFighter.js) */
@@ -389,7 +389,7 @@ export class OmarFighter extends Boss {
       c.material = Array.isArray(c.material) ? c.material.map((m) => m.clone()) : c.material.clone();
       for (const m of [].concat(c.material)) if (m.emissive) mats.push(m);
     });
-    this.styleMaterials(mats);
+    this.styleMaterials(mats, model);
     this.rememberMaterials(mats);
     this.baseEmissive = this.materials.map((e) => e.color.clone());
     if (this.phase2) this.tintPhase2();
@@ -1610,7 +1610,8 @@ export class OmarFighter extends Boss {
     const a = Math.random() * Math.PI * 2;
     const r = 0.25 + Math.random() * 0.35;
     const at = this.position.clone().add(new THREE.Vector3(Math.sin(a) * r, 0.2 + Math.random() * 1.7, Math.cos(a) * r));
-    effects.burst(at, pick(ph ? A.boos : A.colors), { count: 1, speed: 0.3, size: A.size[ph], life: A.life, up: 1.4, gravity: -0.3 });
+    if (A.puff) effects.puff(at, pick(ph ? A.boos : A.colors), { speed: 0.3, size: A.size[ph], life: A.life, up: 0.9, opacity: 0.7 });
+    else effects.burst(at, pick(ph ? A.boos : A.colors), { count: 1, speed: 0.3, size: A.size[ph], life: A.life, up: 1.4, gravity: -0.3 });
   }
 
   /** Alle bliksems en schaduwen weg (nieuw gevecht, of hij is verslagen). */

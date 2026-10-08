@@ -23,6 +23,11 @@ const PEOPLE = {
     name: 'Koopman Kobus', file: null, height: 1.6, shop: true,
     colors: { shirt: 0x2f7a4a, shorts: 0x6b4a2b, sash: 0xffd23a, straw: 0x5b3a8a, band: 0xffd23a, hair: 0x8a5a2b, cuff: 0x6b4a2b },
   },
+  // Opa Donder: een oude weerman in het Rotshoogland. Hij stuurt je met zijn Donderpoort naar het Wolkenrijk van Sky (sky.js)
+  donder: {
+    name: 'Opa Donder', file: null, height: 1.55,
+    colors: { shirt: 0x34406a, shorts: 0x24283a, sash: 0xffd23a, straw: 0x5a6680, band: 0xffd23a, hair: 0xe8e8e8, cuff: 0x24283a },
+  },
   // Omar draagt het personage dat jij NIET koos (file wordt ingevuld in NPCs), met de kroon en de Zeis van de Dood
   omar: { name: 'Omar', file: null, height: 1.75, weapon: 'zeis', helmet: 'kroon', omar: true },
   // Een alien op bezoek in Muntdorp: geen quest, gewoon gezellig kletsen (en hij zweeft een beetje)
@@ -89,7 +94,8 @@ function buildStall() {
 }
 
 /**
- * De zij-quests. goal.kind = 'kill' (versla `count` vijanden van soort `type`) of 'collect' (raap `count` dingen op).
+ * De zij-quests. goal.kind = 'kill' (versla `count` vijanden van soort `type`), 'collect' (raap `count` dingen op)
+ * of 'boss' (versla een boss: dat regelt die boss zelf, zie sky.js).
  * reward = munten en voorwerpen. De teksten: offer (als je de quest krijgt), busy (nog bezig), done (inleveren), after (daarna).
  */
 export const QUESTS = {
@@ -137,6 +143,22 @@ export const QUESTS = {
     busy: 'Rol opzij als hun ogen rood worden!',
     done: ['Drie mecha\'s! Jij bent echt de beste Munt Jager.', 'Hier, alles wat ik heb gespaard. Versla Gorath!'],
     after: 'Ik wacht hier op je. Succes bovenop de berg!',
+  },
+  // Sky verslaan in het Wolkenrijk. kelken = zoveel Wolkenkelken kost één reis met de Donderpoort (zie sky.js)
+  'donder-sky': {
+    title: 'De storm van Sky',
+    goal: { kind: 'boss', boss: 'sky', count: 1, kelken: 4, label: 'Sky verslaan' },
+    reward: { runes: 500, items: [{ kind: 'flask' }] },
+    offer: [
+      'Hohoho! Een avonturier! Ik ben <b>Opa Donder</b>. Ik woon hier al honderd jaar tussen de bliksem.',
+      'Hoog boven de wolken ligt het <b>Wolkenrijk</b>. Daar woont <b>Sky</b>, de Heer van de Storm. Hij is nog sterker dan Omar!',
+      'Hij wordt een wolk en verschijnt opeens <b>vóór</b> of <b>achter</b> je. En hij heeft <b>bliksemwolven</b>... brrr.',
+      'Wie Sky verslaat krijgt <b>1500 munten</b>. En héél soms laat hij zijn bliksemzwaard <b>NightWalker</b> vallen!',
+      'Mijn <b>Donderpoort</b> brengt je erheen, maar elke reis kost <b>4 Wolkenkelken</b>. De <b>Wolkenwachten</b> hier in het hoogland laten ze soms vallen.',
+    ],
+    busy: 'Heb je al 4 Wolkenkelken? Stap dan op mijn Donderpoort en druk op <b>E</b>!',
+    done: ['Je hebt Sky verslagen?! Ik hoorde het donderen tot hier!', 'Hier, een Gouden Appel en wat munten van een trotse opa. Je mag zo vaak terug als je wilt!'],
+    after: 'Wil je NightWalker? Probeer het nog eens! De Donderpoort staat altijd klaar.',
   },
 };
 
@@ -505,11 +527,11 @@ export class NPCs {
     const defs = [...LEVEL.npcs];
     const [, , gx, gz] = LEVEL.checkpoints[0];
     // Vergeten Omar in levels.js te zetten? Dan staat hij gewoon vlak bij het begin.
-    if (!LEVEL.castle && !defs.some((d) => d[0] === 'omar')) defs.push(['omar', gx - 4, gz - 9]);
+    if (!LEVEL.special && !defs.some((d) => d[0] === 'omar')) defs.push(['omar', gx - 4, gz - 9]);
     this.list = defs.map((def) => (def[0] === 'omar' ? new OmarNPC(scene, def, colliders, stats) : new NPC(scene, def, colliders)));
     this.omar = this.list.find((n) => n.omar) ?? null;
     this.koopman = null;
-    if (!LEVEL.castle) {
+    if (!LEVEL.special) {
       // Een koopman met zijn kraampje vlak bij het begin van elk gebied.
       // (lx, lz = plek in het gebied zelf; r.t zet dat op de goede plek in de wereld, ook als het gebied omgedraaid ligt)
       for (const r of LEVEL.regions) {
@@ -583,6 +605,7 @@ export class NPCs {
       this.stats.save();
       return { lines: [...quest.offer, `<i>Nieuwe quest: ${quest.title}</i>`], started: quest };
     }
+    if (state === 'actief' && quest.goal.kind === 'boss') return { lines: [`${quest.busy} <small>(Wolkenkelken: ${this.stats.data.sky?.kelken ?? 0} / ${quest.goal.kelken})</small>`] };
     if (state === 'actief') return { lines: [`${quest.busy} <small>(${this.progress(id)} / ${quest.goal.count})</small>`] };
     if (state === 'klaar') {
       data[id].state = 'beloond';
@@ -619,6 +642,10 @@ export class NPCs {
       .filter(([id, q]) => QUESTS[id] && (q.state === 'actief' || q.state === 'klaar'))
       .map(([id, q]) => {
         const quest = QUESTS[id];
+        if (quest.goal.kind === 'boss') {
+          const kelken = this.stats.data.sky?.kelken ?? 0;
+          return { title: quest.title, text: q.state === 'klaar' ? 'Ga terug naar Opa Donder!' : `Wolkenkelken: ${kelken} / ${quest.goal.kelken} · daarna: ${quest.goal.label}`, done: q.state === 'klaar' };
+        }
         const what = quest.goal.kind === 'kill' ? `${quest.goal.type === 'slijmpje' ? 'Slijmpjes' : quest.goal.type === 'zombie' ? 'Zombies' : 'Mecha-Wachters'} verslaan` : `${quest.goal.label} vinden`;
         return { title: quest.title, text: q.state === 'klaar' ? 'Ga terug om je beloning te halen!' : `${what}: ${Math.min(q.count, quest.goal.count)} / ${quest.goal.count}`, done: q.state === 'klaar' };
       });
