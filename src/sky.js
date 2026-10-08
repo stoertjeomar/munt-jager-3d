@@ -359,7 +359,7 @@ export class SkyFlow extends OmarFlow {
     const at = enemy.center;
     this.effects.burst(at, 0xffd23a, { count: 24, speed: 4, size: 0.12, life: 0.8, up: 3 });
     this.effects.puff(at, CLOUD[0], { count: 8, speed: 2, size: 1, life: 0.9, up: 0.6 });
-    this.effects.floatText(at.clone().setY(at.y + 1), '+1 Wolkenkelk', '#ffe680', 0.55);
+    this.effects.floatText(at.clone().setY(at.y + 1), '+1 🏆', '#ffe680', 0.55);
     play('shine');
     const enough = this.kelken >= SKY_LOOT.kelken;
     const quest = this.questState;
@@ -412,6 +412,13 @@ export class SkyFlow extends OmarFlow {
         ui.toast(RETURN_TEXTS[this.pendingResult] ?? RETURN_TEXTS.terug, 6);
         this.pendingResult = null;
       }
+    }
+    // De eerste keer dat je Opa Donder ziet: uitleg (pas na de grote level-titel)
+    if (running) this.runTime = (this.runTime ?? 0) + dt;
+    if (!this.d.seen && this.npc && this.runTime > 4.6 && !ui.menuOpen && player.position.distanceTo(this.npc.position) < 14) {
+      this.d.seen = true;
+      this.stats.save();
+      ui.toast('Dat is <b>Opa Donder</b>. Hij weet de weg naar het Wolkenrijk van <b>Sky</b>...<br>Loop naar hem toe en druk op <b>E</b>.', 6);
     }
     // Kiezen met het toetsenbord: J = ja, N = nee
     if (this.phase === 'kiezen') {

@@ -120,6 +120,13 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
   álle krachten: dash, wervelslag, dubbele sprong met grondslag, vuurzwaard, rollen en zelf flesjes drinken. Hij kan
   **teleporteren** ("Achter je!"), de **bliksem** laten inslaan en als hij boos is roept hij **schaduwklonen** op die op je
   af stormen. Verlies je? Dan ben je niks kwijt. Win je? Dan krijg je de **Kroon van Omar**, zijn **Zeis** en een gek feest
+- **Sky, de Heer van de Storm** (de eindbaas): in het Rotshoogland woont **Opa Donder** met de quest *De storm van Sky*.
+  **Wolkenwachten** (zwevende onweerswolkjes) laten soms een **Wolkenkelk** vallen. Met 4 kelken brengt de **Donderpoort**
+  je naar het **Wolkenrijk**: een wolkenplateau onder een onweerslucht vol bliksem en donder. Sky zit op een troon van
+  wolken, wordt een wolk en slaat als bliksem de arena in. Hij is sneller dan Omar, heeft een stormhuid met gele
+  bliksemaders, rode ogen en een wolken-aura, **teleporteert als een wolk vóór óf achter je**, laat gele bliksem inslaan
+  en roept **bliksemwolven** op. Win je? Altijd **1500 munten**, en 1 op de 10 keer laat hij zijn bliksemzwaard
+  **NightWalker** vallen: elke klap zapt, elke 3e raak-klap slaat de bliksem in en met **C** word je even een wolk
 - **Muziek** (zie Credits): bij **alle boss-gevechten** speelt *Where Is Your God Now*, tegen **Omar** zijn eigen epische
   boss-muziek, die al zachtjes opkomt terwijl hij praat en sneller gaat als hij boos wordt. In het Spookwoud en het
   Rotshoogland speelt duistere muziek, en de Weide en de Ruïnevallei hebben een zelfgemaakt deuntje (gemaakt in de code).
@@ -171,6 +178,11 @@ munt-jager-3d/
     ├── omar.js       → alles rond Omar: uitdagen, het kasteel-filmpje, winnen (feest!) en verliezen
     ├── omarFighter.js→ Omar zelf in het gevecht: zijn brein, aanvallen, teleporteren en praatjes
     ├── castle.js     → het Gekke Kasteel van Omar met de arena en zijn troon
+    ├── sky.js        → alles rond Sky: Opa Donder, Wolkenkelken, de Donderpoort, het filmpje en de beloning
+    ├── skyFighter.js → Sky zelf in het gevecht (een Omar-vechter met wolkenteleport en bliksemwolven)
+    ├── skyworld.js   → het Wolkenrijk met onweer · skyLook.js → Sky's stormhuid · wolf.js → de bliksemwolven
+    ├── lightning.js  → bliksemschichten (Omar, Sky, NightWalker en het onweer)
+    ├── nightwalker.js→ de krachten van NightWalker: zap, blikseminslag en de wolk-dash
     ├── music.js      → de muziek: liedjes als "bladmuziek" in tekst en een kleine sequencer
     ├── audio.js      → geluiden · camera.js · input.js · assets.js
 ```
@@ -186,6 +198,8 @@ munt-jager-3d/
 - **Krachten en levelen** → `POWERS`, `PERKS` en `killsNeeded` in `src/stats.js`
 - **Personages** → `CHARACTERS` en `PLAYABLE` bovenaan `src/player.js`
 - **Omar sterker of zwakker maken** → `OMAR` bovenaan `src/omarFighter.js`. Test het kasteel met `?level=omar`
+- **Sky sterker of zwakker maken** → `SKY` bovenaan `src/skyFighter.js`, de beloning en kelken in `SKY_LOOT` in `src/sky.js`.
+  Test het Wolkenrijk met `?level=sky`
 - **Muziek** → `SONGS` in `src/music.js`: schrijf je eigen liedje met noten als `C5 - E5 G5`
 - **Opnieuw beginnen** → uitrusting (I) → *Nieuw spel beginnen*
 

@@ -1227,5 +1227,6 @@ if (stats.level === 1 && stats.runes === 0 && stats.data.bosses.length === 0) {
 window.game = { scene, player, enemies, bosses, sites, npcs, stats, ui, world, state, camera, cameraRig, renderer, composer, gfx, nightLight, grass, decor, effects, trail, onDefeated, loop: gameLoop };
 window.game.omar = omar;
 window.game.sky = sky;
+window.game.nightwalker = nightwalker;
 Object.assign(window.game, { dragon, pet, invasions, travelTo, hatchPet });
 window.game.music = music;
