@@ -28,6 +28,7 @@ import { Dragon } from './dragon.js';
 import { Pet, PET } from './pet.js';
 import { Invasions } from './invasions.js';
 import { RamesFlow } from './rames.js';
+import { Admin } from './admin.js';
 
 // ---------- Basis: renderer, scene, camera ----------
 // Geen "antialias" hier: alles gaat eerst door de nabewerking, daar zitten de gladde randjes (zie graphics.js).
@@ -1017,6 +1018,8 @@ const nightwalker = new NightWalker({ scene, player, effects });
 const invasions = new Invasions({ scene, ui, stats, effects, giveRunes, addEnemy: addSummon, removeEnemy });
 // Rames, de ondode boss op het Knekelhof in het Spookwoud: zijn filmpjes en zijn beloning (rames.js)
 const rames = new RamesFlow({ camera, cameraRig, input, state, stats, ui, player, bosses, world, effects, pickups, projectiles, dragon, omar, giveKills, giveRunes, announceNewPowers, removeSummons });
+// Het admin-menu: Enter, dan de code (admin.js)
+const admin = new Admin({ stats, player, ui, equip, close: () => cameraRig.lock() });
 
 function gameLoop() {
   // realDt = tijd sinds vorige frame. Begrensd zodat een lag-piek je niet door de vloer laat vallen.
@@ -1045,7 +1048,11 @@ function gameLoop() {
   if (closeInventory) toggleInventory();
   if (closeShopKey) closeShop();
   if (closeMap) toggleWorldMap();
-  const canAct = player.alive && !ui.menuOpen && !inDialog && state.deathTimer <= 0 && !paused && !closeInventory && !closeShopKey && !closeMap;
+  const closeAdmin = menuAtStart === 'admin' && input.wasPressed('Escape');
+  if (closeAdmin) admin.close();
+  // Enter (niet in een gesprek, menu of filmpje): het vakje voor de admin-code
+  if (input.wasPressed('Enter') && !menuAtStart && !paused && !document.body.classList.contains('omar-film')) admin.askCode();
+  const canAct = player.alive && !ui.menuOpen && !inDialog && state.deathTimer <= 0 && !paused && !closeInventory && !closeShopKey && !closeMap && !closeAdmin;
   if (canAct) handleActions(move);
   else ui.prompt(null);
 
@@ -1240,5 +1247,5 @@ window.game = { scene, player, enemies, bosses, sites, npcs, stats, ui, world, s
 window.game.omar = omar;
 window.game.sky = sky;
 window.game.nightwalker = nightwalker;
-Object.assign(window.game, { dragon, pet, invasions, rames, travelTo, hatchPet });
+Object.assign(window.game, { dragon, pet, invasions, rames, admin, travelTo, hatchPet });
 window.game.music = music;
