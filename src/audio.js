@@ -255,22 +255,23 @@ const SOUNDS = {
 
 /**
  * Praatgeluidjes, als iemand iets zegt (zoals in sommige spelletjes: "blablabla" in piepjes).
- * Iedereen heeft zijn eigen stem: Omar praat diep en snel, een robot piept.
+ * Iedereen heeft zijn eigen stem: Omar praat diep en snel, Rames nog dieper en langzaam, een robot piept.
  */
 export function talk(name = '', text = '') {
   if (!ready()) return;
   let h = 0;
   for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 997;
   const omar = /omar/i.test(name);
+  const rames = /rames/i.test(name); // Rames is ondood: zijn stem is nog dieper, en langzaam
   const robot = /robot|biep|bot/i.test(name);
-  const base = omar ? 118 : 200 + (h % 9) * 26;
-  const type = omar ? 'sawtooth' : robot ? 'sine' : h % 2 ? 'square' : 'triangle';
+  const base = rames ? 84 : omar ? 118 : 200 + (h % 9) * 26;
+  const type = omar || rames ? 'sawtooth' : robot ? 'sine' : h % 2 ? 'square' : 'triangle';
   const letters = text.replace(/<[^>]+>/g, '').length;
   const n = Math.max(3, Math.min(14, Math.round(letters / 5)));
-  const step = omar ? 0.065 : 0.075;
+  const step = rames ? 0.09 : omar ? 0.065 : 0.075;
   for (let i = 0; i < n; i++) {
     const f = robot ? base * (i % 2 ? 2 : 1.5) : base * (0.85 + Math.random() * 0.5);
-    tone({ type, from: f, to: f * (0.9 + Math.random() * 0.25), duration: step * 0.8, volume: omar ? 0.06 : type === 'square' ? 0.035 : 0.06, delay: i * step });
+    tone({ type, from: f, to: f * (0.9 + Math.random() * 0.25), duration: step * 0.8, volume: rames ? 0.075 : omar ? 0.06 : type === 'square' ? 0.035 : 0.06, delay: i * step });
   }
 }
 

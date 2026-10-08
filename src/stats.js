@@ -102,6 +102,8 @@ function freshSave() {
       trip: null, // { level, checkpoint }: waar je was toen Omar je meenam
       back: null, // { level, checkpoint, result }: zo kom je terug in je level
     },
+    // Rames (zie rames.js): heb je zijn lange filmpje al gezien, en hoe vaak je won of verloor
+    rames: { seen: false, wins: 0, losses: 0 },
     victory: false,
   };
 }

@@ -295,6 +295,40 @@ canvas {
   text-shadow: 0 0 18px rgba(155, 231, 255, 0.6);
 }
 
+/* Rames: paars, en groen als hij uit de dood is opgestaan */
+.banner-rames #banner-text {
+  color: #c79bff;
+  text-shadow: 0 0 22px rgba(155, 77, 255, 0.85);
+}
+
+.banner-herrezen #banner-text {
+  color: #8dffa0;
+  text-shadow: 0 0 22px rgba(93, 255, 122, 0.85);
+}
+
+/* ---------- Rames (rames.js): duisternis rond het beeld op het Knekelhof, en de flits van de bliksem ---------- */
+#rames-dark {
+  position: fixed;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 45%, transparent 30%, rgba(24, 6, 44, 0.75) 75%, rgba(4, 0, 10, 0.96) 100%);
+}
+
+#rames-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 14;
+  pointer-events: none;
+  background: #e9d6ff;
+  animation: rames-flash 0.6s ease-out forwards;
+}
+
+@keyframes rames-flash {
+  from { opacity: 0.9; }
+  to { opacity: 0; }
+}
+
 /* ---------- Menu ---------- */
 #menu {
   position: fixed;

@@ -223,6 +223,10 @@ const SONGS = {
   },
 };
 
+// Rames: dezelfde zware boss-muziek, maar die komt al zachtjes op tijdens zijn filmpje (stand -1)
+// en speelt sneller als hij uit de dood is opgestaan (stand 1).
+SONGS.rames = { ...SONGS.boss, fileFaster: 1.1, faster: 1.12 };
+
 // Tekst-bladmuziek omzetten naar lijstjes (één keer, bij het laden)
 for (const song of Object.values(SONGS)) prepare(song);
 function prepare(song) {

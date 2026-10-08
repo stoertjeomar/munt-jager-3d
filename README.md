@@ -107,11 +107,19 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
 - **5 krachten**: Dash, Dubbele sprong, Wervelslag, Grondslag en Vuurzwaard (vrijspelen door te levelen en bosses te verslaan)
 - **Wapens** (alleen slagwapens): kort zwaard, dolk, bijl, ridderzwaard, katana, knots, strijdhamer, IJszwaard,
   Zonnezwaard, het diamanten zwaard, het **Demonenzwaard** (in een kist in het Rotshoogland) en de **Zeis van de Dood**
-  (die krijg je als je Omar verslaat) — plus 3 helmen. Te vinden in kisten, bij quests en bij bosses
+  (die krijg je als je Omar verslaat) en de **Schaduwkatana** (van Rames) — plus 3 helmen. Te vinden in kisten, bij quests en bij bosses
 - **Vijanden**: slijmpjes, slijmballen, spoken, rotsgolems, zombies, Spierbonken, Mecha-Wachters, **Boks-Dino's**
-  (spring op hun hoofd: BOING!), **Bigfoots** en Omars **schaduwkrijgers**. Alle vijanden zijn een stuk sterker geworden
+  (spring op hun hoofd: BOING!), **Bigfoots**, Omars **schaduwkrijgers** en de **bullys** van Rames (skeletten). Alle vijanden zijn een stuk sterker geworden
 - **4 bosses** met een mistmuur, boss-balk en een tweede fase: Koning Slijm, De Gevallen Ridder,
   Steenreus Gorath en Budget Mario. Ze hebben meer leven, doen meer schade en zijn sneller
+- **Rames, de Heer van de Ondoden**: een geheime, héél sterke boss op **het Knekelhof**, een kerkhof in het Spookwoud
+  (neem het zijpad bij de vlag *Woudruïne*; op de kaart staat een paars ✝). Hij is een ondode samoerai met een
+  **Schaduwkatana** vol duistere magie en hij praat zoals de echte Rames typt ("neef je gaat niet halen").
+  Hij heeft **vier filmpjes**: hij wordt wakker op zijn troon van bot en de bliksem slaat in op zijn katana, hij roept zijn
+  **bullys** (skeletten die uit de graven kruipen), hij valt "dood" neer maar staat groen en razend weer op
+  (*Rames de Herrezene*), en zijn echte einde. Zijn aanvallen: katana-combo met een dreun, de **Schaduwsnede** (hij flitst dwars
+  door je heen), een waaier van magie, **botstekels** onder je voeten, de **Schaduwstap** (poef, achter je!) en als hij
+  herrezen is de **Zielenstorm**. Versla hem en je krijgt de **Schaduwkatana**: het snelste wapen van het spel
 - In Muntdorp staan een **oefenpop** (sla erop om je schade te zien, hij valt nooit om) en **Zorp de Alien** (praat met hem!)
 - 3 verstopte **diamanten** per gebied, hartjes, munten die naar je toe vliegen
 - **Omar, de maker van het spel**, woont in Muntdorp. Daag hem uit (E) en hij neemt je mee naar zijn **Gekke Kasteel**:
@@ -120,7 +128,8 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
   álle krachten: dash, wervelslag, dubbele sprong met grondslag, vuurzwaard, rollen en zelf flesjes drinken. Hij kan
   **teleporteren** ("Achter je!"), de **bliksem** laten inslaan en als hij boos is roept hij **schaduwklonen** op die op je
   af stormen. Verlies je? Dan ben je niks kwijt. Win je? Dan krijg je de **Kroon van Omar**, zijn **Zeis** en een gek feest
-- **Muziek** (zie Credits): bij **alle boss-gevechten** speelt *Where Is Your God Now*, tegen **Omar** zijn eigen epische
+- **Muziek** (zie Credits): bij **alle boss-gevechten** speelt *Where Is Your God Now* (bij Rames komt hij al zachtjes op
+  tijdens zijn filmpje, en gaat hij sneller als hij herrezen is), tegen **Omar** zijn eigen epische
   boss-muziek, die al zachtjes opkomt terwijl hij praat en sneller gaat als hij boos wordt. In het Spookwoud en het
   Rotshoogland speelt duistere muziek, en de Weide en de Ruïnevallei hebben een zelfgemaakt deuntje (gemaakt in de code).
   De muziek wisselt vanzelf als je een ander gebied in loopt
@@ -149,7 +158,7 @@ munt-jager-3d/
     ├── blobs.js      → zachte schaduw-vlekjes onder de speler, vijanden en mensen
     ├── grass.js      → dicht, wuivend gras rond de speler (alleen op Normaal en Hoog)
     ├── levels.js     → de 4 gebieden: pad, vijanden, kisten, NPC's, huizen (pas hier je gebieden aan!) en hoe ze samen de open wereld vormen
-    ├── world.js      → bouwt de wereld: grond, paden, huizen, ruïnes, natuur, arena's, mist, dag en nacht
+    ├── world.js      → bouwt de wereld: grond, paden, huizen, ruïnes, natuur, arena's, het Knekelhof, mist, dag en nacht
     ├── npcs.js       → NPC's en hun zij-quests
     ├── decor.js      → planten, stenen, bolle wolken, riet bij de vijvers en dieren
     ├── player.js     → speler: bewegen, rollen, krachten, flesjes, personages
@@ -171,6 +180,8 @@ munt-jager-3d/
     ├── omar.js       → alles rond Omar: uitdagen, het kasteel-filmpje, winnen (feest!) en verliezen
     ├── omarFighter.js→ Omar zelf in het gevecht: zijn brein, aanvallen, teleporteren en praatjes
     ├── castle.js     → het Gekke Kasteel van Omar met de arena en zijn troon
+    ├── rames.js      → alles rond Rames: zijn filmpjes, wat hij zegt en je beloning
+    ├── ramesFighter.js→ Rames zelf in het gevecht: zijn model, aanvallen, bullys en opstaan uit de dood
     ├── music.js      → de muziek: liedjes als "bladmuziek" in tekst en een kleine sequencer
     ├── audio.js      → geluiden · camera.js · input.js · assets.js
 ```
@@ -186,6 +197,9 @@ munt-jager-3d/
 - **Krachten en levelen** → `POWERS`, `PERKS` en `killsNeeded` in `src/stats.js`
 - **Personages** → `CHARACTERS` en `PLAYABLE` bovenaan `src/player.js`
 - **Omar sterker of zwakker maken** → `OMAR` bovenaan `src/omarFighter.js`. Test het kasteel met `?level=omar`
+- **Rames sterker of zwakker maken** → `RAMES` bovenaan `src/ramesFighter.js` (zijn leven: `BOSS_INFO` in `src/bosses.js`).
+  Wat hij zegt → `LINES` bovenaan `src/rames.js` (en `BARKS` in `src/ramesFighter.js`). Testen: begin met `?level=3`, en typ
+  in de console (F12) `game.rames.skipToFight()` of `game.rames.setHp(0.01)` (één klap en hij "sterft")
 - **Muziek** → `SONGS` in `src/music.js`: schrijf je eigen liedje met noten als `C5 - E5 G5`
 - **Opnieuw beginnen** → uitrusting (I) → *Nieuw spel beginnen*
 
