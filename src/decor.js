@@ -256,8 +256,8 @@ export class Decor {
     }
     if (rocksA) scatter(scene, rocksA, spots(rand, 25, { regions: green, scaleMin: 0.8, scaleMax: 1.5 }), { shadows: true });
     if (rocksB) scatter(scene, rocksB, spots(rand, 25, { regions: green, scaleMin: 0.8, scaleMax: 1.5 }), { shadows: true });
-    if (rocksDesA) scatter(scene, rocksDesA, spots(rand, 50, { regions: ['hoogland'], scaleMin: 1, scaleMax: 2 }), { shadows: true });
-    if (rocksDesB) scatter(scene, rocksDesB, spots(rand, 50, { regions: ['hoogland'], scaleMin: 1, scaleMax: 2 }), { shadows: true });
+    if (rocksDesA) scatter(scene, rocksDesA, spots(rand, 40, { regions: ['hoogland', 'schaduw'], scaleMin: 1, scaleMax: 2 }), { shadows: true });
+    if (rocksDesB) scatter(scene, rocksDesB, spots(rand, 40, { regions: ['hoogland', 'schaduw'], scaleMin: 1, scaleMax: 2 }), { shadows: true });
 
     // Bolle wolken die langzaam voorbij drijven (8 vormen, steeds anders gedraaid en geschaald)
     this.cloudMat = createCloudMaterial();

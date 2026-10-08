@@ -129,6 +129,23 @@ const SONGS = {
     ],
   },
 
+  // Het Schaduwrijk: een langzaam, eng koor en een kerkorgel, met een hartslag eronder
+  schaduw: {
+    bpm: 66, gain: 0.62,
+    chords: ['Dm', 'Bb', 'Gm', 'A', 'Dm', 'F', 'Gm', 'A7'],
+    tracks: [
+      { inst: 'organ', vol: 0.06, div: 1, pattern: 'c' },
+      { inst: 'choirLow', vol: 0.08, div: 1, oct: 3, pattern: 'c', fx: true },
+      { inst: 'choir', vol: 0.06, div: 2, fx: true, notes: `
+        D5 - | F5 E5 | D5 - | C#5 - | D5 - | A4 C5 | Bb4 G4 | A4 -` },
+      { inst: 'bell', vol: 0.07, div: 4, fx: true, notes: `
+        A5 . . . | . . F5 . | G5 . . . | . . E5 . | A5 . . . | . . C6 . | Bb5 . . . | A5 . . .` },
+      { inst: 'sub', vol: 0.22, div: 1, pattern: 'R' },
+      { inst: 'cello', vol: 0.06, div: 8, pattern: 'R . . b2 R . . .' },
+      { inst: 'drums', vol: 0.45, div: 8, kit: { kick: 'x..x....', tom: '....x...' } },
+    ],
+  },
+
   // Het Gekke Kasteel van Omar: spannend orgel terwijl hij op zijn troon zit
   kasteel: {
     bpm: 72, gain: 0.6,

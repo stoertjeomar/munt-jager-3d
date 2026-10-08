@@ -6,13 +6,14 @@ import { BlobShadows } from './blobs.js';
 import { GrassField } from './grass.js';
 import { Player, PLAYABLE } from './player.js';
 import { createWorld, CHECKPOINTS, ARENAS, CHESTS, grassMask } from './world.js';
-import { LEVELS, LEVEL, IN_CASTLE, REGIONS, REGION_WIDTH, URL_REGION, regionIndexAt, regionOfCheckpoint } from './levels.js';
+import { LEVELS, LEVEL, IN_CASTLE, REGIONS, REGION_WIDTH, URL_REGION, LOCKED_REGION, GATE_X, regionIndexAt, regionOfCheckpoint } from './levels.js';
 import { NPCs } from './npcs.js';
 import { createEnemies, spawnEnemy } from './enemies.js';
-import { createBosses, BOSS_INFO, BOSS_POWER } from './bosses.js';
+import { createBosses, BOSS_INFO, BOSS_POWER, RAGE } from './bosses.js';
+import './shadowDragon.js'; // de eindbaas in het Schaduwrijk (meldt zichzelf aan bij de bosses)
 import { Sites } from './sites.js';
 import { Decor } from './decor.js';
-import { Stats, POWERS, PERKS, BOSS_KILLS, SHOP_ITEMS } from './stats.js';
+import { Stats, POWERS, PERKS, BOSS_KILLS, SHOP_ITEMS, STAR_ITEMS, APPLE_HEALTH } from './stats.js';
 import { itemInfo } from './gear.js';
 import { Effects } from './effects.js';
 import { SwordTrail } from './trail.js';
@@ -23,8 +24,11 @@ import { Pickups, DIAMONDS } from './pickups.js';
 import { Projectiles } from './projectiles.js';
 import { OmarFlow } from './omar.js';
 import { Dragon } from './dragon.js';
-import { Pet, PET } from './pet.js';
+import { Pet, PET, PETS } from './pet.js';
 import { Invasions } from './invasions.js';
+import { Goals } from './goals.js';
+import { Champions, CHAMPION } from './champions.js';
+import { Villagers } from './villagers.js';
 
 // ---------- Basis: renderer, scene, camera ----------
 // Geen "antialias" hier: alles gaat eerst door de nabewerking, daar zitten de gladde randjes (zie graphics.js).
@@ -46,6 +50,20 @@ if (!IN_CASTLE && URL_REGION !== null) stats.data.checkpoint = LEVELS[URL_REGION
 if (!CHECKPOINTS.some((c) => c.id === stats.data.checkpoint)) stats.data.checkpoint = CHECKPOINTS[0].id;
 if (!IN_CASTLE && !stats.data.flags.includes(stats.data.checkpoint)) stats.data.flags.push(stats.data.checkpoint);
 const ui = new UI(stats);
+// Doelen: trofeeën (met sterren) en premies (goals.js)
+const goals = new Goals(stats, {
+  onTrophies(list) {
+    play('levelUp');
+    const total = list.reduce((n, t) => n + t.stars, 0);
+    ui.toast(list.length === 1
+      ? `🏆 <b>Trofee: ${list[0].name}</b> ${list[0].icon}<br><small>${list[0].info} · +${total} ⭐ (bekijk ze met K)</small>`
+      : `🏆 <b>${list.length} trofeeën verdiend!</b> +${total} ⭐<br><small>${list.map((t) => t.name).join(', ')} (bekijk ze met K)</small>`, 5);
+  },
+  onBounty(b) {
+    play('pickup');
+    ui.toast(`📜 <b>Premie klaar!</b> ${goals.bountyText(b)}<br><small>Haal je beloning op bij het Premiebord in Muntdorp of bij een koopman.</small>`, 4.5);
+  },
+});
 const input = new Input();
 const world = createWorld(scene);
 const sites = new Sites(scene, { checkpoints: CHECKPOINTS, chests: CHESTS }, stats);
@@ -56,8 +74,9 @@ const player = new Player(scene, stats);
 const enemies = createEnemies(scene);
 const bosses = createBosses(scene, ARENAS, []); // de bosses zijn er altijd (ook als je ze al eens versloeg: dan krijg je minder)
 const npcs = new NPCs(scene, stats, world.colliders);
-const dragon = new Dragon(scene); // Vuurtand de draak: B (na de eerste boss)
-const pet = new Pet(scene, stats); // Knokkie het Boks-Dinootje (uit het Dino-ei van de koopman)
+const dragon = new Dragon(scene, stats.data.dragonSkin); // Vuurtand de draak: B (na de eerste boss)
+const pet = new Pet(scene, stats); // Knokkie het Boks-Dinootje (Dino-ei) of Pluis de kat (sterrenwinkel)
+const villagers = IN_CASTLE ? null : new Villagers(scene, world.colliders); // dorpelingen en het Premiebord in Muntdorp
 const effects = new Effects(scene);
 const trail = new SwordTrail(scene);
 const cameraRig = new CameraRig(camera, renderer.domElement);
@@ -142,6 +161,13 @@ function hurtPlayer(from, damage) {
 function giveRunes(amount) {
   stats.addRunes(amount);
   ui.addRunes(amount);
+  if (amount > 0) goals.onCoins(amount);
+}
+
+/** Sterren erbij (om uit te geven in de sterrenwinkel). */
+function giveStars(amount) {
+  stats.data.stars = (stats.data.stars ?? 0) + amount;
+  stats.data.starsEarned = (stats.data.starsEarned ?? 0) + amount;
 }
 
 /**
@@ -200,6 +226,13 @@ function respawnWorld() {
 function onHit(target, result, color) {
   const at = target.center;
   const helper = state.byDragon || state.byPet;
+  if (result.blocked) {
+    // Geblokt! (de Ninjapop hield zijn zwaard ervoor)
+    effects.sparks(at, 0xffffff);
+    effects.floatText(at.clone().setY(at.y + target.type.height * 0.6), 'GEBLOKT!', '#9be7ff', 0.5);
+    play('clang');
+    return;
+  }
   effects.sparks(at, color);
   effects.burst(at, target.type.color, { count: 8, speed: 5, size: 0.12, life: 0.5 });
   effects.floatText(at.clone().setY(at.y + target.type.height * 0.6), `${result.damage}`, state.byPet ? '#7dffe0' : state.byDragon || player.fireTimer > 0 ? '#ff9a3c' : '#ffffff');
@@ -222,9 +255,18 @@ function onDefeated(target) {
   effects.burst(target.center, 0xffd700, { count: 8, speed: 3, size: 0.08, life: 0.6, up: 4 });
   const finished = target.typeKey ? npcs.onKill(target.typeKey) : null;
   if (finished) questReady(finished);
-  if (state.byPet && pet.addKill()) ui.toast(`🦖 <b>${PET.name}</b> is nu <b>level ${pet.level}</b>! Hij stoot harder (${pet.damage} schade).`, 3.5);
+  if (state.byPet && pet.addKill()) ui.toast(`${PETS[pet.kind].icon} <b>${pet.name}</b> is nu <b>level ${pet.level}</b>! Doet nu ${pet.damage} schade.`, 3.5);
   if (!target.summoned) {
     if (!state.byDragon) giveKills(1); // de draak helpt, maar sterker worden doe je zelf
+    goals.onKill({ typeKey: target.typeKey, champion: !!target.champion, byDragon: !!state.byDragon, byPet: !!state.byPet });
+    if (target.champion) {
+      // Een Kampioen! Veel meer munten en een ster
+      const bonus = champions.bonusRunes(target);
+      giveRunes(bonus);
+      giveStars(1);
+      champions.celebrate(target);
+      ui.toast(`👑 <b>Kampioen verslagen!</b> +${target.type.runes + bonus} munten en +1 ⭐`, 4);
+    }
     giveRunes(target.type.runes);
     pickups.coinBurst(target.center, target.type.runes);
     if (Math.random() < 0.2) pickups.dropHeart(target.position);
@@ -238,11 +280,52 @@ const BOSS_REWARDS = {
   koning: [{ kind: 'helmet', key: 'goud' }, { kind: 'flask' }],
   ridder: [{ kind: 'weapon', key: 'diamant' }],
   reus: [],
+  schaduwdraak: [{ kind: 'weapon', key: 'drakenzwaard' }],
 };
+
+// ---------- De Schaduwpoort (naar het Schaduwrijk, gebied 5) ----------
+/** Is de Schaduwpoort open? Dat is zo als de vier bosses van de wereld verslagen zijn. */
+function gateOpen() {
+  return !LOCKED_REGION || REGIONS.every((r) => r === LOCKED_REGION || stats.data.bosses.includes(r.boss));
+}
+
+/** Welke bosses moet je nog verslaan om de poort te openen? */
+function gateMissing() {
+  return REGIONS.filter((r) => r !== LOCKED_REGION && !stats.data.bosses.includes(r.boss)).map((r) => BOSS_INFO[r.boss].name);
+}
+
+/** De poort gaat open: naar het begin van het Schaduwrijk kun je nu ook snelreizen. */
+function openGate() {
+  world.gate?.setOpen(true);
+  if (LOCKED_REGION && !stats.data.flags.includes(LOCKED_REGION.start)) stats.data.flags.push(LOCKED_REGION.start);
+}
+
+let gateToast = 0;
+/** Zolang de poort dicht is: jij, je draak en je huisdier kunnen er niet door (en de vijanden van het Schaduwrijk niet terug). */
+function keepGateClosed(dt) {
+  if (IN_CASTLE || !LOCKED_REGION || gateOpen()) return;
+  gateToast -= dt;
+  const max = GATE_X - 0.6;
+  if (player.position.x > max) {
+    player.position.x = max;
+    if (gateToast <= 0) {
+      gateToast = 8;
+      play('gong');
+      ui.toast(`🔒 <b>De Schaduwpoort is dicht.</b><br><small>Hij gaat pas open als je deze bosses hebt verslagen: ${gateMissing().join(', ')}.</small>`, 5);
+    }
+  }
+  if (dragon.active && dragon.position.x > max - 2) dragon.position.x = max - 2;
+  if (pet.position.x > max) pet.position.x = max;
+  for (const e of enemies) if (e.home.x > GATE_X && e.position.x < GATE_X + 0.6) e.position.x = GATE_X + 0.6;
+}
 
 function onBossDefeated(boss) {
   if (boss.id === 'omar') return omar.onWin(boss); // Omar verslagen: eigen feest, beloning en terugreis (omar.js)
   const firstTime = !stats.data.bosses.includes(boss.id);
+  const wasOpen = gateOpen();
+  const rage = !!boss.rage;
+  goals.onBoss(boss.id, rage);
+  boss.respawnT = BOSS_RESPAWN; // over een paar minuten is hij terug (en dan woedend)
   play('win');
   effects.shake(0.5);
   ui.banner('VIJAND GEVELD', boss.name, 'gold', 5);
@@ -250,18 +333,29 @@ function onBossDefeated(boss) {
   const levelBefore = stats.level;
   // Een boss telt als een heleboel verslagen vijanden
   const newPerks = giveKills(firstTime ? BOSS_KILLS.first : BOSS_KILLS.again, false) ?? [];
-  giveRunes(firstTime ? BOSS_INFO[boss.id].runes : Math.round(BOSS_INFO[boss.id].runes / 3));
+  giveRunes(firstTime || rage ? BOSS_INFO[boss.id].runes : Math.round(BOSS_INFO[boss.id].runes / 3));
   pickups.coinBurst(boss.center, 100);
   const rewards = firstTime ? BOSS_REWARDS[boss.id] : [];
   if (firstTime) stats.data.bosses.push(boss.id);
   for (const item of rewards) stats.addItem(item);
   const rewardNames = rewards.map((i) => itemInfo(i).name);
   if (firstTime && boss.id === DRAGON_BOSS) rewardNames.push('🐉 Vuurtand de draak (druk op <b>B</b>!)');
+  if (rage) {
+    giveStars(2);
+    rewardNames.push('⭐⭐ 2 sterren (je versloeg hem woedend!)');
+  }
+  if (firstTime && boss.id === 'schaduwdraak') {
+    // De eindbaas: je draak mag zijn kleuren hebben
+    stats.data.dragonSkins = [...new Set([...(stats.data.dragonSkins ?? []), 'schaduw'])];
+    rewardNames.push('🐉 Schaduwkleuren voor Vuurtand (kies ze bij je uitrusting, I)');
+  }
   // Het volgende gebied gaat open: naar het begin daarvan kun je meteen snelreizen
   const region = REGIONS[boss.arena.region ?? 0];
   const next = REGIONS[region.index + 1];
   stats.data.unlockedLevel = Math.max(stats.data.unlockedLevel, next ? next.index : region.index);
-  if (next && !stats.data.flags.includes(next.start)) stats.data.flags.push(next.start);
+  if (next && !next.level.locked && !stats.data.flags.includes(next.start)) stats.data.flags.push(next.start);
+  const gateJustOpened = !wasOpen && gateOpen();
+  if (gateJustOpened) openGate();
   state.activeBoss = null;
   state.lockTarget = null;
   removeSummons();
@@ -269,30 +363,66 @@ function onBossDefeated(boss) {
 
   setTimeout(() => {
     announceNewPowers(before, 0, newPerks);
-    showRegionComplete(region, rewardNames, stats.level > levelBefore);
+    showRegionComplete(region, rewardNames, stats.level > levelBefore, { gateJustOpened, final: boss.id === 'schaduwdraak' && firstTime });
   }, 4500);
 }
 
 /** "GEBIED VEILIG": de boss van dit gebied is verslagen. Snel door naar het volgende gebied, of verder lopen. */
-function showRegionComplete(region, rewards, leveledUp = false) {
+function showRegionComplete(region, rewards, leveledUp = false, { gateJustOpened = false, final = false } = {}) {
   const allDone = REGIONS.every((r) => stats.data.bosses.includes(r.boss));
   if (allDone) {
     stats.data.victory = true;
     stats.save();
   }
   document.exitPointerLock?.();
-  const next = REGIONS[region.index + 1];
-  const html = `${allDone ? 'Alle vier de bosses zijn verslagen. <b>Jij bent de echte Munt Jager!</b>' : `<b>${region.name}</b> is weer veilig!`}
+  // Waar kun je nu heen? (het volgende gebied, of het Schaduwrijk als de poort net open is)
+  const next = gateJustOpened ? LOCKED_REGION : REGIONS[region.index + 1];
+  const nextOpen = next && stats.data.flags.includes(next.start);
+  let story = `<b>${region.name}</b> is weer veilig!`;
+  if (final) {
+    story = `De Schaduwdraak is verslagen. <b>De wereld is ECHT gered!</b><br>Omar: "WAT?! Ook mijn draak?! ... Oké, je bent goed. Maar ben je ook een <b>LEGENDE</b>?"
+      <br><br>Nieuw doel: haal alle <b>trofeeën</b> (K) en word een 🌟 Legende. Verslagen bosses komen <b>woedend</b> terug,
+      er lopen <b>Kampioenen</b> 👑 rond, en op het <b>Premiebord</b> staan steeds nieuwe opdrachten.`;
+  } else if (gateJustOpened) {
+    story = `Alle vier de bosses zijn verslagen... en ergens rommelt het. <b>De Schaduwpoort is open!</b>
+      <br>Omar: "Hahaha! Denk je dat je klaar bent? In het <b>Schaduwrijk</b> woont mijn allerlaatste geheim: de <b>SCHADUWDRAAK</b>!"`;
+  } else if (next?.level.locked && !nextOpen) {
+    story += `<br><br>🔒 De Schaduwpoort gaat open als je ook deze bosses verslaat: <b>${gateMissing().join(', ')}</b>.`;
+  }
+  const html = `${story}
     ${rewards.length ? `<br>Beloning: <b>${rewards.join(', ')}</b>` : ''}
     ${leveledUp ? `<br>⬆ Je bent nu <b>level ${stats.level}</b>!` : ''}
-    ${next ? `<br><br>Volgende gebied: <b>${next.name}</b>. Volg het pad, of reis er meteen heen.` : ''}`;
+    ${nextOpen && !final ? `<br><br>Volgende gebied: <b>${next.name}</b>. Volg het pad, of reis er meteen heen.` : ''}`;
   const buttons = [];
-  if (next) buttons.push([`▶ Snel naar ${next.name}`, () => {
+  if (nextOpen && !final) buttons.push([`▶ Snel naar ${next.name}`, () => {
     closeMenuAndPlay();
     travelTo(next.start);
   }]);
+  if (final) buttons.push(['🏆 Bekijk je trofeeën', openTrophies]);
   buttons.push(['Zelf verder lopen', closeMenuAndPlay]);
-  ui.openLevelComplete(allDone ? 'DE WERELD IS GERED' : 'GEBIED VEILIG', html, buttons);
+  ui.openLevelComplete(final ? 'DE WERELD IS ECHT GERED' : gateJustOpened ? 'DE SCHADUWPOORT IS OPEN' : allDone ? 'DE WERELD IS GERED' : 'GEBIED VEILIG', html, buttons);
+}
+
+// ---------- Trofeeën (K), premies (Premiebord) en de sterrenwinkel ----------
+function openTrophies() {
+  document.exitPointerLock?.();
+  ui.openTrophies({ close: closeMenuAndPlay });
+}
+
+function openBounties() {
+  document.exitPointerLock?.();
+  ui.openBounties({
+    text: (b) => goals.bountyText(b),
+    claim: (id) => {
+      const b = goals.claim(id);
+      if (!b) return;
+      giveRunes(b.runes);
+      play('win');
+      effects.burst(player.position.clone().setY(player.position.y + 1.2), 0xffd76a, { count: 26, speed: 4, size: 0.1, life: 0.8, up: 3 });
+      ui.toast(`📜 <b>Premie opgehaald!</b> +${b.runes} munten en +${b.stars} ⭐`, 3);
+    },
+    close: closeMenuAndPlay,
+  });
 }
 
 function closeMenuAndPlay() {
@@ -436,13 +566,35 @@ function questReady(quest) {
   ui.toast(`✔ <b>${quest.title}</b> voltooid!<br><small>Ga terug om je beloning te halen.</small>`, 4);
 }
 
-/** Het Dino-ei komt uit: Knokkie is er! */
-function hatchPet() {
+/** Een nieuw huisdier: Knokkie komt uit het Dino-ei, of Pluis de kat springt erbij. */
+function hatchPet(kind = 'knokkie') {
   const at = player.position.clone().add(player.facing.multiplyScalar(1.6)).setY(0);
-  pet.hatch(at);
-  effects.burst(at.clone().setY(0.6), 0xf3ead2, { count: 26, speed: 4, size: 0.12, life: 0.8, up: 3 }); // eierschaal
-  effects.burst(at.clone().setY(0.8), 0x7dffe0, { count: 20, speed: 3, size: 0.08, life: 0.9, up: 3 });
-  setTimeout(() => ui.toast(`🦖 <b>${PET.name}</b> is uit het ei gekropen! Hij loopt met je mee en stoot vijanden.<br><small>Elke ${PET.killsPerLevel} vijanden die hij verslaat wordt hij sterker.</small>`, 6), 2600);
+  pet.hatch(at, kind);
+  const cat = kind === 'pluis';
+  effects.burst(at.clone().setY(0.6), cat ? 0xffd08a : 0xf3ead2, { count: 26, speed: 4, size: 0.12, life: 0.8, up: 3 }); // eierschaal (of kattenhaar)
+  effects.burst(at.clone().setY(0.8), cat ? 0xff9fb0 : 0x7dffe0, { count: 20, speed: 3, size: 0.08, life: 0.9, up: 3 });
+  if (cat) play('miauw');
+  const text = cat
+    ? '🐱 <b>Pluis</b> de kat loopt nu met je mee! Ze is snel en krabt vijanden.'
+    : '🦖 <b>Knokkie</b> is uit het ei gekropen! Hij loopt met je mee en stoot vijanden.';
+  setTimeout(() => ui.toast(`${text}<br><small>Elke ${PET.killsPerLevel} vijanden die je huisdier verslaat, wordt het sterker.${pet.canSwitch ? ' Wissel van huisdier met <b>P</b>.' : ''}</small>`, 6), cat ? 600 : 2600);
+}
+
+/** P: een ander huisdier met je mee (als je er meer dan één hebt). */
+function switchPet() {
+  const kind = pet.switchPet();
+  if (kind) {
+    pet.placeNear(player.position, player.mesh.rotation.y);
+    ui.toast(`${PETS[kind].icon} <b>${PETS[kind].name}</b> loopt nu met je mee`, 2);
+  } else ui.toast(pet.owned ? 'Je hebt maar één huisdier. Pluis de kat koop je in de sterrenwinkel!' : 'Je hebt nog geen huisdier. Koop een Dino-ei bij de koopman!', 3);
+}
+
+// Draak-kleuren uit de sterrenwinkel
+const DRAGON_SKIN_ITEMS = { draakIjs: 'ijs', draakGoud: 'goud', draakSchaduw: 'schaduw' };
+function setDragonSkin(skin) {
+  stats.data.dragonSkin = skin;
+  dragon.setSkin(skin);
+  stats.save();
 }
 
 /** De winkel van de koopman openen (na een begroeting). */
@@ -455,17 +607,36 @@ function openShop(npc) {
       buy: (key) => {
         if (!stats.buy(key)) return;
         play('pickup');
-        const item = SHOP_ITEMS[key];
+        const item = SHOP_ITEMS[key] ?? STAR_ITEMS[key];
         if (key === 'soep') {
           player.health = player.maxHealth;
           player.stamina = player.maxStamina;
           player.flasks = stats.flasksMax;
           play('heal');
         } else if (key === 'hart') player.health += 10;
-        else if (key === 'dino') hatchPet();
+        else if (key === 'dino') hatchPet('knokkie');
+        else if (key === 'pluis') hatchPet('pluis');
+        else if (key === 'sterrenzwaard') stats.addItem({ kind: 'weapon', key: 'sterrenzwaard' });
+        else if (key === 'appel') {
+          stats.data.apples++;
+          player.health += APPLE_HEALTH;
+        } else if (key === 'snoepje') {
+          if (!pet.owned || !pet.levelUp()) {
+            // Geen huisdier (of hij is al level 10): geld terug
+            stats.data.stars += STAR_ITEMS.snoepje.price[0];
+            ui.toast(pet.owned ? `${pet.name} is al het hoogste level!` : 'Je hebt nog geen huisdier! Koop eerst een Dino-ei of Pluis.', 3);
+            return;
+          }
+        } else if (DRAGON_SKIN_ITEMS[key]) {
+          const skin = DRAGON_SKIN_ITEMS[key];
+          stats.data.dragonSkins = [...new Set([...(stats.data.dragonSkins ?? []), skin])];
+          setDragonSkin(skin);
+        }
+        stats.save();
         effects.burst(player.position.clone().setY(player.position.y + 1.2), 0xffd76a, { count: 20, speed: 3, size: 0.09, life: 0.7, up: 3 });
-        ui.toast(`Gekocht: <b>${item.icon} ${item.name}</b>`, 2.5);
+        ui.toast(`Gekocht: <b>${item.icon} ${item.name}</b>${key === 'sterrenzwaard' ? '<br><small>Pak hem bij je uitrusting (I)</small>' : ''}`, 2.5);
       },
+      bounties: openBounties,
       close: closeShop,
     });
   });
@@ -654,6 +825,8 @@ function toggleInventory() {
       cameraRig.lock();
     },
     equip,
+    trophies: openTrophies,
+    skin: setDragonSkin,
     wipe: () => {
       stats.wipe();
       location.reload();
@@ -789,6 +962,8 @@ function readMove() {
 function handleActions(move) {
   if (input.wasPressed('KeyB')) toggleDragon();
   if (input.wasPressed('KeyT')) toggleWorldMap();
+  if (input.wasPressed('KeyK')) openTrophies();
+  if (input.wasPressed('KeyP')) switchPet();
   const attack = input.wasPressed('KeyF') || state.attackRequested;
   state.attackRequested = false;
 
@@ -828,6 +1003,14 @@ function handleActions(move) {
   if (npc) {
     ui.prompt(npc.shop ? `<b>E</b> Winkelen bij ${npc.name}` : `<b>E</b> Praat met ${npc.name}`);
     if (input.wasPressed('KeyE')) talkTo(npc);
+    return;
+  }
+  // Het Premiebord in Muntdorp
+  const board = villagers?.board;
+  if (board && !player.isBusy && player.position.y < 1.5 && Math.hypot(board.position.x - player.position.x, board.position.z - player.position.z) < 2.6) {
+    const ready = (stats.data.bounties ?? []).filter((b) => b.count >= b.n).length;
+    ui.prompt(`<b>E</b> Premiebord bekijken${ready ? ` — <b>${ready} klaar!</b>` : ''}`);
+    if (input.wasPressed('KeyE')) openBounties();
     return;
   }
   const near = player.isBusy ? null : sites.nearbyInteraction(player.position);
@@ -943,9 +1126,12 @@ function updateBossFights() {
       if (b.dead || b.awake) continue;
       const d = player.position.clone().setY(0).distanceTo(b.arena.center);
       if (d < b.arena.radius - 1.5) {
+        // Al eens verslagen? Dan is hij nu WOEDEND (meer leven, harder en sneller, en hij geeft sterren)
+        if (b.id !== 'omar') b.setRage(stats.data.bosses.includes(b.id));
         b.wake();
         state.activeBoss = b;
-        ui.banner(b.name.toUpperCase(), BOSS_INFO[b.id].title, 'gold', 3);
+        if (b.rage) ui.banner(`😡 ${b.info.name.toUpperCase()}`, 'Hij is terug... en hij is WOEDEND! Versla hem voor 2 ⭐', 'death', 3.5);
+        else ui.banner(b.name.toUpperCase(), BOSS_INFO[b.id].title, 'gold', 3);
         play('gong');
       }
     }
@@ -972,10 +1158,21 @@ const strongBossCtx = {
   hurtPlayer: (from, damage) => hurtPlayer(from, Math.round(damage * BOSS_POWER.damage)),
   projectiles: { spawn: (shot) => projectiles.spawn({ ...shot, damage: Math.round(shot.damage * BOSS_POWER.damage) }) },
 };
+// Een woedende boss (die je al eens versloeg) doet nog meer schade: zie RAGE in bosses.js
+const rageBossCtx = {
+  ...bossCtx,
+  hurtPlayer: (from, damage) => hurtPlayer(from, Math.round(damage * BOSS_POWER.damage * RAGE.damage)),
+  projectiles: { spawn: (shot) => projectiles.spawn({ ...shot, damage: Math.round(shot.damage * BOSS_POWER.damage * RAGE.damage) }) },
+};
+const BOSS_RESPAWN = 180; // zoveel seconden na het verslaan komt een boss terug in zijn arena (woedend)
 // Omar woont in Muntdorp en neemt je mee naar zijn Gekke Kasteel (alles daarover staat in omar.js)
 const omar = new OmarFlow({ scene, camera, cameraRig, input, state, stats, ui, player, bosses, npcs, sites, world, effects, pickups, decor, giveKills, giveRunes, announceNewPowers });
 // Af en toe valt Omars schaduwleger een kamp aan (invasions.js)
-const invasions = new Invasions({ scene, ui, stats, effects, giveRunes, addEnemy: addSummon, removeEnemy });
+const invasions = new Invasions({ scene, ui, stats, effects, giveRunes, addEnemy: addSummon, removeEnemy, onWin: () => goals.onInvasion() });
+// Gouden Kampioenen in elk gebied waar je al bent geweest (champions.js)
+const champions = new Champions({ stats, effects, addEnemy: addSummon, removeEnemy, ui });
+// Staat de Schaduwpoort al open? (bij een oude save waarin de vier bosses al verslagen zijn)
+if (gateOpen()) openGate();
 
 function gameLoop() {
   // realDt = tijd sinds vorige frame. Begrensd zodat een lag-piek je niet door de vloer laat vallen.
@@ -1000,10 +1197,12 @@ function gameLoop() {
   // In die frame doen we verder niks, anders opent dezelfde toetsdruk het menu meteen opnieuw.
   const closeInventory = menuAtStart === 'inventory' && (input.wasPressed('KeyI') || input.wasPressed('Tab') || input.wasPressed('Escape'));
   const closeShopKey = menuAtStart === 'shop' && (input.wasPressed('Escape') || input.wasPressed('KeyE'));
-  const closeMap = menuAtStart === 'map' && (input.wasPressed('KeyT') || input.wasPressed('Escape'));
+  const closeMap = (menuAtStart === 'map' && (input.wasPressed('KeyT') || input.wasPressed('Escape')))
+    || (menuAtStart === 'trophies' && (input.wasPressed('KeyK') || input.wasPressed('Escape')))
+    || (menuAtStart === 'bounties' && (input.wasPressed('Escape') || input.wasPressed('KeyE')));
   if (closeInventory) toggleInventory();
   if (closeShopKey) closeShop();
-  if (closeMap) toggleWorldMap();
+  if (closeMap) closeMenuAndPlay();
   const canAct = player.alive && !ui.menuOpen && !inDialog && state.deathTimer <= 0 && !paused && !closeInventory && !closeShopKey && !closeMap;
   if (canAct) handleActions(move);
   else ui.prompt(null);
@@ -1051,7 +1250,17 @@ function gameLoop() {
     hurtPlayer, projectiles, effects,
     night: world.night ?? 0, // 0 = dag, 1 = nacht (vijanden kunnen dan wat gloeien)
   };
-  for (const enemy of enemies) enemy.update(dt, enemyCtx);
+  // Kampioenen slaan harder (zie CHAMPION in champions.js)
+  const championCtx = {
+    ...enemyCtx,
+    hurtPlayer: (from, damage) => hurtPlayer(from, Math.round(damage * CHAMPION.damage)),
+    onSlam: (e, radius, damage) => onGolemSlam(e, radius, Math.round(damage * CHAMPION.damage)),
+  };
+  for (const enemy of enemies) enemy.update(dt, enemy.champion ? championCtx : enemyCtx);
+  keepGateClosed(realDt);
+  champions.update(dt, player.position, gameStarted && !IN_CASTLE);
+  villagers?.update(dt, player.position);
+  if (gameStarted) goals.update(realDt);
   // Knokkie vecht mee
   const petHit = pet.update(dt, { player, targets: targets(), colliders: world.colliders, away: IN_CASTLE });
   if (petHit) {
@@ -1066,7 +1275,22 @@ function gameLoop() {
   invasions.update(dt, player.position, gameStarted && !paused && !IN_CASTLE && !state.activeBoss && player.alive && state.deathTimer <= 0);
   for (const boss of bosses) {
     if (boss.id === 'omar') boss.update(dt, bossCtx);
-    else boss.update(dt * BOSS_POWER.speed, strongBossCtx);
+    else boss.update(dt * BOSS_POWER.speed * (boss.rage ? RAGE.speed : 1), boss.rage ? rageBossCtx : strongBossCtx);
+    if (boss.rage && boss.awake && !boss.dead && dt > 0 && Math.random() < 0.3) {
+      effects.burst(boss.center, 0xff2a2a, { count: 1, speed: 2, size: 0.18, life: 0.6, up: 1.5, gravity: 0 }); // rode woede-damp
+    }
+    // Verslagen bosses komen na een tijdje terug in hun arena (niet als je erbij staat)
+    if (boss.dead && boss.respawnT !== undefined && boss.id !== 'omar' && dt > 0) {
+      boss.respawnT -= dt;
+      const far = player.position.distanceTo(boss.arena.center) > boss.arena.radius + 25;
+      if (boss.respawnT <= 0 && far) {
+        boss.respawnT = undefined;
+        boss.dead = false;
+        boss.dying = 0;
+        boss.resetFight();
+        boss.mesh.visible = true;
+      }
+    }
   }
   projectiles.update(dt, {
     player, hurtPlayer, colliders: world.colliders, effects,
@@ -1083,7 +1307,7 @@ function gameLoop() {
     else ui.toast(`${picked.quest.goal.label[0].toUpperCase() + picked.quest.goal.label.slice(1)}: <b>${picked.count} / ${picked.quest.goal.count}</b>`, 2);
   }
   ui.setQuests([...invasions.tracker(), ...npcs.tracker()]);
-  ui.markers = [...npcs.mapMarkers(), ...invasions.mapMarkers()];
+  ui.markers = [...npcs.mapMarkers(), ...invasions.mapMarkers(), ...champions.mapMarkers()];
   pickups.update(dt, elapsed, player, {
     onCoin: () => play('coin'),
     onHeart: (fraction) => {
@@ -1194,5 +1418,5 @@ if (stats.level === 1 && stats.runes === 0 && stats.data.bosses.length === 0) {
 // Handig voor debuggen in de browser-console (F12): typ bijvoorbeeld `game.player.position`
 window.game = { scene, player, enemies, bosses, sites, npcs, stats, ui, world, state, camera, cameraRig, renderer, composer, gfx, nightLight, grass, decor, effects, trail, onDefeated, loop: gameLoop };
 window.game.omar = omar;
-Object.assign(window.game, { dragon, pet, invasions, travelTo, hatchPet });
+Object.assign(window.game, { dragon, pet, invasions, travelTo, hatchPet, spawnEnemy: addSummon, goals, champions, villagers, gateOpen, openBounties, openTrophies });
 window.game.music = music;

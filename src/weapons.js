@@ -74,7 +74,18 @@ export const WEAPONS = {
   zeis: {
     name: 'Zeis van de Dood', rarity: 'legendarisch', damage: 46, stamina: 18, range: 3.1, swingTime: 0.36,
     file: 'models/extra/zeis.glb', scale: 1.6, grip: -0.32, glow: 1.2, blade: [0.6, 1.35], trail: 0x3dff6a,
-    info: 'De zeis van Omar zelf. Het sterkste wapen dat er is.',
+    info: 'De zeis van Omar zelf. Een van de sterkste wapens die er zijn.',
+  },
+  // ---------- De allerbeste wapens (eindbaas en sterrenwinkel) ----------
+  drakenzwaard: {
+    name: 'Drakenzwaard', rarity: 'legendarisch', damage: 50, stamina: 15, range: 3.0, swingTime: 0.3,
+    pixels: 'draak', blade: [0.3, 1.0], trail: 0xb04dff,
+    info: 'Gemaakt van een schub van de Schaduwdraak. Snel én keihard.',
+  },
+  sterrenzwaard: {
+    name: 'Sterrenzwaard', rarity: 'legendarisch', damage: 55, stamina: 14, range: 3.1, swingTime: 0.28,
+    pixels: 'ster', blade: [0.3, 1.0], trail: 0xfff27a,
+    info: 'Gesmeed van sterrenstof. Het sterkste wapen van het hele spel!',
   },
 };
 
@@ -176,6 +187,29 @@ const PIXEL_ART = {
       l: { color: 0xffe27a, roughness: 0.25, emissive: 0x8a5a00 },
       g: { color: 0xfff0b0, roughness: 0.3, metalness: 0.5 },
       b: { color: 0xb8860b, roughness: 0.5 },
+    },
+  },
+  // Paars en zwart, met gloeiende paarse kern (de Schaduwdraak)
+  draak: {
+    hand: 19,
+    rows: SWORD_SHAPE,
+    colors: {
+      d: { color: 0x1a0a24, roughness: 0.5 },
+      m: { color: 0x7a2ab0, roughness: 0.3, emissive: 0x3a0a60 },
+      l: { color: 0xd08cff, roughness: 0.25, emissive: 0x5a1a8a },
+      g: { color: 0x2a1a30, roughness: 0.4, metalness: 0.6 },
+      b: { color: 0xb04dff, roughness: 0.4, emissive: 0x5a1a8a },
+    },
+  },
+  // Wit en goud, en het gloeit als een ster
+  ster: {
+    hand: 19,
+    rows: SWORD_SHAPE,
+    colors: {
+      d: { color: 0xb88a10, roughness: 0.4, metalness: 0.5 },
+      m: { color: 0xfff0a0, roughness: 0.25, emissive: 0x8a7a20 },
+      l: { color: 0xffffff, roughness: 0.2, emissive: 0xa09a60 },
+      ...GOLD,
     },
   },
   dolk: {

@@ -1,4 +1,6 @@
-import { POWERS, PERKS, SHOP_ITEMS } from './stats.js';
+import { POWERS, PERKS, SHOP_ITEMS, STAR_ITEMS } from './stats.js';
+import { TROPHIES, TROPHY_STARS, rankOf } from './goals.js';
+import { DRAGON_SKINS } from './dragon.js';
 import { WEAPONS } from './weapons.js';
 import { HELMETS, itemInfo, itemColor } from './gear.js';
 import { BOUNDS, CHECKPOINTS, ARENAS } from './world.js';
@@ -10,7 +12,7 @@ import { play, talk } from './audio.js';
 const $ = (id) => document.getElementById(id);
 
 // Kleur van elk soort gebied op de kaart
-const MAP_COLORS = { weide: '#4f8f4e', woud: '#2c4f2c', hoogland: '#7c776a', kasteel: '#3a2348' };
+const MAP_COLORS = { weide: '#4f8f4e', woud: '#2c4f2c', hoogland: '#7c776a', schaduw: '#3a2448', kasteel: '#3a2348' };
 
 /**
  * De grond, de paden, de huizen en de arena's tekenen (voor de minimap en de grote wereldkaart).
@@ -128,7 +130,7 @@ export class UI {
     if (boss) {
       this.el.boss.classList.remove('hidden');
       this.el.bossName.textContent = boss.name;
-      const b = boss.hp / boss.info.hp;
+      const b = boss.hp / (boss.maxHp ?? boss.info.hp);
       this.bossLag = Math.max(b, this.bossLag - dt * 0.3);
       this.el.bossFill.style.width = `${b * 100}%`;
       this.el.bossLag.style.width = `${this.bossLag * 100}%`;
@@ -252,16 +254,22 @@ export class UI {
     this.el.menuTitle.textContent = name;
     const render = () => {
       const st = this.stats;
+      // Eén rij in de winkel (munten ● of sterren ⭐)
+      const row = ([key, item], have, sign) => {
+        const price = st.shopPrice(key);
+        const soldOut = price === null;
+        const count = item.repeat ? '' : ` · gekocht ${st.bought(key)} / ${item.price.length}`;
+        return `<button data-buy="${key}" class="item" ${soldOut || have < price ? 'disabled' : ''}>
+          <span>${item.icon} ${item.name}</span><small>${item.info}${count}</small>
+          <em class="${!soldOut && have < price ? 'bad' : ''}">${soldOut ? 'Uitverkocht' : `${sign} ${price}`}</em></button>`;
+      };
+      const ready = (st.data.bounties ?? []).filter((b) => b.count >= b.n).length;
       this.el.menuBody.innerHTML = `<p class="menu-info">● Je hebt <b>${st.runes.toLocaleString('nl-NL')}</b> munten</p>` +
-        Object.entries(SHOP_ITEMS).map(([key, item]) => {
-          const price = st.shopPrice(key);
-          const soldOut = price === null;
-          const count = item.repeat ? '' : ` · gekocht ${st.bought(key)} / ${item.price.length}`;
-          return `<button data-buy="${key}" class="item" ${soldOut || st.runes < price ? 'disabled' : ''}>
-            <span>${item.icon} ${item.name}</span><small>${item.info}${count}</small>
-            <em class="${!soldOut && st.runes < price ? 'bad' : ''}">${soldOut ? 'Uitverkocht' : `● ${price}`}</em></button>`;
-        }).join('') +
+        Object.entries(SHOP_ITEMS).map((e) => row(e, st.runes, '●')).join('') +
+        `<h3>⭐ Sterrenwinkel</h3><p class="menu-info">Je hebt <b>${st.data.stars ?? 0}</b> ⭐ sterren. Die verdien je met trofeeën (K) en premies.</p>` +
+        Object.entries(STAR_ITEMS).map((e) => row(e, st.data.stars ?? 0, '⭐')).join('') +
         `<p class="menu-info">Leven ${st.maxHealth} · Schade ×${st.damageMultiplier.toFixed(2)} · Flesjes ${st.flasksMax}</p>
+        <button data-act="bounties">📜 Premiebord${ready ? ` — <b>${ready} klaar!</b>` : ''}</button>
         <button data-act="close">Tot ziens! (Esc)</button>`;
     };
     render();
@@ -269,10 +277,68 @@ export class UI {
       const b = e.target.closest('button');
       if (!b || b.disabled) return;
       if (b.dataset.act === 'close') actions.close();
+      else if (b.dataset.act === 'bounties') actions.bounties();
       else if (b.dataset.buy) {
         actions.buy(b.dataset.buy);
         render();
       }
+    };
+  }
+
+  /**
+   * Het Premiebord: drie opdrachten. Klaar? Beloning ophalen.
+   * actions = { text(bounty), claim(id), close() }
+   */
+  openBounties(actions) {
+    this.menuOpen = 'bounties';
+    play('menuOpen');
+    this.el.menu.classList.remove('hidden');
+    this.el.menuTitle.textContent = '📜 Premiebord';
+    const render = () => {
+      const list = this.stats.data.bounties ?? [];
+      this.el.menuBody.innerHTML = `<p class="menu-info">Doe deze opdrachten (overal in de wereld) en haal hier je beloning op. Er komt steeds een nieuwe bij!</p>` +
+        list.map((b) => {
+          const done = b.count >= b.n;
+          const bar = `<span class="bar"><i style="width:${Math.round((Math.min(b.count, b.n) / b.n) * 100)}%"></i></span>`;
+          return `<button class="item ${done ? 'equipped' : ''}" data-claim="${b.id}" ${done ? '' : 'disabled'}>
+            <span>📜 ${actions.text(b)}</span><small>${done ? '<b>Klaar! Klik om je beloning op te halen.</b>' : `${Math.min(b.count, b.n)} / ${b.n}`} ${bar}</small>
+            <em>● ${b.runes} + ⭐ ${b.stars}</em></button>`;
+        }).join('') +
+        `<p class="menu-info">⭐ Je hebt <b>${this.stats.data.stars ?? 0}</b> sterren · Premies opgehaald: <b>${this.stats.data.counts?.bounties ?? 0}</b></p>
+        <button data-act="close">Sluiten (Esc)</button>`;
+    };
+    render();
+    this.el.menuBody.onclick = (e) => {
+      const b = e.target.closest('button');
+      if (!b || b.disabled) return;
+      if (b.dataset.act === 'close') actions.close();
+      else if (b.dataset.claim) {
+        actions.claim(b.dataset.claim);
+        render();
+      }
+    };
+  }
+
+  /** De trofeeënkast (K): alle trofeeën, je sterren en je rang. */
+  openTrophies(actions) {
+    this.menuOpen = 'trophies';
+    play('menuOpen');
+    this.el.menu.classList.remove('hidden');
+    this.el.menuTitle.textContent = '🏆 Trofeeënkast';
+    const d = this.stats.data;
+    const got = d.trophies ?? [];
+    this.el.menuBody.innerHTML = `<p class="menu-info">Rang: <b>${rankOf(d)}</b> · Trofeeën <b>${got.length} / ${TROPHIES.length}</b> · ⭐ verdiend: <b>${d.starsEarned ?? 0}</b> (${TROPHY_STARS} met alle trofeeën) · nu: <b>${d.stars ?? 0}</b></p>
+      <p class="menu-info">Doel: haal ze <b>allemaal</b> en word een 🌟 <b>LEGENDE</b>! Sterren geef je uit in de sterrenwinkel bij de koopman.</p>` +
+      TROPHIES.map((t) => {
+        const has = got.includes(t.id);
+        const p = !has && t.progress ? t.progress(d) : null;
+        const bar = p ? ` <span class="bar"><i style="width:${Math.round((Math.min(p[0], p[1]) / p[1]) * 100)}%"></i></span> ${Math.min(p[0], p[1])} / ${p[1]}` : '';
+        return `<div class="power-row trophy ${has ? '' : 'locked'}"><b>${has ? t.icon : '🔒'}</b><span>${t.name}</span><small>${t.info} · ${'⭐'.repeat(t.stars)}${bar}</small></div>`;
+      }).join('') +
+      `<button data-act="close">Sluiten (K)</button>`;
+    this.el.menuBody.onclick = (e) => {
+      const b = e.target.closest('button');
+      if (b?.dataset.act === 'close') actions.close();
     };
   }
 
@@ -283,15 +349,25 @@ export class UI {
     this.el.menu.classList.remove('hidden');
     this.el.menuTitle.textContent = 'Uitrusting';
     const render = () => {
-      this.el.menuBody.innerHTML = this.inventoryHtml() + this.powersHtml() +
-        `<button data-act="close">Sluiten (I)</button><button data-act="wipe" class="danger">Nieuw spel beginnen</button>`;
+      const d = this.stats.data;
+      // Kleuren van Vuurtand die je hebt (uit de sterrenwinkel)
+      const skins = ['vuur', ...(d.dragonSkins ?? [])];
+      const dragonHtml = d.bosses.includes('mario') ? `<h3>🐉 Vuurtand</h3>` + skins.map((k) =>
+        `<button class="item ${(d.dragonSkin ?? 'vuur') === k ? 'equipped' : ''}" data-skin="${k}"><span>🐉 ${DRAGON_SKINS[k].name}</span><small>Kleur van je draak</small>${(d.dragonSkin ?? 'vuur') === k ? '<em>gekozen</em>' : ''}</button>`).join('') : '';
+      this.el.menuBody.innerHTML = `<p class="menu-info">Rang: <b>${rankOf(d)}</b> · ⭐ <b>${d.stars ?? 0}</b> sterren · Trofeeën: <b>${(d.trophies ?? []).length} / ${TROPHIES.length}</b> (K)</p>` +
+        this.inventoryHtml() + dragonHtml + this.powersHtml() +
+        `<button data-act="trophies">🏆 Trofeeënkast (K)</button><button data-act="close">Sluiten (I)</button><button data-act="wipe" class="danger">Nieuw spel beginnen</button>`;
     };
     render();
     this.el.menuBody.onclick = (e) => {
       const b = e.target.closest('button');
       if (!b) return;
       if (b.dataset.act === 'close') actions.close();
-      else if (b.dataset.act === 'wipe') {
+      else if (b.dataset.act === 'trophies') actions.trophies();
+      else if (b.dataset.skin) {
+        actions.skin(b.dataset.skin);
+        render();
+      } else if (b.dataset.act === 'wipe') {
         if (confirm('Weet je het zeker? Al je voortgang wordt gewist.')) actions.wipe();
       } else if (b.dataset.equip) {
         actions.equip(JSON.parse(b.dataset.equip));

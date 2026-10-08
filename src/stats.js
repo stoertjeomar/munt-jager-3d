@@ -65,6 +65,17 @@ export const SHOP_ITEMS = {
   dino: { name: 'Dino-ei', icon: '🥚', price: [250], info: 'Er komt Knokkie uit: een Boks-Dinootje dat met je meeloopt en meevecht!' },
 };
 
+// De sterrenwinkel (ook bij Koopman Kobus): hier betaal je met ⭐ sterren (die verdien je met trofeeën en premies)
+export const STAR_ITEMS = {
+  sterrenzwaard: { name: 'Sterrenzwaard', icon: '⭐', price: [8], info: 'Het sterkste wapen van het hele spel!' },
+  pluis: { name: 'Pluis de kat', icon: '🐱', price: [4], info: 'Een eigen kat die met je meeloopt en vijanden krabt. Wissel van huisdier met P.' },
+  draakIjs: { name: 'Vuurtand: IJsblauw', icon: '🐉', price: [3], info: 'Je draak wordt ijsblauw.' },
+  draakGoud: { name: 'Vuurtand: Goud', icon: '🐉', price: [5], info: 'Je draak wordt van goud!' },
+  draakSchaduw: { name: 'Vuurtand: Schaduw', icon: '🐉', price: [6], info: 'Je draak wordt zwart-paars, net als de Schaduwdraak.' },
+  appel: { name: 'Sterrenappel', icon: '🍎', price: [2, 3, 4], info: '+8 levenspunten.' },
+  snoepje: { name: 'Huisdiersnoepje', icon: '🍬', price: [2], repeat: true, info: 'Je huisdier gaat meteen een level omhoog.' },
+};
+
 /** Hoeveel vijanden je moet verslaan om van `level` naar `level + 1` te gaan. */
 export function killsNeeded(level) {
   return 4 + level * 3; // (zo word je niet te snel sterk)
@@ -147,9 +158,9 @@ export class Stats {
     return this.data.shop?.[key] ?? 0;
   }
 
-  /** Wat kost dit nu? null = uitverkocht. */
+  /** Wat kost dit nu? null = uitverkocht. (Voor de sterrenwinkel: in sterren) */
   shopPrice(key) {
-    const item = SHOP_ITEMS[key];
+    const item = SHOP_ITEMS[key] ?? STAR_ITEMS[key];
     if (item.repeat) return item.price[0];
     return item.price[this.bought(key)] ?? null;
   }
@@ -157,8 +168,11 @@ export class Stats {
   /** Iets kopen (als je genoeg munten hebt). Geeft true terug als het lukte. */
   buy(key) {
     const price = this.shopPrice(key);
-    if (price === null || this.data.runes < price) return false;
-    this.data.runes -= price;
+    const stars = !!STAR_ITEMS[key];
+    const have = stars ? this.data.stars ?? 0 : this.data.runes;
+    if (price === null || have < price) return false;
+    if (stars) this.data.stars -= price;
+    else this.data.runes -= price;
     this.data.shop = { ...this.data.shop, [key]: this.bought(key) + 1 };
     this.save();
     return true;

@@ -2,8 +2,9 @@
 
 Een **open-wereld actie-RPG** in de browser, gemaakt met **JavaScript** en **[Three.js](https://threejs.org/)**.
 Kies je held en trek door één grote wereld met 4 gebieden: versla vijanden voor munten en XP, help de dorpelingen
-met zij-quests, koop spullen bij de koopman, vlieg op je **draak**, vecht samen met je **Boks-Dinootje** en versla de
-boss van elk gebied. Pas op: Omar stuurt soms zijn **schaduwleger** op je af!
+met zij-quests, koop spullen bij de koopman, vlieg op je **draak**, vecht samen met je **huisdier** en versla de
+boss van elk gebied. Pas op: Omar stuurt soms zijn **schaduwleger** op je af! En als alle bosses verslagen zijn,
+gaat de **Schaduwpoort** open... en daarna jaag je op **trofeeën**, **premies**, **Kampioenen** en **woedende bosses**.
 
 > 👑 **Ikzelf, Omar, zit ook in de game!** Ik heb dit spel gemaakt en ik woon in Muntdorp.
 > Daag me uit en ik neem je mee naar mijn Gekke Kasteel. Niemand heeft mij ooit verslagen...
@@ -51,6 +52,8 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 | I of Tab | Uitrusting (wapens, helmen, krachten) |
 | T | Wereldkaart + snelreizen naar een vlag waar je al was |
 | B | Vuurtand de draak roepen / afstappen (na de eerste boss) |
+| K | Trofeeënkast (je trofeeën, sterren en rang) |
+| P | Ander huisdier met je mee (als je er meer hebt) |
 | M | Geluid aan/uit |
 | N | Muziek aan/uit (wordt onthouden) |
 | G | Graphics: Laag / Normaal / Hoog (wordt onthouden) |
@@ -67,7 +70,9 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
   1. **Groene Weide** met het dorp Muntdorp → boss **Budget Mario**
   2. **Ruïnevallei** met een parkour-ruïne → boss **Koning Slijm**
   3. **Spookwoud** (donker en mistig) → boss **De Gevallen Ridder**
-  4. **Rotshoogland** (de finale) → boss **Steenreus Gorath**
+  4. **Rotshoogland** → boss **Steenreus Gorath**
+  5. **Schaduwrijk** (geheim!) → eindbaas **De Schaduwdraak**. De **Schaduwpoort** gaat pas open als de vier andere
+     bosses verslagen zijn. Paarse mist, gloeiende kristallen, paarse dennen en enge muziek
 
   Loop je een ander gebied in, dan zie je de naam en veranderen de muziek, de mist, het gras en de geluiden.
   Te vroeg in een moeilijk gebied? Dan krijg je een waarschuwing. Versla een boss → *GEBIED VEILIG* → het volgende gebied gaat open.
@@ -80,6 +85,23 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
   met zijn bokshandschoenen en wordt sterker (en groter) van elke 5 vijanden die hij verslaat, tot level 10
 - **Omar-invasies**: af en toe valt Omars schaduwleger Muntdorp of een ander kamp aan (volg de paarse lichtstraal!).
   Versla drie golven schaduwkrijgers op tijd en je krijgt een flinke beloning
+- **De Schaduwdraak**: een enorme paarse draak in het Schaduwrijk. Hij vliegt rondjes en schiet paarse vuurballen,
+  duikt naar beneden (dan kun je hem raken!), spuwt vuur en zwiept met zijn staart, en in fase 2 roept hij Zombiepoppen op.
+  Versla hem voor het **Drakenzwaard** en schaduwkleuren voor je eigen draak
+- **Na alle bosses is er nog genoeg te doen** (het einddoel: word een 🌟 **LEGENDE**):
+  - **Trofeeën (K)**: 28 prestaties (alle diamanten vinden, Omar verslaan, 1000 vijanden, Knokkie level 10...).
+    Elke trofee geeft ⭐ **sterren**, en je rang groeit van Avonturier tot Legende
+  - **Premiebord** in Muntdorp (en bij elke koopman): steeds drie nieuwe opdrachten voor munten en sterren
+  - **Kampioenen** 👑: gouden vijanden met een kroon, veel sterker, en ze geven een ster
+  - **Woedende bosses** 😡: een boss die je versloeg komt na een paar minuten terug, met meer leven en harder.
+    Versla hem voor 2 sterren
+  - **Sterrenwinkel** bij de koopman: het **Sterrenzwaard** (het sterkste wapen), **Pluis de kat**, nieuwe kleuren
+    voor Vuurtand, Sterrenappels en snoepjes voor je huisdier
+- **Pluis de kat**: een tweede huisdier (zelfgebouwd in code). Snel en ze krabt vijanden. Wissel met **P**
+- **Nieuwe vijanden met echte animaties** (uit de *Universal Animation Library* van Quaternius): de **Zombiepop** ligt
+  op de grond en kruipt overeind als je dichtbij komt, en de **Ninjapop** springt met een ninjasprong op je af,
+  hakt drie keer met zijn katana en blokt soms je klappen (GEBLOKT!)
+- **Muntdorp leeft**: dorpelingen die oogsten, zaaien, water geven, hout hakken, met een lantaarn rondstaan of bellen
 - **Kies je held**: Eve of Soldaat (Mixamo-personages met een echt skelet: knieën, ellebogen, rennen, uitvalspas bij het slaan)
 - **NPC's met zij-quests**: Mila, Strohoed, Robot B-0P en Sir Roestbout wonen in de wereld. Praat met ze (E) als er een **!** boven
   hun hoofd staat, doe de quest (vijanden verslaan of sterren/batterijen zoeken) en haal je beloning op bij het **?**
@@ -163,6 +185,10 @@ munt-jager-3d/
     ├── dragon.js     → Vuurtand de draak: gebouwd van simpele vormen, vliegen en vuur spuwen
     ├── pet.js        → Knokkie het Boks-Dinootje dat met je meevecht
     ├── invasions.js  → Omar-invasies: golven schaduwkrijgers bij een kamp
+    ├── shadowDragon.js → de eindbaas: de Schaduwdraak
+    ├── goals.js      → trofeeën, sterren, rangen en het Premiebord
+    ├── champions.js  → gouden Kampioenen met een kroon
+    ├── villagers.js  → dorpelingen met animaties en het Premiebord in Muntdorp
     ├── sites.js      → checkpoint-vlaggen en kisten
     ├── pickups.js    → munten, hartjes, diamanten
     ├── stats.js      → level (door vijanden te verslaan), bonussen, krachten, opslaan
@@ -178,7 +204,9 @@ munt-jager-3d/
 ## Zelf aanpassen
 
 - **Gebieden** → `LEVELS` in `src/levels.js` (welke vijanden, kisten, NPC's, huizen en welke boss). Begin in een gebied met `?level=3` achter de link
-- **Draak, huisdier en invasies** → `DRAGON` in `src/dragon.js`, `PET` in `src/pet.js` en `INVASION` in `src/invasions.js`
+- **Draak, huisdier en invasies** → `DRAGON` in `src/dragon.js`, `PET`/`PETS` in `src/pet.js` en `INVASION` in `src/invasions.js`
+- **Trofeeën, premies en de sterrenwinkel** → `TROPHIES` in `src/goals.js` en `STAR_ITEMS` in `src/stats.js`
+- **Kampioenen en woedende bosses** → `CHAMPION` in `src/champions.js` en `RAGE` in `src/bosses.js`
 - **Quests** → `QUESTS` bovenaan `src/npcs.js`
 - **Vijanden** → `ENEMY_TYPES` bovenaan `src/enemies.js`. Alle vijanden sterker of zwakker: `ENEMY_POWER` (en voor de
   bosses `BOSS_POWER` in `src/bosses.js`)
@@ -204,6 +232,8 @@ munt-jager-3d/
 - Extra 3D-modellen (Pixabay): magic ritual, glowing green reaper weapon, fantasy weapon en cosmic peace alien door
   pixellabs, samurai en bigfoot door nickpanek, male door promptplay, dinosaurs door tiny_planet_friends_3d en male door dezyne_3d
 - Personages Eve, Soldaat en Mila: via Mixamo
+- Etalagepoppen en hun animaties (Zombiepop, Ninjapop, dorpelingen): *Universal Animation Library 2* door
+  [Quaternius](https://quaternius.com) — CC0
 - Budget Mario door Teh_LaughingMan, Buff man door joney_lol, MS Gundam RX-78-2 door Tipatat Chennavasin
   (fan-modellen; Mario en Gundam zijn van Nintendo en Bandai — alleen voor eigen plezier)
 

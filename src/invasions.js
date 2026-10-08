@@ -142,6 +142,7 @@ export class Invasions {
       this.game.giveRunes(runes);
       stats.data.invasions = (stats.data.invasions ?? 0) + 1;
       stats.save();
+      this.game.onWin?.();
       play('win');
       ui.banner('INVASIE VERSLAGEN!', `${a.camp.name} is gered! +${runes} munten`, 'gold', 5);
       ui.toast('<b style="color:#c77dff">Omar:</b> "Grrr... Dat was nog maar een klein stukje van mijn leger! Volgende keer win ík!"', 5);

@@ -660,3 +660,25 @@ canvas {
   border-radius: 4px;
   background: #2b3326;
 }
+
+/* ---------- Premies en trofeeën ---------- */
+.bar {
+  display: inline-block;
+  width: 110px;
+  height: 7px;
+  margin-left: 6px;
+  vertical-align: middle;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #f3d27a, #ffb340);
+}
+
+.power-row.trophy {
+  grid-template-columns: 40px 170px 1fr;
+}

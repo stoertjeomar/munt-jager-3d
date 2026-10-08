@@ -240,6 +240,12 @@ const SOUNDS = {
     noise({ from: 400, to: 1200, duration: 0.6, volume: 0.3, q: 0.8 });
     noise({ from: 1100, to: 250, duration: 0.9, volume: 0.28, q: 0.8, delay: 0.45 });
   },
+  // Zwaard tegen zwaard: een metalen "klang!" (als een Ninjapop je klap blokt)
+  clang: () => {
+    tone({ type: 'triangle', from: 1900, to: 1750, duration: 0.25, volume: 0.18 });
+    tone({ type: 'square', from: 2600, to: 2400, duration: 0.08, volume: 0.06 });
+    noise({ from: 5000, to: 3000, duration: 0.1, volume: 0.2, q: 3 });
+  },
   // Vleugelslag: een zware "woesj"
   flap: () => noise({ from: 160, to: 520, duration: 0.35, volume: 0.32, q: 0.9 }),
   // Drakenvuur: een lange brullende vlam
@@ -251,6 +257,12 @@ const SOUNDS = {
   // Het huisdiertje: een blij piepje (en een boos grommetje als het aanvalt)
   pet: () => [880, 1175].forEach((f, i) => tone({ type: 'triangle', from: f, to: f * 1.15, duration: 0.09, volume: 0.15, delay: i * 0.08 })),
   petGrr: () => tone({ type: 'sawtooth', from: 220, to: 160, duration: 0.18, volume: 0.1 }),
+  // Pluis de kat: "miauw!" (en een blazend "chhh" als ze krabt)
+  miauw: () => {
+    tone({ type: 'triangle', from: 700, to: 1100, duration: 0.12, volume: 0.12 });
+    tone({ type: 'triangle', from: 1100, to: 650, duration: 0.22, volume: 0.12, delay: 0.12 });
+    noise({ from: 4000, to: 2500, duration: 0.15, volume: 0.08, q: 1.5, delay: 0.05 });
+  },
 };
 
 /**
@@ -275,7 +287,7 @@ export function talk(name = '', text = '') {
 }
 
 // ---------- Geluiden van de wereld om je heen ----------
-const amb = { bird: 2, cricket: 1, wind: 5, owl: 6, crackle: 0.3 };
+const amb = { bird: 2, cricket: 1, wind: 5, owl: 6, crackle: 0.3, whisper: 4 };
 
 /** Elke frame: vogeltjes overdag, krekels 's nachts, een uil in het Spookwoud, wind in de bergen, knetterende fakkels in het kasteel. */
 export function updateAmbience(dt, { theme, night = 0 }) {
@@ -286,6 +298,15 @@ export function updateAmbience(dt, { theme, night = 0 }) {
     if (amb.crackle <= 0) {
       amb.crackle = 0.12 + Math.random() * 0.5;
       noise({ from: 2000 + Math.random() * 2500, duration: 0.04, volume: 0.03, q: 3 });
+    }
+    return;
+  }
+  if (theme === 'schaduw') {
+    // Het Schaduwrijk: geen vogeltjes, alleen een diep gebrom en enge fluisteringen
+    if (amb.whisper <= 0) {
+      amb.whisper = 5 + Math.random() * 7;
+      noise({ from: 3000 + Math.random() * 2000, to: 1500, duration: 1.4, volume: 0.035, q: 6 });
+      tone({ type: 'sine', from: 55, to: 48, duration: 3, volume: 0.06 });
     }
     return;
   }

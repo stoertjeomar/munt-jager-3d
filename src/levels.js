@@ -118,12 +118,38 @@ export const LEVELS = [
       ['l4-fles', 30, 0, 50, { kind: 'flask' }],
       ['l4-fles2', -30, 0, -44, { kind: 'weapon', key: 'demonenzwaard' }],
     ],
-    diamonds: [['l4-d1', 32, 0, 88], ['l4-d2', -32, 0, 44], ['l4-d3', 32, 0, -30]],
+    diamonds: [['l4-d1', 32, 0, 88], ['l4-d2', -29, 0, 44], ['l4-d3', 32, 0, -30]], // (niet te ver naar links: daar is de Schaduwpoort)
     npcs: [['mila', -20, 80, 'mila-mecha'], ['omar', -0.5, 80]],
     questItems: {},
     blocks: [[28, 1.5, 20, 1, 3, 7], [22, 1, 28, 6, 2, 1]],
     animals: [],
     trees: 25,
+  },
+  {
+    // Het geheime vijfde gebied: de Schaduwpoort gaat pas open als je de andere vier bosses hebt verslagen.
+    // Hier wonen Omars ergste vijanden (de etalagepoppen) en zijn allerlaatste geheim: de Schaduwdraak.
+    name: 'Schaduwrijk',
+    subtitle: 'Gebied 5 · Het allerlaatste',
+    theme: 'schaduw',
+    music: 'schaduw',
+    half: { x: 36, z: 100 },
+    boss: 'schaduwdraak',
+    locked: true,
+    path: [[0, 92], [12, 66], [-6, 40], [-16, 14], [2, -14], [12, -40], [0, -62]],
+    checkpoints: [['l5-start', 'Schaduwpoort', 0, 88], ['l5-mid', 'Kristalveld', -17, 0]],
+    spawns: [['zombiepop', 9], ['ninjapop', 6], ['schaduw', 4], ['spook', 3], ['bigfoot', 2]],
+    chests: [
+      ['l5-appel', 28, 0, 34, { kind: 'flask' }],
+      ['l5-appel2', -28, 0, -34, { kind: 'flask' }],
+      ['l5-hamer', -28, 0, 64, { kind: 'weapon', key: 'hamer' }],
+    ],
+    diamonds: [['l5-d1', 30, 0, 86], ['l5-d2', -31, 0, 24], ['l5-d3', 30, 0, -24]],
+    npcs: [],
+    questItems: {},
+    // Zwarte ruïnes van obsidiaan
+    blocks: [[-24, 1.6, 50, 6, 3.2, 1], [-27, 1.6, 54, 1, 3.2, 7], [22, 2, -8, 1, 4, 8], [26, 1.2, -12, 7, 2.4, 1], [-10, 0.8, -40, 3, 1.6, 3]],
+    animals: [],
+    trees: 55,
   },
 ];
 
@@ -194,6 +220,11 @@ export function regionIndexAt(x, z) {
   const i = Math.floor((x + wobble + WORLD.half.x) / REGION_WIDTH);
   return Math.min(REGIONS.length - 1, Math.max(0, i));
 }
+
+/** Het gebied dat op slot zit tot de andere bosses verslagen zijn (het Schaduwrijk), of null. */
+export const LOCKED_REGION = REGIONS.find((r) => r.level.locked) ?? null;
+/** Zover kun je lopen zolang de Schaduwpoort dicht is (een stukje vóór de golvende grens). */
+export const GATE_X = LOCKED_REGION ? LOCKED_REGION.x0 - 6.5 : Infinity;
 
 /** In welk gebied ligt deze vlag? */
 export function regionOfCheckpoint(id) {

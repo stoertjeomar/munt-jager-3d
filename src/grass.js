@@ -15,6 +15,7 @@ const THEMES = {
   weide: { dark: [0.12, 0.28, 0.07], light: [0.26, 0.42, 0.1], amount: 1, flowers: 0.03 },
   woud: { dark: [0.08, 0.2, 0.07], light: [0.16, 0.3, 0.1], amount: 1, flowers: 0.008 },
   hoogland: { dark: [0.17, 0.22, 0.09], light: [0.32, 0.36, 0.15], amount: 0.45, flowers: 0.004 },
+  schaduw: { dark: [0.1, 0.05, 0.14], light: [0.28, 0.13, 0.36], amount: 0.75, flowers: 0.012 },
 };
 
 export class GrassField {
