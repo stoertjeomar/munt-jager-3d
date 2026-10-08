@@ -7,6 +7,7 @@ import { SwordTrail } from './trail.js';
 import { play } from './audio.js';
 import { SAVE_KEY } from './levels.js';
 import { loadGLB } from './assets.js';
+import { makeBolt } from './lightning.js';
 
 // Omar: de maker van het spel. Hij woont in zijn Gekke Kasteel (castle.js) en vecht in de arena.
 // Omar is een echte "speler": hij heeft hetzelfde lijf, dezelfde animaties en dezelfde krachten als jij
@@ -119,27 +120,28 @@ function flatDist(a, b) {
  * Er wordt hier niks opgeslagen: de save van de echte speler blijft van Omar af.
  */
 export class OmarStats {
-  constructor(character) {
-    this.data = { character, weapon: 'zeis', helmet: 'kroon', level: OMAR.level };
+  /** cfg = de instellingen van wie er vecht (OMAR, of SKY in skyFighter.js) */
+  constructor(character, cfg = OMAR, weapon = 'zeis', helmet = 'kroon') {
+    this.cfg = cfg;
+    this.data = { character, weapon, helmet, level: cfg.level };
     this.phase = 0; // 0 = fase 1, 1 = fase 2
     this.boost = 1; // even sneller of langzamer (rustig rondlopen, ver springen)
   }
 
-  get level() { return OMAR.level; }
+  get level() { return this.cfg.level; }
   get maxHealth() { return 9999; }
   get maxStamina() { return 999; } // de computer houdt zichzelf in met de wachttijden hierboven
-  get flasksMax() { return OMAR.flasks; }
+  get flasksMax() { return this.cfg.flasks; }
   get damageMultiplier() { return 1; }
-  get speedMultiplier() { return OMAR.speed[this.phase] * this.boost; }
+  get speedMultiplier() { return this.cfg.speed[this.phase] * this.boost; }
   get defenseBonus() { return 0; }
   get healBonus() { return 0; }
   hasPower() { return true; } // dash, dubbele sprong, wervelslag, grondslag, vuurzwaard: alles!
 }
 
-/** Naambordje "Omar" boven zijn hoofd. */
 /** Een gloeiend rood oog (een plaatje dat altijd naar de camera kijkt). */
 let eyeTexture = null;
-function makeEye() {
+export function makeEye() {
   if (!eyeTexture) {
     const c = document.createElement('canvas');
     c.width = c.height = 64;
@@ -158,37 +160,8 @@ function makeEye() {
   return eye;
 }
 
-const BOLT_GEO = new THREE.CylinderGeometry(1, 1, 1, 6, 1, true);
-const BOLT_CORE = new THREE.MeshBasicMaterial({ color: 0xf2e6ff, toneMapped: false, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
-const BOLT_GLOW = new THREE.MeshBasicMaterial({ color: 0x9a4dff, toneMapped: false, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false });
-
-/** Een bliksemschicht: een zigzag van de lucht naar de grond. */
-function makeBolt(ground) {
-  const group = new THREE.Group();
-  const points = [];
-  for (let i = 0; i <= 9; i++) {
-    const k = i / 9;
-    const wiggle = i === 0 || i === 9 ? 0 : 0.7;
-    points.push(new THREE.Vector3(ground.x + (Math.random() - 0.5) * wiggle, ground.y + 18 * (1 - k), ground.z + (Math.random() - 0.5) * wiggle));
-  }
-  const up = new THREE.Vector3(0, 1, 0);
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i];
-    const b = points[i + 1];
-    const len = a.distanceTo(b);
-    const dir = b.clone().sub(a).normalize();
-    for (const [mat, r] of [[BOLT_CORE, 0.07], [BOLT_GLOW, 0.28]]) {
-      const seg = new THREE.Mesh(BOLT_GEO, mat);
-      seg.position.copy(a).lerp(b, 0.5);
-      seg.quaternion.setFromUnitVectors(up, dir);
-      seg.scale.set(r, len, r);
-      group.add(seg);
-    }
-  }
-  return group;
-}
-
-function makeNameTag() {
+/** Naambordje boven zijn hoofd ("Omar", of een andere naam en kleuren). */
+function makeNameTag({ text = 'Omar', stroke = '#5a1a8a', fill = '#ffd23a' } = {}) {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 64;
@@ -197,10 +170,10 @@ function makeNameTag() {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.lineWidth = 8;
-  ctx.strokeStyle = '#5a1a8a';
-  ctx.strokeText('Omar', 128, 34);
-  ctx.fillStyle = '#ffd23a';
-  ctx.fillText('Omar', 128, 34);
+  ctx.strokeStyle = stroke;
+  ctx.strokeText(text, 128, 34);
+  ctx.fillStyle = fill;
+  ctx.fillText(text, 128, 34);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, toneMapped: false }));
@@ -258,7 +231,7 @@ export class OmarFighter extends Boss {
 
   /** Waar Omar staat als hij op zijn troon zit (zijn voeten hangen boven het trapje). */
   get seatedPosition() {
-    return new THREE.Vector3(this.throne.x, this.throne.y - OMAR.hipHeight, this.throne.z + 0.15);
+    return new THREE.Vector3(this.throne.x, this.throne.y - this.cfg.hipHeight, this.throne.z + 0.15);
   }
 
   /** Waar Omar staat als hij net is opgestaan (vóór de troon). */
@@ -269,8 +242,8 @@ export class OmarFighter extends Boss {
   /** Klaarzetten voor een gevecht tegen deze speler: leven hangt af van jouw wapen en level, kostuum van jouw held. */
   prepare(stats) {
     const weapon = WEAPONS[stats.data.weapon] ?? WEAPONS[START_WEAPON];
-    const hits = Math.max(OMAR.hp.minHits, OMAR.hp.hits - OMAR.hp.perLevel * (stats.level - 1));
-    this.info.hp = Math.max(OMAR.hp.min, Math.round((weapon.damage * stats.damageMultiplier * hits) / 10) * 10);
+    const hits = Math.max(this.cfg.hp.minHits, this.cfg.hp.hits - this.cfg.hp.perLevel * (stats.level - 1));
+    this.info.hp = Math.max(this.cfg.hp.min, Math.round((weapon.damage * stats.damageMultiplier * hits) / 10) * 10);
     const want = otherPlayable(stats.data.character);
     if (want !== this.puppet.stats.data.character) {
       this.puppet.stats.data.character = want;
@@ -296,9 +269,9 @@ export class OmarFighter extends Boss {
     p.stats.phase = 0;
     p.stats.boost = 1;
     p.respawnAt(this.seatedPosition); // ook: vuurzwaard uit, flesjes vol, zeis en kroon
-    p.sword.swingTime *= OMAR.swingSpeed; // Omar slaat sneller dan jij
+    p.sword.swingTime *= this.cfg.swingSpeed; // Omar slaat sneller dan jij
     this.mesh.rotation.y = 0; // kijkt naar de arena (het zuiden)
-    this.mesh.scale.setScalar(OMAR.size);
+    this.mesh.scale.setScalar(this.cfg.size);
     this.mesh.visible = true;
     this.mode = 'troon'; // troon | opstaan | sprong | klaar | vechten | lachen | verslagen
     this.nameTag.visible = false;
@@ -310,7 +283,7 @@ export class OmarFighter extends Boss {
     // Wachttijden (seconden). Aan het begin even rustig: geen aanval in de eerste seconde.
     this.cd = { think: 0, gap: 0.3, dash: 0.8, spin: 1.8, slam: 2.5, dodge: 0.6, taunt: 6, mercy: 0, fire: 2.5, drink: 0, say: 0, raak: 0, teleport: 2, praat: 3, bliksem: 4, schaduwen: 3 };
     this.swingsLeft = 0;
-    this.after = OMAR.recover.combo[0];
+    this.after = this.cfg.recover.combo[0];
     this.lastSwordHit = null;
     this.lastSpinHit = null;
     this.lastDodgeId = null;
@@ -508,7 +481,7 @@ export class OmarFighter extends Boss {
           break;
         }
         // Op zijn billen op de grond, duizelig
-        this.position.y += (-(OMAR.hipHeight - 0.25) - this.position.y) * Math.min(1, 6 * dt);
+        this.position.y += (-(this.cfg.hipHeight - 0.25) - this.position.y) * Math.min(1, 6 * dt);
         p.body.rotation.set(0, 0, 0);
         this.pose(dt, {}, (r) => {
           r.legL.rotation.set(-1.4, 0, 0.15);
@@ -523,7 +496,7 @@ export class OmarFighter extends Boss {
         if (this.sparkTimer <= 0 && this.effects) {
           this.sparkTimer = 0.12;
           const a = t * 5;
-          const head = this.position.clone().add(new THREE.Vector3(Math.sin(a) * 0.45, 0.25 + OMAR.hipHeight + 0.95, Math.cos(a) * 0.45));
+          const head = this.position.clone().add(new THREE.Vector3(Math.sin(a) * 0.45, 0.25 + this.cfg.hipHeight + 0.95, Math.cos(a) * 0.45));
           this.effects.burst(head, 0xffe066, { count: 1, speed: 0.4, size: 0.14, life: 0.4, up: 0.3, gravity: 0 });
         }
         break;
@@ -601,7 +574,7 @@ export class OmarFighter extends Boss {
         this.lastDodgeId = swingId;
         this.taken.missed++;
         this.shout('Mis!', '#cfcfcf', 0.45);
-        if (Math.random() < 0.35) this.say(pick(TAUNTS.mis));
+        if (Math.random() < 0.35) this.say(pick(this.taunts.mis));
       }
       return null;
     }
@@ -621,7 +594,7 @@ export class OmarFighter extends Boss {
       p.drinkTimer = 0;
       if (!p.healed) this.say('Mijn drankje!', 2, true);
     }
-    if (!result.killed && damage >= this.info.hp * 0.08 && Math.random() < 0.6) this.say(pick(TAUNTS.au));
+    if (!result.killed && damage >= this.info.hp * 0.08 && Math.random() < 0.6) this.say(pick(this.taunts.au));
     if (result.killed) {
       this.clearMagic();
       this.dying = 0; // niet verdwijnen zoals andere bosses: Omar gaat duizelig op de grond zitten
@@ -646,7 +619,7 @@ export class OmarFighter extends Boss {
 
   /** Schade voor de speler: een deel van zijn maximale leven (dan is elke klap even eng, op elk level). */
   damageFor(player, kind) {
-    const pct = OMAR.damagePct[kind] * (this.phase2 ? OMAR.phase2Damage : 1) * (this.puppet.fireTimer > 0 ? OMAR.fireDamage : 1);
+    const pct = this.cfg.damagePct[kind] * (this.phase2 ? this.cfg.phase2Damage : 1) * (this.puppet.fireTimer > 0 ? this.cfg.fireDamage : 1);
     return Math.max(1, Math.round(player.maxHealth * pct));
   }
 
@@ -658,8 +631,8 @@ export class OmarFighter extends Boss {
     this.dealt[kind] = (this.dealt[kind] ?? 0) + (before - player.health);
     if (this.cd.raak <= 0 && player.alive) {
       this.cd.raak = 2.5;
-      if (Math.random() < 0.5) this.say(pick(TAUNTS.raak), 1.6);
-      else this.shout(pick(TAUNTS.raak));
+      if (Math.random() < 0.5) this.say(pick(this.taunts.raak), 1.6);
+      else this.shout(pick(this.taunts.raak));
     }
     return true;
   }
@@ -716,8 +689,8 @@ export class OmarFighter extends Boss {
     this.brain(dt, ctx, c, dist, dir, ph, threat);
     // Tussendoor iets roepen ("Kleine speler, kom hier!")
     if (this.cd.praat <= 0 && this.bubbleTimer <= 0 && this.state !== 'weg') {
-      this.cd.praat = THREE.MathUtils.randFloat(...OMAR.talk);
-      this.say(pick(ph && Math.random() < 0.5 ? TAUNTS.boos : TAUNTS.praten), 2.4);
+      this.cd.praat = THREE.MathUtils.randFloat(...this.cfg.talk);
+      this.say(pick(ph && Math.random() < 0.5 ? this.taunts.boos : this.taunts.praten), 2.4);
     }
 
     // Tijdens een klap draait hij mee tot de klap "vastligt": daarna kun je nog opzij stappen
@@ -779,9 +752,9 @@ export class OmarFighter extends Boss {
 
     // Zie ik een klap aankomen? Soms rol ik weg (niet tijdens mijn eigen aanvallen, en niet als ik moe ben)
     if (threat && CAN_DODGE.includes(this.state) && !this.pending && cd.dodge <= 0) {
-      const chance = threat === 'slag' ? OMAR.dodgeChance[ph] : OMAR.dodgeChance[ph] + 0.25;
-      if (Math.random() < chance) this.pending = { t: OMAR.reaction[ph], threat };
-      cd.dodge = OMAR.cooldown.dodge[ph];
+      const chance = threat === 'slag' ? this.cfg.dodgeChance[ph] : this.cfg.dodgeChance[ph] + 0.25;
+      if (Math.random() < chance) this.pending = { t: this.cfg.reaction[ph], threat };
+      cd.dodge = this.cfg.cooldown.dodge[ph];
     }
     if (this.pending) {
       this.pending.t -= dt;
@@ -797,9 +770,9 @@ export class OmarFighter extends Boss {
     const now = this.time ?? 0;
     this.recentHits = this.recentHits.filter((t) => now - t < 1.6);
     const calm = this.state !== 'herstel' || this.stateT > this.stateTime * 0.4;
-    if (this.recentHits.length >= OMAR.poise[ph] && calm && ['neutraal', 'aanlopen', 'herstel', 'uitdagen'].includes(this.state)) {
+    if (this.recentHits.length >= this.cfg.poise[ph] && calm && ['neutraal', 'aanlopen', 'herstel', 'uitdagen'].includes(this.state)) {
       this.recentHits.length = 0;
-      if (dist < OMAR.spinRadius && p.spinCooldown <= 0 && p.onGround) {
+      if (dist < this.cfg.spinRadius && p.spinCooldown <= 0 && p.onGround) {
         this.say('Laat me los!', 1.6, true);
         this.startSpin(ph, 0.32);
       } else this.dodge(dir, 'wervel');
@@ -820,7 +793,7 @@ export class OmarFighter extends Boss {
         // Jij drinkt een flesje? Daar komt Omar!
         if (player.drinkTimer > 0 && !this.seenDrink) {
           this.seenDrink = true;
-          const mercy = cd.mercy > OMAR.cooldown.mercy - 3; // net "bijna!" geroepen: dan mag je even drinken
+          const mercy = cd.mercy > this.cfg.cooldown.mercy - 3; // net "bijna!" geroepen: dan mag je even drinken
           if (!mercy && dist < 12 && p.dashCooldown <= 0 && Math.random() < (ph ? 0.95 : 0.8)) {
             this.say('Niet drinken!', 1.6, true);
             this.startDash(ph);
@@ -829,8 +802,8 @@ export class OmarFighter extends Boss {
         }
         if (player.drinkTimer <= 0) this.seenDrink = false;
         // Weinig leven over? Wegdashen en een slokje nemen (hij heeft een paar flesjes!)
-        if (this.hp < this.info.hp * OMAR.drinkBelow && p.flasks > 0 && p.onGround && cd.drink <= 0) {
-          cd.drink = OMAR.cooldown.drink[ph];
+        if (this.hp < this.info.hp * this.cfg.drinkBelow && p.flasks > 0 && p.onGround && cd.drink <= 0) {
+          cd.drink = this.cfg.cooldown.drink[ph];
           this.say(pick(['Even een slokje...', 'Pauze! Hehe.', 'Ik heb nog meer flesjes hoor!']), 2, true);
           if (dist < 5 && p.dashCooldown <= 0) {
             p.tryDash(dir.clone().negate());
@@ -845,14 +818,14 @@ export class OmarFighter extends Boss {
         }
         // Jij bent bijna dood? Dan doet Omar even stoer (en kun jij drinken)
         if (!ph && player.health < player.maxHealth * 0.2 && cd.mercy <= 0) {
-          cd.mercy = OMAR.cooldown.mercy;
+          cd.mercy = this.cfg.cooldown.mercy;
           this.setState('uitdagen', 1.5);
           this.say('Bijna! Hehe. Drink maar gauw een flesje!', 2.4, true);
           this.log('uitdagen');
           break;
         }
         if (cd.think <= 0 && cd.gap <= 0) {
-          cd.think = OMAR.think[ph];
+          cd.think = this.cfg.think[ph];
           this.decide(dist, ph);
         }
         break;
@@ -874,7 +847,7 @@ export class OmarFighter extends Boss {
         this.bladeSparks(dt, 0xffffff, 0.08);
         if (this.timer <= 0) {
           this.setState('combo');
-          this.swingsLeft = OMAR.comboHits[ph];
+          this.swingsLeft = this.cfg.comboHits[ph];
         }
         break;
       }
@@ -898,16 +871,16 @@ export class OmarFighter extends Boss {
           break;
         }
         // Klaar met slaan. Boos en net geteleporteerd? Dan soms meteen nog een keer: "Nog een keer!"
-        const chain = this.fromTeleport && ph && p.onGround && Math.random() < OMAR.teleportChain;
+        const chain = this.fromTeleport && ph && p.onGround && Math.random() < this.cfg.teleportChain;
         this.fromTeleport = false;
         if (chain) {
           this.say('Nog een keer!', 1.2, true);
           this.startTeleport(ph, 0.2);
-          this.cd.teleport = OMAR.cooldown.teleport[ph];
+          this.cd.teleport = this.cfg.cooldown.teleport[ph];
           break;
         }
         // Soms nog een wervelslag erachteraan (in fase 2 vaker)!
-        if (dist < OMAR.spinRadius + 0.5 && p.spinCooldown <= 0 && Math.random() < OMAR.spinAfterCombo[ph]) {
+        if (dist < this.cfg.spinRadius + 0.5 && p.spinCooldown <= 0 && Math.random() < this.cfg.spinAfterCombo[ph]) {
           this.startSpin(ph, 0.32);
           break;
         }
@@ -948,17 +921,17 @@ export class OmarFighter extends Boss {
         // Na de dash snel omdraaien en nog één klap
         this.turnRate = 20;
         if (this.timer > 0) break;
-        if (dist <= p.sword.range + OMAR.reach + 0.6 && p.tryAttack()) {
+        if (dist <= p.sword.range + this.cfg.reach + 0.6 && p.tryAttack()) {
           this.log('slag');
           play('swing');
           this.trail.cut();
           this.swingsLeft = 0;
-          this.after = OMAR.recover.dash[ph];
+          this.after = this.cfg.recover.dash[ph];
           this.setState('combo');
         } else if (dist < 8.5) {
-          this.after = OMAR.recover.combo[ph];
+          this.after = this.cfg.recover.combo[ph];
           this.setState('aanlopen', 1.5);
-        } else this.setState('herstel', OMAR.recover.dash[ph]);
+        } else this.setState('herstel', this.cfg.recover.dash[ph]);
         break;
       }
 
@@ -979,7 +952,7 @@ export class OmarFighter extends Boss {
 
       case 'spin': {
         this.face = false;
-        if (p.spinTimer <= 0) this.setState('herstel', OMAR.recover.spin[ph]);
+        if (p.spinTimer <= 0) this.setState('herstel', this.cfg.recover.spin[ph]);
         break;
       }
 
@@ -1009,9 +982,9 @@ export class OmarFighter extends Boss {
         this.steerTo(c, this.target, Math.max(0.05, p.velocity.y / GRAVITY), ph);
         if (p.velocity.y <= 0.5 || this.stateT > 0.6) {
           // Bovenaan: even stil hangen met zijn zwaard omhoog, en een rode cirkel waar hij gaat landen
-          const time = OMAR.windup.slam[ph];
+          const time = this.cfg.windup.slam[ph];
           this.setState('hangen', time);
-          ctx.effects.warnCircle(this.position.clone().setY(0), OMAR.slamRadius, time + 0.1);
+          ctx.effects.warnCircle(this.position.clone().setY(0), this.cfg.slamRadius, time + 0.1);
           this.telegraph('charge');
         }
         break;
@@ -1041,7 +1014,7 @@ export class OmarFighter extends Boss {
             this.startJumpSlam(ctx, ph, true);
           } else {
             this.chained = false;
-            this.setState('herstel', OMAR.recover.slam[ph]);
+            this.setState('herstel', this.cfg.recover.slam[ph]);
           }
         }
         break;
@@ -1063,7 +1036,7 @@ export class OmarFighter extends Boss {
             this.say('Mijn zwaard staat in de fik!', 2);
           }
           this.setState('neutraal');
-          cd.gap = OMAR.gap[ph];
+          cd.gap = this.cfg.gap[ph];
         }
         break;
       }
@@ -1125,7 +1098,7 @@ export class OmarFighter extends Boss {
         if (this.timer <= 0) {
           this.summonShadows(ctx);
           this.setState('neutraal');
-          cd.gap = OMAR.gap[ph];
+          cd.gap = this.cfg.gap[ph];
         }
         break;
       }
@@ -1155,8 +1128,8 @@ export class OmarFighter extends Boss {
         this.turnRate = 25;
         this.bladeSparks(dt, 0xd9a3ff, 0.06);
         if (this.timer <= 0) {
-          this.after = OMAR.recover.combo[ph];
-          this.swingsLeft = OMAR.teleportHits[ph];
+          this.after = this.cfg.recover.combo[ph];
+          this.swingsLeft = this.cfg.teleportHits[ph];
           this.fromTeleport = true;
           this.setState('combo');
         }
@@ -1168,7 +1141,7 @@ export class OmarFighter extends Boss {
         this.patch = 'wenken';
         if (this.timer <= 0) {
           this.setState('neutraal');
-          cd.gap = OMAR.gap[ph];
+          cd.gap = this.cfg.gap[ph];
         }
         break;
       }
@@ -1200,7 +1173,7 @@ export class OmarFighter extends Boss {
         this.turnRate = 2.5; // draait langzaam: loop om hem heen!
         if (this.timer <= 0) {
           this.setState('neutraal');
-          cd.gap = OMAR.gap[ph];
+          cd.gap = this.cfg.gap[ph];
         }
         break;
       }
@@ -1215,7 +1188,7 @@ export class OmarFighter extends Boss {
       this.sideTimer = 2 + Math.random();
     }
     const tangent = new THREE.Vector3(dir.z, 0, -dir.x).multiplyScalar(this.side);
-    if (dist > OMAR.sprintFrom) {
+    if (dist > this.cfg.sprintFrom) {
       c.move.copy(dir);
       c.sprint = true;
       this.face = false;
@@ -1279,60 +1252,60 @@ export class OmarFighter extends Boss {
     else if (move === 'dash') this.startDash(ph);
     else if (move === 'teleport') this.startTeleport(ph);
     else if (move === 'bliksem') {
-      cd.bliksem = OMAR.bliksem.cooldown[ph];
-      this.setState('bliksemWindup', OMAR.bliksem.windup[ph]);
+      cd.bliksem = this.cfg.bliksem.cooldown[ph];
+      this.setState('bliksemWindup', this.cfg.bliksem.windup[ph]);
       this.say(pick(['Voel de bliksem!', 'Hoor je de donder? Dat ben IK!', 'De hemel luistert naar mij!']), 1.8, true);
       play('charge');
       this.log('bliksem');
     } else if (move === 'schaduwen') {
-      cd.schaduwen = OMAR.schaduwen.cooldown;
+      cd.schaduwen = this.cfg.schaduwen.cooldown;
       this.setState('schaduwWindup', 0.7);
       this.say(pick(['Mijn schaduwen... PAK HEM!', 'Kom maar, schaduwen!']), 1.8, true);
       play('charge');
       this.log('schaduwen');
     }
     else if (move === 'vuurzwaard') {
-      cd.fire = OMAR.cooldown.fire;
-      this.setState('vuurWindup', OMAR.windup.fire);
+      cd.fire = this.cfg.cooldown.fire;
+      this.setState('vuurWindup', this.cfg.windup.fire);
       this.shout('VUUR!', '#ff9a3c', 0.7);
       play('charge');
     }
     else if (move === 'aanlopen') {
-      this.after = OMAR.recover.combo[ph];
+      this.after = this.cfg.recover.combo[ph];
       this.setState('aanlopen', 2);
     } else if (move === 'uitdagen') {
-      cd.taunt = OMAR.cooldown.taunt[ph];
+      cd.taunt = this.cfg.cooldown.taunt[ph];
       this.setState('uitdagen', 1.2);
-      this.say(pick(TAUNTS.uitdagen), 1.8);
+      this.say(pick(this.taunts.uitdagen), 1.8);
       this.log('uitdagen');
     }
   }
 
   startCombo(ph, windupScale = 1) {
     this.fromTeleport = false;
-    this.after = OMAR.recover.combo[ph];
-    this.setState('comboWindup', OMAR.windup.combo[ph] * windupScale);
+    this.after = this.cfg.recover.combo[ph];
+    this.setState('comboWindup', this.cfg.windup.combo[ph] * windupScale);
     this.telegraph('glint');
     this.log('combo');
   }
 
-  startSpin(ph, windup = OMAR.windup.spin[ph]) {
-    this.cd.spin = OMAR.cooldown.spin[ph];
+  startSpin(ph, windup = this.cfg.windup.spin[ph]) {
+    this.cd.spin = this.cfg.cooldown.spin[ph];
     this.setState('spinWindup', windup);
-    this.effects?.warnCircle(this.position.clone().setY(0), OMAR.spinRadius, windup);
+    this.effects?.warnCircle(this.position.clone().setY(0), this.cfg.spinRadius, windup);
     this.telegraph('charge');
   }
 
   startDash(ph) {
-    this.cd.dash = OMAR.cooldown.dash[ph];
+    this.cd.dash = this.cfg.cooldown.dash[ph];
     this.streakTimer = 0;
-    this.setState('dashWindup', OMAR.windup.dash[ph]);
+    this.setState('dashWindup', this.cfg.windup.dash[ph]);
     this.telegraph('charge');
   }
 
   /** Teleporteren: even paarse rook, dan poef... en hij staat achter je. */
   startTeleport(ph, windup = 0.3) {
-    this.cd.teleport = OMAR.cooldown.teleport[ph];
+    this.cd.teleport = this.cfg.cooldown.teleport[ph];
     this.smokeTimer = 0;
     this.setState('verdwijnen', windup);
     play('charge');
@@ -1346,7 +1319,7 @@ export class OmarFighter extends Boss {
     this.trail.cut();
     this.puppet.velocity.set(0, 0, 0);
     this.log('teleport');
-    this.setState('weg', OMAR.teleportGone);
+    this.setState('weg', this.cfg.teleportGone);
   }
 
   /** En opeens staat hij achter je (een beetje opzij, zodat je hem ook echt ziet verschijnen). */
@@ -1358,13 +1331,13 @@ export class OmarFighter extends Boss {
     let found = false;
     // Achter je, of anders ergens naast je (hij moet wel in de arena blijven)
     for (const turn of [0.5, 0.9, 1.4, 2, 2.6]) {
-      spot.copy(player.position).addScaledVector(back.clone().applyAxisAngle(UP, turn * side), OMAR.teleportDist);
+      spot.copy(player.position).addScaledVector(back.clone().applyAxisAngle(UP, turn * side), this.cfg.teleportDist);
       if (flatDist(spot, this.arena.center) < this.arena.radius - 1.2) {
         found = true;
         break;
       }
     }
-    if (!found) spot.copy(player.position).addScaledVector(tmp.copy(this.arena.center).sub(player.position).setY(0).normalize(), OMAR.teleportDist);
+    if (!found) spot.copy(player.position).addScaledVector(tmp.copy(this.arena.center).sub(player.position).setY(0).normalize(), this.cfg.teleportDist);
     spot.y = this.position.y;
     this.position.copy(spot);
     this.puppet.velocity.set(0, 0, 0);
@@ -1374,7 +1347,7 @@ export class OmarFighter extends Boss {
     this.mesh.visible = true;
     this.poof(ctx.effects, spot);
     this.telegraph('glint');
-    this.setState('achter', OMAR.windup.teleport[ph]);
+    this.setState('achter', this.cfg.windup.teleport[ph]);
   }
 
   /** Een wolk paarse rook (verdwijnen en verschijnen). */
@@ -1387,7 +1360,7 @@ export class OmarFighter extends Boss {
   }
 
   startJumpSlam(ctx, ph, again = false) {
-    if (!again) this.cd.slam = OMAR.cooldown.slam[ph];
+    if (!again) this.cd.slam = this.cfg.cooldown.slam[ph];
     // Mikken op waar jij straks bent (maar wel binnen de arena)
     const player = (ctx ?? this.lastCtx)?.player;
     const target = player ? player.position.clone().addScaledVector(player.velocity, 0.35).setY(0) : this.position.clone();
@@ -1404,7 +1377,7 @@ export class OmarFighter extends Boss {
     const len = tmp.length();
     if (len < 0.3) return;
     c.move.copy(tmp).divideScalar(len);
-    this.puppet.stats.boost = THREE.MathUtils.clamp(len / (Math.max(0.12, timeLeft) * BASE_SPEED * OMAR.speed[ph]), 0.2, 2.2);
+    this.puppet.stats.boost = THREE.MathUtils.clamp(len / (Math.max(0.12, timeLeft) * BASE_SPEED * this.cfg.speed[ph]), 0.2, 2.2);
   }
 
   /** Wegrollen (of wegdashen bij een grote aanval). */
@@ -1413,13 +1386,13 @@ export class OmarFighter extends Boss {
     const away = dir.clone().negate();
     const side = Math.random() < 0.5 ? 1 : -1;
     // Soms: poef, weg... en dan staat hij achter je
-    if (threat === 'slag' && this.cd.teleport <= 0 && p.onGround && !p.isBusy && Math.random() < OMAR.teleportDodge[this.phase2 ? 1 : 0]) {
-      this.cd.teleport = OMAR.cooldown.teleport[this.phase2 ? 1 : 0];
+    if (threat === 'slag' && this.cd.teleport <= 0 && p.onGround && !p.isBusy && Math.random() < this.cfg.teleportDodge[this.phase2 ? 1 : 0]) {
+      this.cd.teleport = this.cfg.cooldown.teleport[this.phase2 ? 1 : 0];
       this.vanish(this.lastCtx);
       return true;
     }
     let ok = false;
-    if ((threat !== 'slag' || !p.onGround || Math.random() < OMAR.dashDodge) && p.dashCooldown <= 0) {
+    if ((threat !== 'slag' || !p.onGround || Math.random() < this.cfg.dashDodge) && p.dashCooldown <= 0) {
       ok = p.tryDash(away.clone().applyAxisAngle(UP, side * 0.4));
       if (ok) this.log('ontwijk-dash');
     }
@@ -1428,7 +1401,7 @@ export class OmarFighter extends Boss {
       if (ok) this.log('rol');
     }
     if (!ok) return false;
-    this.counter = threat === 'slag' && Math.random() < OMAR.counterChance;
+    this.counter = threat === 'slag' && Math.random() < this.cfg.counterChance;
     this.setState('ontwijk');
     return true;
   }
@@ -1438,7 +1411,7 @@ export class OmarFighter extends Boss {
   /** Rode cirkels om de speler heen: daar slaat zo meteen de bliksem in. */
   callLightning(ctx, ph) {
     const player = ctx.player;
-    const n = OMAR.bliksem.strikes[ph];
+    const n = this.cfg.bliksem.strikes[ph];
     for (let i = 0; i < n; i++) {
       const pos = player.position.clone().setY(this.position.y);
       if (i === 0) pos.addScaledVector(player.velocity.clone().setY(0), 0.4); // waar jij straks bent
@@ -1450,8 +1423,8 @@ export class OmarFighter extends Boss {
       }
       const off = pos.clone().sub(this.arena.center).setY(0);
       if (off.length() > this.arena.radius - 1) pos.sub(off.setLength(off.length() - (this.arena.radius - 1)));
-      const t = OMAR.bliksem.delay + i * OMAR.bliksem.every;
-      ctx.effects.warnCircle(pos, OMAR.bliksem.radius, t);
+      const t = this.cfg.bliksem.delay + i * this.cfg.bliksem.every;
+      ctx.effects.warnCircle(pos, this.cfg.bliksem.radius, t);
       this.strikes.push({ pos, t, first: i === 0 });
     }
   }
@@ -1466,14 +1439,14 @@ export class OmarFighter extends Boss {
     ctx.effects.burst(s.pos.clone().setY(s.pos.y + 0.3), 0xe8d0ff, { count: 22, speed: 8, size: 0.14, life: 0.5, up: 4 });
     ctx.effects.shake(0.35);
     const player = ctx.player;
-    if (flatDist(player.position, s.pos) < OMAR.bliksem.radius + 0.1 && player.position.y < s.pos.y + 3) this.hurt(ctx, 'bliksem');
+    if (flatDist(player.position, s.pos) < this.cfg.bliksem.radius + 0.1 && player.position.y < s.pos.y + 3) this.hurt(ctx, 'bliksem');
   }
 
   /** Zwarte schaduwklonen met rode ogen verschijnen in een kring om de speler. */
   summonShadows(ctx) {
     if (!this.shadowModel) return;
     const player = ctx.player;
-    const n = OMAR.schaduwen.count;
+    const n = this.cfg.schaduwen.count;
     const start = Math.random() * Math.PI * 2;
     for (let i = 0; i < n; i++) {
       const a = start + (i / n) * Math.PI * 2;
@@ -1483,7 +1456,7 @@ export class OmarFighter extends Boss {
       const model = this.shadowModel.clone(true);
       model.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(model);
-      const scale = (1.95 * OMAR.size) / (box.max.y - box.min.y);
+      const scale = (1.95 * this.cfg.size) / (box.max.y - box.min.y);
       model.scale.multiplyScalar(scale);
       const center = box.getCenter(new THREE.Vector3());
       model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
@@ -1496,7 +1469,7 @@ export class OmarFighter extends Boss {
       mesh.position.copy(pos);
       const eyes = [makeEye(), makeEye()];
       eyes.forEach((e, k) => {
-        e.position.set(k ? 0.045 : -0.045, 1.95 * OMAR.size * 0.93, 0.13);
+        e.position.set(k ? 0.045 : -0.045, 1.95 * this.cfg.size * 0.93, 0.13);
         mesh.add(e);
       });
       this.scene.add(mesh);
@@ -1527,7 +1500,7 @@ export class OmarFighter extends Boss {
       }
     }
     // Schaduwklonen: verschijnen, op je af stormen, verdwijnen
-    const C = OMAR.schaduwen;
+    const C = this.cfg.schaduwen;
     const player = ctx.player;
     for (let i = this.clones.length - 1; i >= 0; i--) {
       const c = this.clones[i];
@@ -1567,7 +1540,7 @@ export class OmarFighter extends Boss {
     slot.updateWorldMatrix(true, false);
     const head = slot.getWorldPosition(new THREE.Vector3());
     const q = slot.getWorldQuaternion(new THREE.Quaternion());
-    const size = OMAR.size;
+    const size = this.cfg.size;
     const glow = (this.phase2 ? 0.15 : 0.11) * (0.85 + Math.random() * 0.3);
     this.eyes.children.forEach((eye, i) => {
       eye.position.set((i ? 1 : -1) * 0.032 * size, -0.02 * size, 0.09 * size).applyQuaternion(q).add(head);
@@ -1707,7 +1680,7 @@ export class OmarFighter extends Boss {
         ctx.effects.shockwave(this.position, 0xd9a3ff, 1.2);
       } else if (ev === 'slamLand') this.slamImpact(ctx);
       else if (ev === 'heal') {
-        const heal = Math.round(this.info.hp * OMAR.drinkHeal);
+        const heal = Math.round(this.info.hp * this.cfg.drinkHeal);
         this.hp = Math.min(this.info.hp, this.hp + heal);
         play('heal');
         ctx.effects.burst(this.center, 0x7dff9a, { count: 18, speed: 3, size: 0.09, life: 0.7, up: 3, gravity: -0.3 });
@@ -1726,13 +1699,13 @@ export class OmarFighter extends Boss {
     const pos = this.position.clone().setY(0);
     this.slamLanded = true;
     play('slam');
-    ctx.effects.shockwave(pos, 0xb04dff, OMAR.slamRadius);
+    ctx.effects.shockwave(pos, 0xb04dff, this.cfg.slamRadius);
     ctx.effects.burst(pos.clone().setY(0.3), 0xb04dff, { count: 26, speed: 8, size: 0.16, life: 0.7, up: 2 });
     ctx.effects.burst(pos.clone().setY(0.3), 0x9a8f7a, { count: 14, speed: 6, size: 0.18, life: 0.6, up: 2 });
     const player = ctx.player;
     const d = flatDist(player.position, pos);
-    ctx.effects.shake(d < OMAR.slamRadius * 2 ? 0.55 : 0.2);
-    if (d <= OMAR.slamRadius && player.position.y < 1.2) this.hurt(ctx, 'grondslag');
+    ctx.effects.shake(d < this.cfg.slamRadius * 2 ? 0.55 : 0.2);
+    if (d <= this.cfg.slamRadius && player.position.y < 1.2) this.hurt(ctx, 'grondslag');
   }
 
   /** Raakt zijn zwaard of zijn wervelslag de speler? */
@@ -1745,11 +1718,11 @@ export class OmarFighter extends Boss {
     const sword = p.sword;
     if (sword.isHitting && this.lastSwordHit !== sword.swingId) {
       const facing = p.facing;
-      if (dist <= sword.range + OMAR.reach && (dist < 1.2 || toPlayer.normalize().dot(facing) > 0.1)) {
+      if (dist <= sword.range + this.cfg.reach && (dist < 1.2 || toPlayer.normalize().dot(facing) > 0.1)) {
         if (this.hurt(ctx, 'slag')) this.lastSwordHit = sword.swingId;
       }
     }
-    if (p.spinTimer > 0 && this.lastSpinHit !== p.spinId && dist <= OMAR.spinRadius && Math.abs(player.position.y - this.position.y) < 1.6) {
+    if (p.spinTimer > 0 && this.lastSpinHit !== p.spinId && dist <= this.cfg.spinRadius && Math.abs(player.position.y - this.position.y) < 1.6) {
       if (this.hurt(ctx, 'wervelslag')) this.lastSpinHit = p.spinId;
     }
   }
