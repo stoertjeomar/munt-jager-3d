@@ -31,7 +31,7 @@ import { Goals } from './goals.js';
 import { Champions, CHAMPION } from './champions.js';
 import { Villagers } from './villagers.js';
 import { Arena } from './arena.js';
-import { Sky, ALTAR } from './sky.js';
+import { Islands, ALTAR } from './islands.js';
 import { Multiplayer, DUEL } from './multiplayer.js';
 
 // ---------- Basis: renderer, scene, camera ----------
@@ -529,7 +529,7 @@ const dragonWorld = {
   colliders: world.colliders,
   bounds: world.bounds,
   arenas: ARENAS.map((arena) => ({ center: arena.center, radius: arena.radius, closed: true })),
-  groundAt: (x, z, y) => sky?.groundAt(x, z, y) ?? 0, // bovenop een luchteiland is de grond hoger
+  groundAt: (x, z, y) => islands?.groundAt(x, z, y) ?? 0, // bovenop een luchteiland is de grond hoger
 };
 const seat = new THREE.Vector3();
 
@@ -553,7 +553,7 @@ function toggleDragon() {
     return;
   }
   if (dragon.active) dragon.hide(); // hij was nog aan het wegvliegen: dan keert hij meteen om
-  dragon.summon(player.position, cameraRig.yaw + Math.PI, sky?.groundAt(player.position.x, player.position.z, player.position.y + 0.5) ?? 0);
+  dragon.summon(player.position, cameraRig.yaw + Math.PI, islands?.groundAt(player.position.x, player.position.z, player.position.y + 0.5) ?? 0);
   ui.toast('🐉 <b>Vuurtand</b> komt eraan!', 2);
 }
 
@@ -1197,10 +1197,10 @@ function handleActions(move) {
     if (input.wasPressed('KeyE')) talkTo(npc);
     return;
   }
-  // Het Windaltaar in het Wolkenrijk
-  if (sky && !player.isBusy && sky.nearAltar(player.position)) {
-    ui.prompt(sky.altarCooldown > 0 ? `🌬 Windaltaar (nog ${Math.ceil(sky.altarCooldown)} s)` : '<b>E</b> 🌬 Zegen van de Wind');
-    if (input.wasPressed('KeyE')) ui.toast(sky.useAltar(player), 5);
+  // Het Windaltaar op de Hemeleilanden
+  if (islands && !player.isBusy && islands.nearAltar(player.position)) {
+    ui.prompt(islands.altarCooldown > 0 ? `🌬 Windaltaar (nog ${Math.ceil(islands.altarCooldown)} s)` : '<b>E</b> 🌬 Zegen van de Wind');
+    if (input.wasPressed('KeyE')) ui.toast(islands.useAltar(player), 5);
     return;
   }
   // De poort van de Arena
@@ -1414,8 +1414,8 @@ const multiplayer = IN_CASTLE ? null : new Multiplayer({
     }
   },
 });
-// Het Wolkenrijk: zwevende eilanden hoog in de lucht, alleen met de draak te bereiken (sky.js)
-const sky = IN_CASTLE ? null : new Sky(scene, { colliders: world.colliders, addEnemy: addSummon, stats, effects, ui, giveStars });
+// De Hemeleilanden: zwevende eilanden hoog in de lucht, alleen met de draak te bereiken (islands.js)
+const islands = IN_CASTLE ? null : new Islands(scene, { colliders: world.colliders, addEnemy: addSummon, stats, effects, ui, giveStars });
 // Staat de Schaduwpoort al open? (bij een oude save waarin de vier bosses al verslagen zijn)
 if (gateOpen()) openGate();
 
@@ -1509,9 +1509,9 @@ function gameLoop() {
   for (const enemy of enemies) enemy.update(dt, enemy.arenaCtx ?? (enemy.champion ? championCtx : enemyCtx));
   keepGateClosed(realDt);
   champions.update(dt, player.position, gameStarted && !IN_CASTLE);
-  sky?.update(dt, player, dragon.riding);
+  islands?.update(dt, player, dragon.riding);
   // Zegen van de Wind (het Windaltaar): meer schade en sneller lopen
-  player.boost = sky?.buffT > 0 ? { damage: ALTAR.damage, speed: ALTAR.speed, t: sky.buffT } : null;
+  player.boost = islands?.buffT > 0 ? { damage: ALTAR.damage, speed: ALTAR.speed, t: islands.buffT } : null;
   villagers?.update(dt, player.position);
   if (gameStarted) goals.update(realDt);
   // Huisdieren scharrelen rond in Muntdorp (of vechten in de arena: zie arena.js)
@@ -1555,7 +1555,7 @@ function gameLoop() {
     else ui.toast(`${picked.quest.goal.label[0].toUpperCase() + picked.quest.goal.label.slice(1)}: <b>${picked.count} / ${picked.quest.goal.count}</b>`, 2);
   }
   ui.setQuests([...invasions.tracker(), ...npcs.tracker()]);
-  ui.markers = [...npcs.mapMarkers(), ...invasions.mapMarkers(), ...champions.mapMarkers(), ...arena.mapMarkers(), ...(sky?.mapMarkers() ?? []), ...(multiplayer?.mapMarkers() ?? [])];
+  ui.markers = [...npcs.mapMarkers(), ...invasions.mapMarkers(), ...champions.mapMarkers(), ...arena.mapMarkers(), ...(islands?.mapMarkers() ?? []), ...(multiplayer?.mapMarkers() ?? [])];
   pickups.update(dt, elapsed, player, {
     onCoin: () => play('coin'),
     onHeart: (fraction) => {
@@ -1668,5 +1668,5 @@ if (stats.level === 1 && stats.runes === 0 && stats.data.bosses.length === 0) {
 // Handig voor debuggen in de browser-console (F12): typ bijvoorbeeld `game.player.position`
 window.game = { scene, player, enemies, bosses, sites, npcs, stats, ui, world, state, camera, cameraRig, renderer, composer, gfx, nightLight, grass, decor, effects, trail, onDefeated, loop: gameLoop };
 window.game.omar = omar;
-Object.assign(window.game, { arena, openArenaMenu, dragon, pets, invasions, travelTo, hatchPet, spawnEnemy: addSummon, goals, champions, villagers, gateOpen, openBounties, openTrophies, sky, multiplayer, openMultiplayerMenu });
+Object.assign(window.game, { arena, openArenaMenu, dragon, pets, invasions, travelTo, hatchPet, spawnEnemy: addSummon, goals, champions, villagers, gateOpen, openBounties, openTrophies, islands, multiplayer, openMultiplayerMenu });
 window.game.music = music;

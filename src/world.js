@@ -1282,7 +1282,7 @@ export function createWorld(scene) {
     /** Mist van het gebied waar je bent: in het Spookwoud dikker. Schuift langzaam mee (geen sprong). */
     updateFog(theme, dt, altitude = 0) {
       let near = theme === 'woud' ? 25 : theme === 'schaduw' ? 30 : 50;
-      if (altitude > 14) near = Math.max(near, 80); // hoog in de lucht (bij het Wolkenrijk) is het helder
+      if (altitude > 14) near = Math.max(near, 80); // hoog in de lucht (bij de Hemeleilanden) is het helder
       scene.fog.near += (near - scene.fog.near) * Math.min(1, dt * 0.6);
       scene.fog.far = scene.fog.near + 90;
       // In het Schaduwrijk zijn de mist en de lucht paars

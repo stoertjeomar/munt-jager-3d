@@ -204,12 +204,12 @@ function buildOpenWorld() {
     if (L.village) world.village = { center: t(...L.village.center) };
     if (L.colosseum) world.colosseum = { center: t(...L.colosseum.center), radius: L.colosseum.radius, flip: r.flip };
   }
-  // Het Wolkenrijk (hoog in de lucht, zie SKY hieronder): een vlag, kisten en diamanten
-  const sky = buildSky(regions);
-  if (sky) {
-    world.checkpoints.push(...sky.checkpoints);
-    world.chests.push(...sky.chests);
-    world.diamonds.push(...sky.diamonds);
+  // De Hemeleilanden (hoog in de lucht, zie ISLANDS hieronder): een vlag, kisten en diamanten
+  const isl = buildIslands(regions);
+  if (isl) {
+    world.checkpoints.push(...isl.checkpoints);
+    world.chests.push(...isl.chests);
+    world.diamonds.push(...isl.diamonds);
   }
   // Verbindingspaden: van vlak voor de boss-arena van het ene gebied naar het begin van het volgende
   for (let i = 0; i < regions.length - 1; i++) {
@@ -221,14 +221,15 @@ function buildOpenWorld() {
 }
 
 // ======================================================================
-// Het Wolkenrijk: zwevende eilanden hoog boven de Ruïnevallei
+// De Hemeleilanden: zwevende eilanden hoog boven de Ruïnevallei
 // ======================================================================
 // Je komt er alleen met Vuurtand de draak (springen is veel te laag!). Alles staat hier in wereld-coördinaten,
-// rond het midden van gebied 2. De eilanden zelf worden gebouwd in sky.js.
+// rond het midden van gebied 2. De eilanden zelf worden gebouwd in islands.js.
+// (Niet te verwarren met het Wolkenrijk van Sky: dat is een geheim level, zie SKY_REALM.)
 //   islands: [id, naam, x, z, hoogte van de grond bovenop, straal]   (x en z: vanaf het midden van het gebied)
 //   stones:  stapstenen van het ene eiland naar het andere (springen!)
-const SKY_REGION = 1;
-const SKY_LAYOUT = {
+const ISLAND_REGION = 1;
+const ISLAND_LAYOUT = {
   islands: [
     ['poort', 'Hemelpoort', 0, -10, 31, 13],
     ['storm', 'Stormeiland', 26, -30, 34, 9],
@@ -238,36 +239,36 @@ const SKY_LAYOUT = {
   ],
   // [x, z, hoogte, straal]: van de Hemelpoort omhoog naar het Stormeiland
   stones: [[11.85, -19.1, 31.5, 1], [14.6, -21.2, 32.4, 1], [17.35, -23.3, 33.3, 1]],
-  checkpoint: ['sky-start', 'Hemelpoort', 6, -6],
+  checkpoint: ['eiland-start', 'Hemelpoort', 6, -6],
   chests: [
-    ['sky-gif', -5, -16, 'poort', { kind: 'weapon', key: 'gifdolk' }],
-    ['sky-bliksem', 28, -32, 'storm', { kind: 'weapon', key: 'bliksemzwaard' }],
-    ['sky-vampier', -28, 11, 'tuin', { kind: 'weapon', key: 'vampierzwaard' }],
-    ['sky-speer', 4, -47, 'top', { kind: 'weapon', key: 'wolkenspeer' }],
+    ['eiland-gif', -5, -16, 'poort', { kind: 'weapon', key: 'gifdolk' }],
+    ['eiland-bliksem', 28, -32, 'storm', { kind: 'weapon', key: 'bliksemzwaard' }],
+    ['eiland-vampier', -28, 11, 'tuin', { kind: 'weapon', key: 'vampierzwaard' }],
+    ['eiland-speer', 4, -47, 'top', { kind: 'weapon', key: 'wolkenspeer' }],
   ],
-  diamonds: [['sky-d1', -16, -30, 'kei'], ['sky-d2', -21, 3, 'tuin'], ['sky-d3', 14.6, -21.2, 'stone']],
+  diamonds: [['eiland-d1', -16, -30, 'kei'], ['eiland-d2', -21, 3, 'tuin'], ['eiland-d3', 14.6, -21.2, 'stone']],
 };
 
-function buildSky(regions) {
-  const r = regions[SKY_REGION];
+function buildIslands(regions) {
+  const r = regions[ISLAND_REGION];
   if (!r) return null;
   const X = (x) => r.ox + x;
-  const islands = SKY_LAYOUT.islands.map(([id, name, x, z, top, radius]) => ({ id, name, x: X(x), z, top, radius }));
-  const stones = SKY_LAYOUT.stones.map(([x, z, top, radius]) => ({ id: 'stone', name: 'Stapsteen', x: X(x), z, top, radius, stone: true }));
+  const islands = ISLAND_LAYOUT.islands.map(([id, name, x, z, top, radius]) => ({ id, name, x: X(x), z, top, radius }));
+  const stones = ISLAND_LAYOUT.stones.map(([x, z, top, radius]) => ({ id: 'stone', name: 'Stapsteen', x: X(x), z, top, radius, stone: true }));
   const topOf = (id, x) => (id === 'stone' ? stones.find((st) => Math.abs(st.x - X(x)) < 0.01)?.top : islands.find((i) => i.id === id).top);
-  const [cid, cname, cx, cz] = SKY_LAYOUT.checkpoint;
+  const [cid, cname, cx, cz] = ISLAND_LAYOUT.checkpoint;
   return {
-    region: SKY_REGION,
+    region: ISLAND_REGION,
     islands,
     stones,
     checkpoints: [[cid, cname, X(cx), cz, islands[0].top]],
-    chests: SKY_LAYOUT.chests.map(([id, x, z, on, item]) => [id, X(x), topOf(on, x), z, item]),
-    diamonds: SKY_LAYOUT.diamonds.map(([id, x, z, on]) => [id, X(x), topOf(on, x), z]),
+    chests: ISLAND_LAYOUT.chests.map(([id, x, z, on, item]) => [id, X(x), topOf(on, x), z, item]),
+    diamonds: ISLAND_LAYOUT.diamonds.map(([id, x, z, on]) => [id, X(x), topOf(on, x), z]),
   };
 }
 
 export const WORLD = buildOpenWorld();
-export const SKY = buildSky(WORLD.regions);
+export const ISLANDS = buildIslands(WORLD.regions);
 export const REGIONS = WORLD.regions;
 
 /** In welk gebied (0, 1, 2, 3) ligt dit punt? (de grens is een beetje golvend, dat ziet er natuurlijker uit) */
@@ -284,7 +285,7 @@ export const GATE_X = LOCKED_REGION ? LOCKED_REGION.x0 - 6.5 : Infinity;
 
 /** In welk gebied ligt deze vlag? */
 export function regionOfCheckpoint(id) {
-  if (id.startsWith('sky')) return SKY_REGION; // het Wolkenrijk hangt boven de Ruïnevallei
+  if (id.startsWith('eiland')) return ISLAND_REGION; // de Hemeleilanden hangen boven de Ruïnevallei
   const i = LEVELS.findIndex((l) => l.checkpoints.some((c) => c[0] === id));
   return i < 0 ? 0 : i;
 }

@@ -1,4 +1,4 @@
-import { LEVELS, REGIONS, WORLD, SKY } from './levels.js';
+import { LEVELS, REGIONS, WORLD, ISLANDS } from './levels.js';
 import { ENEMY_TYPES } from './enemies.js';
 import { BOSS_INFO } from './bosses.js';
 
@@ -13,11 +13,11 @@ import { BOSS_INFO } from './bosses.js';
 
 /** Alle zij-quests die er zijn (uit de mensen in LEVELS). */
 const ALL_QUESTS = LEVELS.flatMap((l) => l.npcs.map((n) => n[3]).filter(Boolean));
-// (WORLD = alle gebieden samen, plus het Wolkenrijk)
+// (WORLD = alle gebieden samen, plus de Hemeleilanden)
 const ALL_DIAMONDS = WORLD.diamonds.length;
 const ALL_CHESTS = WORLD.chests.length;
 const ALL_FLAGS = WORLD.checkpoints.length;
-const SKY_CHESTS = SKY ? SKY.chests.map((c) => c[0]) : [];
+const ISLAND_CHESTS = ISLANDS ? ISLANDS.chests.map((c) => c[0]) : [];
 const MAIN_BOSSES = REGIONS.filter((r) => !r.level.locked).map((r) => r.boss);
 const ALL_BOSSES = REGIONS.map((r) => r.boss);
 
@@ -50,8 +50,8 @@ export const TROPHIES = [
   ['premies-5', '📜', 'Premiejager', 'Haal 5 premies op', 1, (d) => count(d, 'bounties') >= 5, (d) => [count(d, 'bounties'), 5]],
   ['premies-20', '📜', 'Meester-premiejager', 'Haal 20 premies op', 2, (d) => count(d, 'bounties') >= 20, (d) => [count(d, 'bounties'), 20]],
   ['drakenrijder', '🐉', 'Drakenrijder', 'Vlieg op Vuurtand de draak', 1, (d) => !!d.dragonTips],
-  ['wolkenrijk', '☁', 'Hemelbestormer', 'Vlieg met Vuurtand naar het Wolkenrijk, hoog boven de Ruïnevallei', 1, (d) => d.flags.includes('sky-start')],
-  ['hemelschat', '⚡', 'Hemelse schatten', 'Open alle kisten in het Wolkenrijk', 2, (d) => SKY_CHESTS.every((id) => d.chests.includes(id)), (d) => [SKY_CHESTS.filter((id) => d.chests.includes(id)).length, SKY_CHESTS.length]],
+  ['hemeleilanden', '☁', 'Hemelbestormer', 'Vlieg met Vuurtand naar de Hemeleilanden, hoog boven de Ruïnevallei', 1, (d) => d.flags.includes('eiland-start')],
+  ['hemelschat', '⚡', 'Hemelse schatten', 'Open alle kisten op de Hemeleilanden', 2, (d) => ISLAND_CHESTS.every((id) => d.chests.includes(id)), (d) => [ISLAND_CHESTS.filter((id) => d.chests.includes(id)).length, ISLAND_CHESTS.length]],
   ['knokkie', '🦖', 'Beste maatjes', 'Train Knokkie tot level 10', 2, (d) => (d.pets?.knokkie?.level ?? 0) >= 10, (d) => [d.pets?.knokkie?.level ?? 0, 10]],
   ['pluis', '🐱', 'Kattenvriend', 'Adopteer Pluis de kat (sterrenwinkel)', 1, (d) => !!d.pets?.pluis],
   ['rijk', '💰', 'Rijkaard', 'Heb 5000 munten tegelijk', 1, (d) => d.runes >= 5000, (d) => [Math.min(d.runes, 5000), 5000]],

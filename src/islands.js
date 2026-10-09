@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { SKY } from './levels.js';
+import { ISLANDS } from './levels.js';
 import { play } from './audio.js';
 
 // ======================================================================
-// Het Wolkenrijk: zwevende eilanden hoog in de lucht
+// De Hemeleilanden: zwevende eilanden hoog in de lucht
 // ======================================================================
-// Je komt er alleen met Vuurtand de draak. Er zijn vijf eilanden (zie SKY in levels.js):
+// Je komt er alleen met Vuurtand de draak. Er zijn vijf eilanden (zie ISLANDS in levels.js):
 //   Hemelpoort  — het grootste eiland, met een vlag (snelreizen!), het Windaltaar en een waterval
 //   Stormeiland — bewaakt door een Stormgolem en Wolkengeesten (spring erheen over de stapstenen!)
 //   Wolkentuin  — roze wolkenbomen en Wolkengeesten
@@ -45,7 +45,7 @@ function hash(x, y, z) {
   return s - Math.floor(s);
 }
 
-export class Sky {
+export class Islands {
   /**
    * @param {THREE.Scene} scene
    * @param {object} game  { colliders, addEnemy(type, x, z), stats, effects, ui, giveStars }
@@ -53,14 +53,14 @@ export class Sky {
   constructor(scene, game) {
     this.scene = scene;
     this.game = game;
-    this.islands = SKY ? [...SKY.islands, ...SKY.stones] : [];
+    this.islands = ISLANDS ? [...ISLANDS.islands, ...ISLANDS.stones] : [];
     this.group = new THREE.Group();
     this.time = 0;
     this.buffT = 0; // > 0: de Zegen van de Wind werkt nog
     this.altarCooldown = 0;
     this.hinted = false;
     this.guards = [];
-    if (!SKY) return;
+    if (!ISLANDS) return;
     scene.add(this.group);
     this.materials = {
       grass: mat(0x7fd05a),
@@ -77,8 +77,8 @@ export class Sky {
       crystal: mat(0x8ff0ff, { roughness: 0.15, emissive: 0x2aa0c0, emissiveIntensity: 0.9, transparent: true, opacity: 0.9 }),
     };
     for (const isl of this.islands) this.buildIsland(isl);
-    this.buildAltar(SKY.islands[0]);
-    this.buildWaterfall(SKY.islands[0]);
+    this.buildAltar(ISLANDS.islands[0]);
+    this.buildWaterfall(ISLANDS.islands[0]);
     this.buildTrees();
     this.buildClouds();
     this.buildRainbow();
@@ -86,7 +86,7 @@ export class Sky {
   }
 
   get main() {
-    return SKY?.islands[0] ?? null;
+    return ISLANDS?.islands[0] ?? null;
   }
 
   // ---------------- Bouwen ----------------
@@ -252,7 +252,7 @@ export class Sky {
       ['storm', -5, 4, 'white'],
     ];
     for (const [id, dx, dz, kind] of spots) {
-      const isl = SKY.islands.find((i) => i.id === id);
+      const isl = ISLANDS.islands.find((i) => i.id === id);
       const x = isl.x + dx;
       const z = isl.z + dz;
       const tree = new THREE.Group();
@@ -283,7 +283,7 @@ export class Sky {
         puffs.push([x + (i - n / 2) * size * 0.7, y + hash(i, y, 1) * size * 0.4, z + (hash(z, i, 2) - 0.5) * size, s]);
       }
     };
-    for (const isl of SKY.islands) {
+    for (const isl of ISLANDS.islands) {
       const R = isl.radius;
       for (let k = 0; k < 3; k++) {
         const a = k * 2.1 + R;
@@ -291,7 +291,7 @@ export class Sky {
       }
     }
     // Wolken een eind weg (je ziet ze ook vanaf de grond)
-    const c = SKY.islands[0];
+    const c = ISLANDS.islands[0];
     for (let k = 0; k < 10; k++) {
       const a = (k / 10) * Math.PI * 2;
       const d = 40 + hash(k, 3, 3) * 25;
@@ -308,7 +308,7 @@ export class Sky {
     this.group.add(mesh);
   }
 
-  /** Een grote regenboog over het Wolkenrijk. */
+  /** Een grote regenboog over de Hemeleilanden. */
   buildRainbow() {
     const colors = [0xff4a4a, 0xff9a3a, 0xffe14a, 0x6ad84a, 0x4ab8ff, 0x6a5aff, 0xb05aff];
     const rainbow = new THREE.Group();
@@ -319,8 +319,8 @@ export class Sky {
       );
       rainbow.add(band);
     });
-    const a = SKY.islands.find((i) => i.id === 'tuin');
-    const b = SKY.islands.find((i) => i.id === 'storm');
+    const a = ISLANDS.islands.find((i) => i.id === 'tuin');
+    const b = ISLANDS.islands.find((i) => i.id === 'storm');
     rainbow.position.set((a.x + b.x) / 2, 8, (a.z + b.z) / 2 + 12);
     rainbow.rotation.y = Math.atan2(b.x - a.x, b.z - a.z) + Math.PI / 2;
     this.group.add(rainbow);
@@ -329,7 +329,7 @@ export class Sky {
   /** De bewakers van de eilanden: Wolkengeesten en een Stormgolem. */
   spawnGuards() {
     for (const [id, kind, dx, dz, look] of GUARDS) {
-      const isl = SKY.islands.find((i) => i.id === id);
+      const isl = ISLANDS.islands.find((i) => i.id === id);
       const e = this.game.addEnemy(kind, isl.x + dx, isl.z + dz);
       e.summoned = false; // ze horen bij de wereld (komen terug na rusten, tellen mee voor je level)
       e.floor = isl.top;
@@ -397,8 +397,8 @@ export class Sky {
 
   /** Voor de minimap en de wereldkaart. */
   mapMarkers() {
-    if (!SKY) return [];
-    return SKY.islands.map((i) => ({ x: i.x, z: i.z, icon: '☁', color: '#e8f6ff' }));
+    if (!ISLANDS) return [];
+    return ISLANDS.islands.map((i) => ({ x: i.x, z: i.z, icon: '☁', color: '#e8f6ff' }));
   }
 
   /**
@@ -407,7 +407,7 @@ export class Sky {
    * @param {boolean} riding  zit je op de draak?
    */
   update(dt, player, riding) {
-    if (!SKY) return;
+    if (!ISLANDS) return;
     this.time += dt;
     this.buffT = Math.max(0, this.buffT - dt);
     this.altarCooldown = Math.max(0, this.altarCooldown - dt);
@@ -429,8 +429,8 @@ export class Sky {
     const main = this.main;
     if (!this.hinted && riding && player.position.y > 16 && Math.hypot(player.position.x - main.x, player.position.z - main.z) < 90) {
       this.hinted = true;
-      if (!this.game.stats.data.flags.includes('sky-start')) {
-        this.game.ui.toast('☁ <b>Kijk daar!</b> Hoog boven de Ruïnevallei zweeft het <b>Wolkenrijk</b>.<br><small>Vlieg erheen en land op een eiland (laat Spatie los). Stap af met <b>B</b>.</small>', 6);
+      if (!this.game.stats.data.flags.includes('eiland-start')) {
+        this.game.ui.toast('☁ <b>Kijk daar!</b> Hoog boven de Ruïnevallei zweven de <b>Hemeleilanden</b>.<br><small>Vlieg erheen en land op een eiland (laat Spatie los). Stap af met <b>B</b>.</small>', 6);
       }
     }
   }

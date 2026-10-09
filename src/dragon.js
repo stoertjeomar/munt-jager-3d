@@ -421,7 +421,7 @@ export class Dragon {
   ride(dt, ctrl, world) {
     const pos = this.position;
     const moving = ctrl.move.lengthSq() > 0.01;
-    // De grond: meestal 0, maar bovenop een luchteiland (sky.js) hoger
+    // De grond: meestal 0, maar bovenop een luchteiland (islands.js) hoger
     const ground = world.groundAt ? world.groundAt(pos.x, pos.z, pos.y) : 0;
     const onGround = pos.y <= ground + 0.02;
     const flying = !onGround || ctrl.up;

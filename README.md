@@ -2,7 +2,7 @@
 
 Een **open-wereld actie-RPG** in de browser, gemaakt met **JavaScript** en **[Three.js](https://threejs.org/)**.
 Kies je held en trek door één grote wereld met 5 gebieden: versla vijanden voor munten en XP, help de dorpelingen
-met zij-quests, koop spullen bij de koopman, vlieg op je **draak** naar het **Wolkenrijk** hoog in de lucht, train je
+met zij-quests, koop spullen bij de koopman, vlieg op je **draak** naar de **Hemeleilanden** hoog in de lucht, train je
 **huisdieren** in de **Arena** en versla de boss van elk gebied. Pas op: Omar stuurt soms zijn **schaduwleger** op je af!
 En als alle bosses verslagen zijn, gaat de **Schaduwpoort** open... en daarna jaag je op **trofeeën**, **premies**,
 **Kampioenen** en **woedende bosses**. Of speel **samen online** met een vriend en daag hem uit voor een **duel**!
@@ -90,7 +90,7 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
   - **Huisdiergevecht**: Knokkie of Pluis tegen een monster
   - **Monstergevecht**: twee monsters vechten tegen elkaar en jij **wedt** munten op de winnaar (goed gegokt = dubbel terug)
   - **Duel**: online tegen een vriend (zie *Samen spelen*)
-- **Het Wolkenrijk** ☁: vijf zwevende eilanden hoog boven de Ruïnevallei, waar je **alleen met Vuurtand** komt. Met
+- **De Hemeleilanden** ☁: vijf zwevende eilanden hoog boven de Ruïnevallei, waar je **alleen met Vuurtand** komt. Met
   roze wolkenbomen, een waterval die naar beneden valt, kristallen, een regenboog, stapstenen om over te springen,
   Wolkengeesten en een Stormgolem. Op elk eiland staat een kist met een **speciaal wapen**, er liggen 3 diamanten, er staat
   een vlag (dan kun je erheen snelreizen) en het **Windaltaar** geeft je de *Zegen van de Wind*: 90 seconden lang meer
@@ -215,7 +215,7 @@ munt-jager-3d/
     ├── dragon.js     → Vuurtand de draak: gebouwd van simpele vormen, vliegen en vuur spuwen
     ├── pet.js        → Knokkie en Pluis: lopen los rond in Muntdorp
     ├── arena.js      → de Arena: golven, huisdiergevechten, wedden op monsters en het duel
-    ├── sky.js        → het Wolkenrijk: zwevende eilanden, het Windaltaar en de bewakers
+    ├── islands.js    → de Hemeleilanden: zwevende eilanden, het Windaltaar en de bewakers
     ├── multiplayer.js→ samen spelen via internet (PeerJS): je vriend zien en het duel
     ├── invasions.js  → Omar-invasies: golven schaduwkrijgers bij een kamp
     ├── shadowDragon.js → de eindbaas: de Schaduwdraak
@@ -238,7 +238,7 @@ munt-jager-3d/
 
 - **Gebieden** → `LEVELS` in `src/levels.js` (welke vijanden, kisten, NPC's, huizen en welke boss). Begin in een gebied met `?level=3` achter de link
 - **Draak, huisdier en invasies** → `DRAGON` in `src/dragon.js`, `PET`/`PETS` in `src/pet.js` en `INVASION` in `src/invasions.js`
-- **De Arena** → `ARENA`, `WAVES` en `FIGHTERS` in `src/arena.js` · **Het Wolkenrijk** → `SKY_LAYOUT` in `src/levels.js` en `ALTAR` in `src/sky.js`
+- **De Arena** → `ARENA`, `WAVES` en `FIGHTERS` in `src/arena.js` · **De Hemeleilanden** → `ISLAND_LAYOUT` in `src/levels.js` en `ALTAR` in `src/islands.js`
 - **Animaties van je held** → `CLIPS` bovenaan `src/player.js` (welke animatie bij welke actie, en welk stukje ervan)
 - **Samen spelen** → `src/multiplayer.js` (test met een eigen PeerJS-server: `index.html?peer=localhost:9000`)
 - **Trofeeën, premies en de sterrenwinkel** → `TROPHIES` in `src/goals.js` en `STAR_ITEMS` in `src/stats.js`

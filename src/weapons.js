@@ -87,7 +87,7 @@ export const WEAPONS = {
     pixels: 'ster', blade: [0.3, 1.0], trail: 0xfff27a,
     info: 'Gesmeed van sterrenstof. Het sterkste wapen van het hele spel!',
   },
-  // ---------- Wapens uit het Wolkenrijk (sky.js), met een speciale kracht ----------
+  // ---------- Wapens van de Hemeleilanden (islands.js), met een speciale kracht ----------
   //   special = 'gif' (de vijand krijgt nog even schade), 'ijs' (bevriezen: langzaam lopen),
   //             'bliksem' (de bliksem springt over naar andere vijanden), 'vampier' (jij krijgt leven terug),
   //             'wind' (vijanden vliegen ver weg)
