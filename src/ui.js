@@ -4,12 +4,24 @@ import { DRAGON_SKINS } from './dragon.js';
 import { WEAPONS } from './weapons.js';
 import { HELMETS, itemInfo, itemColor } from './gear.js';
 import { BOUNDS, CHECKPOINTS, ARENAS } from './world.js';
-import { LEVEL, LEVELS, REGIONS, regionOfCheckpoint } from './levels.js';
+import { LEVEL, WORLD, REGIONS, regionOfCheckpoint, regionIndexAt } from './levels.js';
 import { play, talk } from './audio.js';
 
 // Alles wat je op het scherm ziet (behalve de 3D-wereld): balken, munten, menu's, banners, de minimap en de wereldkaart.
 
 const $ = (id) => document.getElementById(id);
+
+// Plaatjes en korte toetsen voor de krachtenbalk (linksonder)
+const POWER_ICONS = {
+  dash: { icon: '💨', key: 'C' },
+  doubleJump: { icon: '🦘', key: '␣²' },
+  spin: { icon: '🌀', key: 'V' },
+  slam: { icon: '💥', key: 'F↓' },
+  fire: { icon: '🔥', key: 'X' },
+};
+// Wat je met elk soort wapen ziet in je uitrusting
+const WEAPON_ICONS = { club: '🏏', bijl: '🪓', hamer: '🔨', dolk: '🗡', zeis: '☠' };
+const weaponIcon = (key) => WEAPON_ICONS[key] ?? '⚔';
 
 // Kleur van elk soort gebied op de kaart
 const MAP_COLORS = { weide: '#4f8f4e', woud: '#2c4f2c', hoogland: '#7c776a', schaduw: '#3a2448', kasteel: '#3a2348' };
@@ -84,6 +96,21 @@ export class UI {
     this.regionTimer = 0;
     this.currentRegion = null;
     this.mapCtx = this.el.minimap.getContext('2d');
+    this.mapScale = this.el.minimap.width / 180; // scherpe minimap (2× zoveel pixels)
+    this.night = 0;
+    this.slotKeys = '';
+    this.lastLevel = null;
+    this.lastCooldown = {};
+  }
+
+  /** Een menu openen (met titel). wide = breed paneel (kaart, uitrusting). */
+  showMenu(kind, title, wide = false) {
+    this.menuOpen = kind;
+    play('menuOpen');
+    this.el.menu.classList.remove('hidden');
+    this.el.menuTitle.textContent = title;
+    $('menu-panel').classList.toggle('wide', wide);
+    $('menu-panel').scrollTop = 0;
   }
 
   // ---------- HUD elke frame ----------
@@ -95,28 +122,32 @@ export class UI {
     this.el.hpFill.style.width = `${hp * 100}%`;
     this.el.hpLag.style.width = `${this.hpLag * 100}%`;
     this.el.hpText.textContent = `${Math.ceil(player.health)} / ${player.maxHealth}`;
-    $('hp-bar').style.width = `${Math.min(46, 14 + player.maxHealth / 12)}vw`;
+    $('hp-bar').style.width = `${Math.min(40, 14 + player.maxHealth / 14)}vw`;
+    $('hp-bar').classList.toggle('low', hp < 0.3 && player.health > 0);
     this.el.stFill.style.width = `${(player.stamina / player.maxStamina) * 100}%`;
-    $('st-bar').style.width = `${Math.min(40, 10 + player.maxStamina / 10)}vw`;
-    this.el.level.textContent = `Level ${this.stats.level} · ${this.stats.xp} / ${this.stats.xpNeeded} verslagen`;
+    $('st-bar').style.width = `${Math.min(34, 10 + player.maxStamina / 12)}vw`;
+    $('st-bar').classList.toggle('tired', player.stamina < 15);
+    // Level: rondje met het getal (springt even op als je een level omhoog gaat)
+    const lvl = this.stats.level;
+    if (lvl !== this.lastLevel) {
+      $('level-num').textContent = lvl;
+      if (this.lastLevel !== null) {
+        $('level-badge').classList.remove('up');
+        void $('level-badge').offsetWidth;
+        $('level-badge').classList.add('up');
+      }
+      this.lastLevel = lvl;
+    }
+    this.el.level.innerHTML = `${rankOf(this.stats.data)} · <b>${this.stats.xp}</b> / ${this.stats.xpNeeded} tot level ${lvl + 1}`;
     this.el.xpFill.style.width = `${(this.stats.xp / this.stats.xpNeeded) * 100}%`;
     this.el.runes.textContent = this.stats.runes.toLocaleString('nl-NL');
-    this.el.flasks.textContent = `🧪 ${player.flasks} / ${this.stats.flasksMax}`;
-    this.el.weapon.textContent = `⚔ ${WEAPONS[player.sword.weaponKey].name}${player.fireTimer > 0 ? ' 🔥' : ''}`;
-    this.el.weapon.style.color = itemColor({ kind: 'weapon', key: player.sword.weaponKey });
-    this.el.helmet.textContent = `⛑ ${HELMETS[player.helmetKey].name}`;
-
-    // Krachten met hun afkoeltijd
-    const unlocked = this.stats.unlockedPowers();
-    const cooldowns = { dash: player.dashCooldown, spin: player.spinCooldown, fire: player.fireTimer > 0 ? 0 : player.fireCooldown };
-    this.el.powers.innerHTML = unlocked
-      .map((key) => {
-        const p = POWERS[key];
-        const cd = cooldowns[key] ?? 0;
-        const active = key === 'fire' && player.fireTimer > 0;
-        return `<div class="power ${cd > 0 ? 'cooling' : ''} ${active ? 'active' : ''}"><b>${p.key}</b><span>${p.name}</span>${cd > 0 ? `<i>${cd.toFixed(1)}</i>` : ''}</div>`;
-      })
-      .join('');
+    $('stars-count').textContent = this.stats.data.stars ?? 0;
+    const wKey = player.sword.weaponKey;
+    this.el.weapon.innerHTML = `${weaponIcon(wKey)} ${WEAPONS[wKey].name}${player.fireTimer > 0 ? ' 🔥' : ''}${player.boost ? ` <span style="color:#9be7ff">🌬 ${Math.ceil(player.boost.t)}s</span>` : ''}`;
+    this.el.weapon.style.color = itemColor({ kind: 'weapon', key: wKey });
+    this.el.weapon.classList.toggle('fire', player.fireTimer > 0);
+    this.el.helmet.textContent = player.helmetKey && player.helmetKey !== 'geen' ? `⛑ ${HELMETS[player.helmetKey].name}` : '';
+    this.updateHotbar(player);
 
     // Munten erbij: "+14" naast je teller
     if (this.runesGainTimer > 0) {
@@ -156,6 +187,48 @@ export class UI {
     }
 
     this.drawMinimap(player, time);
+  }
+
+  /** De krachtenbalk: flesjes en krachten, met een taartpunt die laat zien hoe lang je nog moet wachten. */
+  updateHotbar(player) {
+    const unlocked = this.stats.unlockedPowers();
+    const keys = unlocked.join(',');
+    if (keys !== this.slotKeys) {
+      this.slotKeys = keys;
+      this.el.powers.innerHTML = unlocked.map((key) => {
+        const p = POWERS[key];
+        const look = POWER_ICONS[key] ?? { icon: '✦', key: p.key };
+        return `<div class="slot" data-power="${key}" title="${p.name}: ${p.info}"><span class="key">${look.key}</span><span class="ic">${look.icon}</span><span class="nm">${p.name}</span><span class="cd"></span></div>`;
+      }).join('');
+      this.slotEls = Object.fromEntries([...this.el.powers.children].map((el) => [el.dataset.power, el]));
+      this.el.flasks.innerHTML = '<span class="key">R</span><span class="ic">🧪</span><span class="nm">Flesje</span><span class="count"></span>';
+    }
+    // Flesjes
+    this.el.flasks.querySelector('.count').textContent = `${player.flasks}/${this.stats.flasksMax}`;
+    this.el.flasks.classList.toggle('empty', player.flasks <= 0);
+    this.el.flasks.classList.toggle('ready', player.flasks > 0);
+    // Krachten
+    const cooldowns = {
+      dash: [player.dashCooldown, POWERS.dash.cooldown],
+      spin: [player.spinCooldown, POWERS.spin.cooldown],
+      fire: player.fireTimer > 0 ? [0, 1] : [player.fireCooldown, POWERS.fire.cooldown],
+    };
+    for (const [key, el] of Object.entries(this.slotEls ?? {})) {
+      const [cd, max] = cooldowns[key] ?? [0, 1];
+      const active = key === 'fire' && player.fireTimer > 0;
+      el.style.setProperty('--cd', active ? 1 - player.fireTimer / POWERS.fire.duration : cd > 0 ? cd / max : 0);
+      el.querySelector('.cd').textContent = cd > 0 ? (cd >= 1 ? Math.ceil(cd) : cd.toFixed(1)) : active ? Math.ceil(player.fireTimer) : '';
+      el.classList.toggle('active', active);
+      el.classList.toggle('ready', cd <= 0 && !active);
+      el.classList.toggle('nostamina', player.stamina < (POWERS[key].stamina ?? 0));
+      // Net weer klaar? Even oplichten
+      if (cd <= 0 && (this.lastCooldown[key] ?? 0) > 0) {
+        el.classList.remove('flash');
+        void el.offsetWidth;
+        el.classList.add('flash');
+      }
+      this.lastCooldown[key] = cd;
+    }
   }
 
   addRunes(amount) {
@@ -227,10 +300,7 @@ export class UI {
 
   /** Scherm aan het eind van een level. buttons = [[tekst, functie], ...] */
   openLevelComplete(title, html, buttons) {
-    this.menuOpen = 'level';
-    play('menuOpen');
-    this.el.menu.classList.remove('hidden');
-    this.el.menuTitle.textContent = title;
+    this.showMenu('level', title);
     this.el.menuBody.innerHTML = `<div class="level-done">${html}</div>` + buttons.map(([text], i) => `<button data-i="${i}">${text}</button>`).join('');
     this.el.menuBody.onclick = (e) => {
       const b = e.target.closest('button');
@@ -248,10 +318,7 @@ export class UI {
 
   /** De winkel van de koopman: munten uitgeven. actions = { buy(key), close() } */
   openShop(name, actions) {
-    this.menuOpen = 'shop';
-    play('menuOpen');
-    this.el.menu.classList.remove('hidden');
-    this.el.menuTitle.textContent = name;
+    this.showMenu('shop', name);
     const render = () => {
       const st = this.stats;
       // Eén rij in de winkel (munten ● of sterren ⭐)
@@ -290,16 +357,13 @@ export class UI {
    * actions = { text(bounty), claim(id), close() }
    */
   openBounties(actions) {
-    this.menuOpen = 'bounties';
-    play('menuOpen');
-    this.el.menu.classList.remove('hidden');
-    this.el.menuTitle.textContent = '📜 Premiebord';
+    this.showMenu('bounties', '📜 Premiebord');
     const render = () => {
       const list = this.stats.data.bounties ?? [];
       this.el.menuBody.innerHTML = `<p class="menu-info">Doe deze opdrachten (overal in de wereld) en haal hier je beloning op. Er komt steeds een nieuwe bij!</p>` +
         list.map((b) => {
           const done = b.count >= b.n;
-          const bar = `<span class="bar"><i style="width:${Math.round((Math.min(b.count, b.n) / b.n) * 100)}%"></i></span>`;
+          const bar = `<span class="prog"><i style="width:${Math.round((Math.min(b.count, b.n) / b.n) * 100)}%"></i></span>`;
           return `<button class="item ${done ? 'equipped' : ''}" data-claim="${b.id}" ${done ? '' : 'disabled'}>
             <span>📜 ${actions.text(b)}</span><small>${done ? '<b>Klaar! Klik om je beloning op te halen.</b>' : `${Math.min(b.count, b.n)} / ${b.n}`} ${bar}</small>
             <em>● ${b.runes} + ⭐ ${b.stars}</em></button>`;
@@ -319,12 +383,101 @@ export class UI {
     };
   }
 
+  /**
+   * De Arena: kies wat je wilt doen.
+   * info = arena.menuInfo(); actions = { waves(), pet(kind), bet(type, amount), reroll(), duel(), close() }
+   */
+  openArena(info, actions) {
+    this.showMenu('arena', '⚔ De Arena');
+    const render = (info) => {
+      const [a, b] = info.matchup;
+      const fighter = (m) => `<b>${m.name}</b> <small>❤ ${m.hp} · ⚔ ${m.damage}</small>`;
+      this.el.menuBody.innerHTML = `<p class="menu-info">Welkom in de Arena! Wat wil je doen? Je hebt <b>● ${info.runes.toLocaleString('nl-NL')}</b> munten.</p>
+        <h3>⚔ Golven overleven</h3>
+        <button class="item" data-act="waves"><span>⚔ Jij tegen de monsters</span><small>Elke golf meer en sterkere monsters. Elke golf: munten; elke 5 golven: een ⭐. Doodgaan kost hier niks!</small><em>beste: golf ${info.best}</em></button>
+        <h3>🐾 Huisdiergevecht</h3>` +
+        (info.pets.length
+          ? info.pets.map((p) => `<button class="item" data-pet="${p.kind}"><span>${p.icon} ${p.name} (Lv ${p.level}) tegen een ${p.foe.name}</span><small>${p.name}: ❤ ${p.hp} · ⚔ ${p.damage} — ${p.foe.name}: ❤ ${p.foe.hp} · ⚔ ${p.foe.damage}. Winnen maakt je huisdier sterker!</small></button>`).join('')
+          : '<p class="menu-info">Je hebt nog geen huisdier. Koop een Dino-ei bij de koopman, of Pluis de kat in de sterrenwinkel.</p>') +
+        `<h3>👾 Monstergevecht — wie wint er?</h3>
+        <p class="menu-info">${fighter(a)} &nbsp;tegen&nbsp; ${fighter(b)}<br><small>Wed munten op het monster dat volgens jou wint. Goed gegokt? Dan krijg je het dubbele terug!</small></p>
+        <div class="bet-row">` +
+        [a, b].map((m) => info.bets.map((n) => `<button data-bet="${m.key}" data-amount="${n}" ${info.runes < n ? 'disabled' : ''}>● ${n} op ${m.name}</button>`).join('')).join('') +
+        `</div><button data-act="reroll">🔄 Andere monsters</button>
+        <h3>🌐 Online</h3>
+        <button class="item" data-act="duel"><span>🌐 Duel tegen een vriend</span><small>Speel samen online en vecht tegen elkaar in de arena (zie "Samen spelen" op het startscherm).</small></button>
+        <button data-act="close">Sluiten (Esc)</button>`;
+    };
+    render(info);
+    this.el.menuBody.onclick = (e) => {
+      const btn = e.target.closest('button');
+      if (!btn || btn.disabled) return;
+      if (btn.dataset.act === 'close') actions.close();
+      else if (btn.dataset.act === 'waves') actions.waves();
+      else if (btn.dataset.act === 'duel') actions.duel();
+      else if (btn.dataset.act === 'reroll') render(actions.reroll());
+      else if (btn.dataset.pet) actions.pet(btn.dataset.pet);
+      else if (btn.dataset.bet) actions.bet(btn.dataset.bet, Number(btn.dataset.amount));
+    };
+  }
+
+  /**
+   * Samen spelen (online): een kamer maken, meedoen met een code, of een duel beginnen.
+   * mp = de Multiplayer (multiplayer.js); actions = { host(), join(code), duel(), goto(), leave(), close(), name(text) }
+   */
+  openMultiplayer(mp, actions, duelPrize) {
+    this.showMenu('online', '🌐 Samen spelen');
+    const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    const render = () => {
+      if (this.menuOpen !== 'online') return;
+      const st = mp.status;
+      const other = esc(mp.remote?.name ?? 'je vriend');
+      let html = `<p class="menu-info">Speel samen met een vriend via internet! Jullie zien elkaar in de wereld en kunnen in de <b>Arena</b> een duel doen.
+        <small>(Vijanden, kisten en munten heeft ieder voor zich.)</small></p>
+        <label class="field">Jouw naam <input id="mp-name" maxlength="14" value="${esc(this.stats.data.name ?? '')}" placeholder="Speler"></label>`;
+      if (st === 'verbonden') {
+        html += `<div class="mp-status ok">✔ Verbonden met <b>${other}</b> (kamer MUNT-${esc(mp.code ?? '')})</div>
+          <button class="item" data-act="duel"><span>⚔ Duel in de Arena</span><small>Jullie gaan allebei naar de Arena. Wie het eerst geen leven meer heeft, verliest. De winnaar krijgt ● ${duelPrize}.</small></button>
+          <button class="item" data-act="goto"><span>🧭 Naar ${other} toe</span><small>Snel naar je vriend toe reizen</small></button>
+          <button class="danger" data-act="leave">Stoppen met samen spelen</button>`;
+      } else if (st === 'wachten') {
+        html += `<div class="mp-code"><small>Jouw code</small><b>MUNT-${esc(mp.code)}</b><small>Geef deze code aan je vriend. Wachten tot je vriend meedoet...</small></div>
+          <button data-act="leave">Annuleren</button>`;
+      } else if (st === 'laden' || st === 'verbinden') {
+        html += `<div class="mp-status">⏳ ${st === 'laden' ? 'Even laden...' : `Verbinden met kamer MUNT-${esc(mp.code)}...`}</div><button data-act="leave">Annuleren</button>`;
+      } else {
+        if (st === 'fout') html += `<div class="mp-status bad">⚠ ${esc(mp.error)}</div>`;
+        html += `<h3>🏠 Een kamer maken</h3>
+          <button class="item" data-act="host"><span>🏠 Nieuwe kamer</span><small>Je krijgt een code die je aan je vriend geeft</small></button>
+          <h3>🤝 Meedoen met een vriend</h3>
+          <div class="join-row"><input id="mp-code" maxlength="9" placeholder="MUNT-XXXX" autocomplete="off"><button data-act="join">Meedoen</button></div>`;
+      }
+      html += `<button data-act="close">Sluiten (Esc)</button>`;
+      this.el.menuBody.innerHTML = html;
+      // Typen in een tekstvak mag de game niet besturen (anders zet de M het geluid uit, enz.)
+      for (const input of this.el.menuBody.querySelectorAll('input')) {
+        for (const type of ['keydown', 'keyup']) input.addEventListener(type, (e) => e.stopPropagation());
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && input.id === 'mp-code') actions.join(input.value);
+          if (e.key === 'Escape') actions.close();
+        });
+      }
+      this.el.menuBody.querySelector('#mp-name')?.addEventListener('input', (e) => actions.name(e.target.value));
+    };
+    mp.onChange = render;
+    render();
+    this.el.menuBody.onclick = (e) => {
+      const b = e.target.closest('button');
+      if (!b || b.disabled) return;
+      const act = b.dataset.act;
+      if (act === 'join') actions.join(this.el.menuBody.querySelector('#mp-code')?.value ?? '');
+      else if (act && actions[act]) actions[act]();
+    };
+  }
+
   /** De trofeeënkast (K): alle trofeeën, je sterren en je rang. */
   openTrophies(actions) {
-    this.menuOpen = 'trophies';
-    play('menuOpen');
-    this.el.menu.classList.remove('hidden');
-    this.el.menuTitle.textContent = '🏆 Trofeeënkast';
+    this.showMenu('trophies', '🏆 Trofeeënkast');
     const d = this.stats.data;
     const got = d.trophies ?? [];
     this.el.menuBody.innerHTML = `<p class="menu-info">Rang: <b>${rankOf(d)}</b> · Trofeeën <b>${got.length} / ${TROPHIES.length}</b> · ⭐ verdiend: <b>${d.starsEarned ?? 0}</b> (${TROPHY_STARS} met alle trofeeën) · nu: <b>${d.stars ?? 0}</b></p>
@@ -332,7 +485,7 @@ export class UI {
       TROPHIES.map((t) => {
         const has = got.includes(t.id);
         const p = !has && t.progress ? t.progress(d) : null;
-        const bar = p ? ` <span class="bar"><i style="width:${Math.round((Math.min(p[0], p[1]) / p[1]) * 100)}%"></i></span> ${Math.min(p[0], p[1])} / ${p[1]}` : '';
+        const bar = p ? ` <span class="prog"><i style="width:${Math.round((Math.min(p[0], p[1]) / p[1]) * 100)}%"></i></span> ${Math.min(p[0], p[1])} / ${p[1]}` : '';
         return `<div class="power-row trophy ${has ? '' : 'locked'}"><b>${has ? t.icon : '🔒'}</b><span>${t.name}</span><small>${t.info} · ${'⭐'.repeat(t.stars)}${bar}</small></div>`;
       }).join('') +
       `<button data-act="close">Sluiten (K)</button>`;
@@ -344,17 +497,15 @@ export class UI {
 
   /** Uitrusting (I of Tab): wapens, helmen, je level en krachten. */
   openInventory(actions) {
-    this.menuOpen = 'inventory';
-    play('menuOpen');
-    this.el.menu.classList.remove('hidden');
-    this.el.menuTitle.textContent = 'Uitrusting';
+    this.showMenu('inventory', '🎒 Uitrusting', true);
     const render = () => {
       const d = this.stats.data;
       // Kleuren van Vuurtand die je hebt (uit de sterrenwinkel)
       const skins = ['vuur', ...(d.dragonSkins ?? [])];
       const dragonHtml = d.bosses.includes('mario') ? `<h3>🐉 Vuurtand</h3>` + skins.map((k) =>
         `<button class="item ${(d.dragonSkin ?? 'vuur') === k ? 'equipped' : ''}" data-skin="${k}"><span>🐉 ${DRAGON_SKINS[k].name}</span><small>Kleur van je draak</small>${(d.dragonSkin ?? 'vuur') === k ? '<em>gekozen</em>' : ''}</button>`).join('') : '';
-      this.el.menuBody.innerHTML = `<p class="menu-info">Rang: <b>${rankOf(d)}</b> · ⭐ <b>${d.stars ?? 0}</b> sterren · Trofeeën: <b>${(d.trophies ?? []).length} / ${TROPHIES.length}</b> (K)</p>` +
+      const st = this.stats;
+      this.el.menuBody.innerHTML = `<div class="stat-row"><span>Rang <b>${rankOf(d)}</b></span><span>Level <b>${st.level}</b></span><span>❤ <b>${st.maxHealth}</b></span><span>⚡ <b>${st.maxStamina}</b></span><span>⚔ <b>×${st.damageMultiplier.toFixed(2)}</b></span><span>⭐ <b>${d.stars ?? 0}</b></span><span>🏆 <b>${(d.trophies ?? []).length} / ${TROPHIES.length}</b></span></div>` +
         this.inventoryHtml() + dragonHtml + this.powersHtml() +
         `<button data-act="trophies">🏆 Trofeeënkast (K)</button><button data-act="close">Sluiten (I)</button><button data-act="wipe" class="danger">Nieuw spel beginnen</button>`;
     };
@@ -378,17 +529,18 @@ export class UI {
 
   inventoryHtml() {
     const d = this.stats.data;
-    const row = (item) => {
+    // Elk wapen en elke helm als een kaartje in een raster (rand in de kleur van hoe zeldzaam het is)
+    const card = (item) => {
       const info = itemInfo(item);
       const equipped = (item.kind === 'weapon' && d.weapon === item.key) || (item.kind === 'helmet' && d.helmet === item.key);
-      const stat = item.kind === 'weapon' ? `${info.damage} schade` : `${Math.round(info.defense * 100)}% bescherming`;
-      return `<button data-equip='${JSON.stringify(item)}' class="item ${equipped ? 'equipped' : ''}">
-        <span style="color:${itemColor(item)}">${item.kind === 'weapon' ? '⚔' : '⛑'} ${info.name}</span>
-        <small>${stat} · ${info.info}</small>${equipped ? '<em>uitgerust</em>' : ''}</button>`;
+      const stat = item.kind === 'weapon' ? `⚔ ${info.damage} schade` : `🛡 ${Math.round(info.defense * 100)}% bescherming`;
+      const icon = item.kind === 'weapon' ? weaponIcon(item.key) : '⛑';
+      return `<button data-equip='${JSON.stringify(item)}' class="card ${equipped ? 'equipped' : ''}" style="--rar:${itemColor(item)}" title="${info.info}">
+        <span class="ic">${icon}</span><b>${info.name}</b><small>${stat}</small>${equipped ? '<em>aan</em>' : ''}</button>`;
     };
-    const diamonds = `<p class="menu-info">💎 Diamanten gevonden: <b>${(d.diamonds ?? []).length} / ${LEVELS.reduce((n, l) => n + l.diamonds.length, 0)}</b> · Kisten geopend: <b>${d.chests.length}</b></p>`;
-    return diamonds + `<h3>Wapens</h3>${d.inventory.filter((i) => i.kind === 'weapon').map(row).join('')}
-      <h3>Helmen</h3>${d.inventory.filter((i) => i.kind === 'helmet').map(row).join('')}`;
+    const diamonds = `<div class="stat-row"><span>💎 Diamanten <b>${(d.diamonds ?? []).length} / ${WORLD.diamonds.length}</b></span><span>📦 Kisten <b>${d.chests.length}</b></span><span>☠ Bosses <b>${d.bosses.length} / ${REGIONS.length}</b></span></div>`;
+    return diamonds + `<h3>⚔ Wapens</h3><div class="grid">${d.inventory.filter((i) => i.kind === 'weapon').map(card).join('')}</div>
+      <h3>⛑ Helmen</h3><div class="grid">${d.inventory.filter((i) => i.kind === 'helmet').map(card).join('')}</div>`;
   }
 
   /** Je level, hoe sterk je bent en wat je nog kunt vrijspelen. */
@@ -428,44 +580,77 @@ export class UI {
    * actions = { travel(id) | null (snelreizen kan nu niet), close(), why: waarom het niet kan }
    */
   openWorldMap(player, actions) {
-    this.menuOpen = 'map';
-    play('menuOpen');
-    this.el.menu.classList.remove('hidden');
-    this.el.menuTitle.textContent = 'Wereldkaart';
+    this.showMenu('map', '🗺 Wereldkaart', true);
     const d = this.stats.data;
     const flags = CHECKPOINTS.filter((c) => d.flags.includes(c.id) || c.id === d.checkpoint);
     const groups = REGIONS.map((r) => ({ r, flags: flags.filter((c) => regionOfCheckpoint(c.id) === r.index) })).filter((g) => g.flags.length);
-    this.el.menuBody.innerHTML = `<canvas class="world-map" width="608" height="400"></canvas>
-      <p class="menu-info">${actions.travel ? 'Snelreizen: kies een vlag waar je al eens was.' : actions.why}</p>` +
-      groups.map(({ r, flags: list }) => `<h3>${r.name}${d.bosses.includes(r.boss) ? ' ✔' : ''}</h3>` + list.map((c) =>
-        `<button data-flag="${c.id}" ${actions.travel ? '' : 'disabled'}><span>⚑ ${c.name}</span>${c.id === d.checkpoint ? '<small>Hier kom je terug als je doodgaat</small>' : ''}</button>`).join('')).join('') +
-      `<button data-act="close">Sluiten (T)</button>`;
-    // De kaart tekenen
+    this.el.menuBody.innerHTML = `<canvas class="world-map" width="1680" height="${Math.round((1680 * BOUNDS.z) / BOUNDS.x)}"></canvas>
+      <div class="map-legend"><span>➤ jij</span><span>⚑ vlag (goud = snelreizen)</span><span>☠ boss</span><span>✔ verslagen</span><span>👑 kampioen</span><span>⚔ arena</span><span>! opdracht</span></div>
+      <p class="menu-info">${actions.travel ? 'Snelreizen: kies een vlag waar je al eens was.' : actions.why}</p><div class="map-flags">` +
+      groups.map(({ r, flags: list }) => `<div><h3>${r.name}${d.bosses.includes(r.boss) ? ' ✔' : ''}</h3>` + list.map((c) =>
+        `<button data-flag="${c.id}" ${actions.travel ? '' : 'disabled'}><span>⚑ ${c.name}</span>${c.id === d.checkpoint ? '<small>Hier kom je terug als je doodgaat</small>' : ''}</button>`).join('') + '</div>').join('') +
+      `</div><button data-act="close">Sluiten (T)</button>`;
+    // De kaart tekenen (2× zo scherp als hij op het scherm staat)
     const canvas = this.el.menuBody.querySelector('canvas');
     const ctx = canvas.getContext('2d');
-    const scale = Math.min(canvas.width / (BOUNDS.x * 2), canvas.height / (BOUNDS.z * 2));
-    const toMap = (x, z) => [canvas.width / 2 + x * scale, canvas.height / 2 + z * scale];
-    ctx.font = 'bold 16px sans-serif';
+    ctx.scale(2, 2);
+    const W = canvas.width / 2;
+    const H = canvas.height / 2;
+    const scale = Math.min(W / (BOUNDS.x * 2), H / (BOUNDS.z * 2));
+    const toMap = (x, z) => [W / 2 + x * scale, H / 2 + z * scale];
+    ctx.font = 'bold 15px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     drawLand(ctx, toMap, scale, d.bosses);
-    this.drawFlags(ctx, toMap);
-    // De naam van elk gebied in het midden (met een donker randje, dan kun je het altijd lezen)
-    ctx.font = 'bold 15px sans-serif';
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillStyle = '#fff5d2';
-    for (const r of REGIONS) {
-      ctx.strokeText(r.name, ...toMap(r.ox, 0));
-      ctx.fillText(r.name, ...toMap(r.ox, 0));
+    // Gebieden waar je nog nooit was: in de mist
+    if (LEVEL.regions) {
+      for (const r of REGIONS) {
+        if (d.flags.includes(r.start)) continue;
+        const [bx, by] = toMap(r.x0, -BOUNDS.z);
+        ctx.fillStyle = 'rgba(20, 16, 24, 0.55)';
+        ctx.fillRect(bx, by, (r.x1 - r.x0) * scale, BOUNDS.z * 2 * scale);
+      }
     }
-    // Jij: een rondje met een pijltje
+    for (const n of this.markers ?? []) {
+      const [mx, my] = toMap(n.x, n.z);
+      ctx.fillStyle = n.color;
+      ctx.fillText(n.icon, mx, my);
+    }
+    this.drawFlags(ctx, toMap);
+    // De naam van elk gebied als een lintje bovenaan
+    ctx.font = 'bold 13px Georgia, serif';
+    for (const r of LEVEL.regions ? REGIONS : []) {
+      const [mx] = toMap(r.ox, 0);
+      const my = 16;
+      const w = ctx.measureText(r.name).width + 22;
+      ctx.fillStyle = 'rgba(20, 14, 8, 0.82)';
+      ctx.strokeStyle = 'rgba(243, 210, 122, 0.8)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(mx - w / 2, my - 10, w, 20, 10);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = d.bosses.includes(r.boss) ? '#9dffb5' : '#fff5d2';
+      ctx.fillText(r.name, mx, my + 1);
+    }
+    // Zachte donkere rand (een beetje als een oude kaart)
+    const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, W * 0.62);
+    vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    vignette.addColorStop(1, 'rgba(0, 0, 0, 0.45)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, W, H);
+    // Jij: een pijltje in een gouden rondje
     const [px, py] = toMap(player.position.x, player.position.z);
     ctx.save();
     ctx.translate(px, py);
+    ctx.fillStyle = 'rgba(243, 210, 122, 0.35)';
+    ctx.beginPath();
+    ctx.arc(0, 0, 13, 0, Math.PI * 2);
+    ctx.fill();
     ctx.rotate(-player.mesh.rotation.y + Math.PI);
     ctx.fillStyle = '#fff';
     ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(0, -9);
     ctx.lineTo(7, 7);
@@ -485,17 +670,19 @@ export class UI {
 
   drawMinimap(player, time) {
     const ctx = this.mapCtx;
-    const size = this.el.minimap.width;
+    ctx.setTransform(this.mapScale, 0, 0, this.mapScale, 0, 0);
+    const size = 180;
+    const r = size / 2;
     const view = 70; // zoveel meter breed laat de kaart zien
     const scale = size / view;
     const px = player.position.x;
     const pz = player.position.z;
-    const toMap = (x, z) => [size / 2 + (x - px) * scale, size / 2 + (z - pz) * scale];
+    const toMap = (x, z) => [r + (x - px) * scale, r + (z - pz) * scale];
 
     ctx.clearRect(0, 0, size, size);
     ctx.save();
     ctx.beginPath();
-    ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+    ctx.arc(r, r, r - 5, 0, Math.PI * 2);
     ctx.clip();
     ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'center';
@@ -504,21 +691,40 @@ export class UI {
     ctx.fillStyle = '#2b3326';
     ctx.fillRect(0, 0, size, size);
     drawLand(ctx, toMap, scale, this.stats.data.bosses);
-    // NPC's en quest-voorwerpen
+    // NPC's, kampioenen, quest-voorwerpen (met een donker randje, dan zie je ze altijd)
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
     for (const n of this.markers ?? []) {
       const [mx, my] = toMap(n.x, n.z);
+      ctx.strokeText(n.icon, mx, my);
       ctx.fillStyle = n.color;
       ctx.fillText(n.icon, mx, my);
     }
     this.drawFlags(ctx, toMap);
+    // 's Nachts is de kaart wat donkerder, en de rand is altijd een beetje schaduw
+    const shade = ctx.createRadialGradient(r, r, r * 0.55, r, r, r);
+    shade.addColorStop(0, `rgba(5, 8, 25, ${0.35 * this.night})`);
+    shade.addColorStop(1, `rgba(0, 0, 0, ${0.45 + 0.3 * this.night})`);
+    ctx.fillStyle = shade;
+    ctx.fillRect(0, 0, size, size);
     ctx.restore();
 
-    // De speler: pijltje in kijkrichting
+    // De speler: pijltje in kijkrichting, met een kijk-kegeltje
     ctx.save();
-    ctx.translate(size / 2, size / 2);
+    ctx.translate(r, r);
     ctx.rotate(-player.mesh.rotation.y + Math.PI);
+    const cone = ctx.createRadialGradient(0, 0, 2, 0, 0, 34);
+    cone.addColorStop(0, 'rgba(255, 245, 200, 0.35)');
+    cone.addColorStop(1, 'rgba(255, 245, 200, 0)');
+    ctx.fillStyle = cone;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, 34, -Math.PI / 2 - 0.55, -Math.PI / 2 + 0.55);
+    ctx.closePath();
+    ctx.fill();
     ctx.fillStyle = '#fff';
     ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(0, -8);
     ctx.lineTo(6, 6);
@@ -528,13 +734,42 @@ export class UI {
     ctx.fill();
     ctx.stroke();
     ctx.restore();
-    // Rand en "N" voor het noorden
-    ctx.strokeStyle = 'rgba(255, 215, 106, 0.8)';
-    ctx.lineWidth = 2;
+
+    // Gouden rand met een kompas (N, O, Z, W)
+    const ring = ctx.createLinearGradient(0, 0, 0, size);
+    ring.addColorStop(0, '#fff1b8');
+    ring.addColorStop(0.5, '#c99a3a');
+    ring.addColorStop(1, '#6a4a14');
+    ctx.strokeStyle = ring;
+    ctx.lineWidth = 5;
     ctx.beginPath();
-    ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+    ctx.arc(r, r, r - 4, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.fillStyle = '#ffd76a';
-    ctx.fillText('N', size / 2, 10);
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(r, r, r - 7, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.font = 'bold 11px sans-serif';
+    for (const [letter, x, y] of [['N', r, 6], ['Z', r, size - 6], ['W', 6, r], ['O', size - 6, r]]) {
+      ctx.fillStyle = '#1a1206';
+      ctx.beginPath();
+      ctx.arc(x, y, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = letter === 'N' ? '#ff8a6a' : '#f3d27a';
+      ctx.fillText(letter, x, y + 0.5);
+    }
+
+    // Onder de kaart: waar ben je, en is het dag of nacht?
+    const name = LEVEL.castle ? LEVEL.name : REGIONS[regionIndexAt(px, pz)]?.name ?? '';
+    if (name !== this.mapName) {
+      this.mapName = name;
+      $('map-region').textContent = name;
+    }
+    const info = this.night > 0.5 ? '🌙 nacht' : this.night > 0.15 ? '🌇 schemer' : '☀ dag';
+    if (info !== this.mapInfo) {
+      this.mapInfo = info;
+      $('map-info').textContent = info;
+    }
   }
 }

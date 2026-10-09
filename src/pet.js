@@ -3,18 +3,21 @@ import { loadGLB } from './assets.js';
 import { play } from './audio.js';
 
 // ======================================================================
-// Huisdieren die met je meevechten
+// Huisdieren: ze wonen in Muntdorp en lopen daar lekker los rond
 // ======================================================================
-//  - Knokkie het Boks-Dinootje: koop een Dino-ei bij de koopman. Hij stoot vijanden met zijn bokshandschoenen.
-//  - Pluis de kat: koop haar in de sterrenwinkel. Ze is sneller en krabt vaker (maar iets zachter).
-// Ze lopen overal met je mee, en elke vijand die ze verslaan telt mee: zo worden ze sterker (en een beetje groter).
-// Er loopt er één tegelijk met je mee: wissel met P. Ze kunnen niet doodgaan.
+//  - Knokkie het Boks-Dinootje: koop een Dino-ei bij de koopman.
+//  - Pluis de kat: koop haar in de sterrenwinkel.
+// Ze scharrelen rond het dorpsplein. Kom je bij ze, dan komen ze naar je toe: druk op E om ze te aaien.
+// In de ARENA (arena.js) kun je ze laten vechten tegen een monster: winnen ze, dan worden ze sterker
+// (en een beetje groter), tot level 10. In de arena kunnen ze flauwvallen, maar daarna zijn ze gewoon weer thuis.
 
 export const PET = {
-  speed: 7.5, // lopen (meter per seconde); rennen als hij ver achter je is
-  sight: 9, // vijanden binnen deze afstand vallen hem op
-  leash: 14, // verder dan dit van jou gaat hij niet weg om te vechten
+  speed: 7.5, // rennen in de arena (meter per seconde)
+  stroll: 2.2, // rustig wandelen in het dorp
+  roam: 11, // zo ver van het dorpsplein lopen ze rond (meter)
   cooldown: 0.85, // tijd tussen twee stoten (seconden)
+  hp: 70, // leven in de arena op level 1
+  hpPerLevel: 22, // zoveel leven erbij per level
   damage: 8, // schade op level 1
   perLevel: 3, // zoveel schade erbij per level
   killsPerLevel: 5, // zoveel vijanden verslaan voor een level omhoog
@@ -121,71 +124,81 @@ function makeLabel() {
 export class Pet {
   /**
    * @param {THREE.Scene} scene
-   * @param {import('./stats.js').Stats} stats  (stats.data.pets = { knokkie: { level, kills }, ... }, stats.data.activePet)
+   * @param {import('./stats.js').Stats} stats  (stats.data.pets = { knokkie: { level, kills }, pluis: ... })
+   * @param {string} kind  'knokkie' of 'pluis'
+   * @param {THREE.Vector3} home  het dorpsplein: daar lopen ze omheen
    */
-  constructor(scene, stats) {
+  constructor(scene, stats, kind, home) {
     this.stats = stats;
+    this.kind = kind;
+    this.home = home.clone();
     // Oude save: toen was er alleen Knokkie (stats.data.pet)
     const d = stats.data;
     d.pets ??= {};
     if (d.pet) {
       d.pets.knokkie ??= d.pet;
-      d.activePet ??= 'knokkie';
       delete d.pet;
     }
+    delete d.activePet;
     this.mesh = new THREE.Group();
     this.body = new THREE.Group(); // wiebelt en leunt (de stoot)
     this.mesh.add(this.body);
-    this.models = { knokkie: new THREE.Group(), pluis: buildCat() };
-    for (const m of Object.values(this.models)) this.body.add(m);
     this.label = makeLabel();
     this.mesh.add(this.label);
     this.mesh.visible = false;
     scene.add(this.mesh);
+    // Wat de vijanden in de arena van hem willen weten (net als van de speler)
+    this.velocity = new THREE.Vector3();
+    this.knockback = new THREE.Vector3();
+    this.onGround = true;
+    this.hp = this.maxHp;
+    this.fighting = null; // in de arena: { target }
     this.cooldown = 0;
     this.punch = 0; // > 0: bezig met een stoot
     this.hops = 0;
-    this.target = null;
     this.attackId = 0;
-    this.time = 0;
-    this.happy = 0; // > 0: springt blij (net uit het ei, of een level omhoog)
-    loadGLB('models/extra/boks-dino.glb').then((gltf) => {
-      const obj = gltf.scene.clone(true);
-      const turned = new THREE.Group(); // het model kijkt opzij: een kwartslag draaien
-      turned.add(obj);
-      obj.rotation.y = Math.PI / 2;
-      turned.updateMatrixWorld(true);
-      const box = new THREE.Box3().setFromObject(turned);
-      const s = 1 / (box.max.y - box.min.y); // 1 meter hoog (daarna geschaald per level)
-      const center = box.getCenter(new THREE.Vector3());
-      turned.scale.setScalar(s);
-      turned.position.set(-center.x * s, -box.min.y * s, -center.z * s);
-      turned.traverse((c) => {
-        if (!c.isMesh) return;
-        c.castShadow = true;
-        // Een eigen kleur: blauwgroen, zodat je hem niet verwart met de boze Boks-Dino's
-        c.material = c.material.clone();
-        c.material.color?.lerp(new THREE.Color(0x3fd0c0), 0.45);
+    this.time = Math.random() * 10;
+    this.happy = 0; // > 0: springt blij (net nieuw, geaaid, of een level omhoog)
+    this.wait = Math.random() * 3; // even stilstaan voor hij verder wandelt
+    this.goal = null;
+    if (kind === 'pluis') {
+      this.model = buildCat();
+      this.body.add(this.model);
+    } else {
+      this.model = new THREE.Group();
+      this.body.add(this.model);
+      loadGLB('models/extra/boks-dino.glb').then((gltf) => {
+        const obj = gltf.scene.clone(true);
+        const turned = new THREE.Group(); // het model kijkt opzij: een kwartslag draaien
+        turned.add(obj);
+        obj.rotation.y = Math.PI / 2;
+        turned.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(turned);
+        const s = 1 / (box.max.y - box.min.y); // 1 meter hoog (daarna geschaald per level)
+        const center = box.getCenter(new THREE.Vector3());
+        turned.scale.setScalar(s);
+        turned.position.set(-center.x * s, -box.min.y * s, -center.z * s);
+        turned.traverse((c) => {
+          if (!c.isMesh) return;
+          c.castShadow = true;
+          // Een eigen kleur: blauwgroen, zodat je hem niet verwart met de boze Boks-Dino's
+          c.material = c.material.clone();
+          c.material.color?.lerp(new THREE.Color(0x3fd0c0), 0.45);
+        });
+        this.model.add(turned);
+      }).catch(() => {
+        const blob = new THREE.Mesh(new THREE.IcosahedronGeometry(0.45, 1), new THREE.MeshStandardMaterial({ color: 0x3fd0c0, flatShading: true }));
+        blob.position.y = 0.45;
+        this.model.add(blob);
       });
-      this.models.knokkie.add(turned);
-    }).catch(() => {
-      // Geen model? Dan een groen bolletje
-      const blob = new THREE.Mesh(new THREE.IcosahedronGeometry(0.45, 1), new THREE.MeshStandardMaterial({ color: 0x3fd0c0, flatShading: true }));
-      blob.position.y = 0.45;
-      this.models.knokkie.add(blob);
-    });
+    }
+    this.position.copy(this.home).add(new THREE.Vector3((Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 8));
     this.refresh();
-  }
-
-  /** Welk huisdier loopt nu met je mee? ('knokkie', 'pluis' of null) */
-  get kind() {
-    const d = this.stats.data;
-    return d.pets[d.activePet] ? d.activePet : Object.keys(d.pets)[0] ?? null;
   }
 
   /** Instellingen van dit huisdier (PET met de eigen dingen uit PETS erover). */
   get cfg() {
-    return { ...PET, ...PETS[this.kind ?? 'knokkie'] };
+    return { ...PET, ...PETS[this.kind] };
   }
 
   get name() {
@@ -193,28 +206,11 @@ export class Pet {
   }
 
   get data() {
-    return this.kind ? this.stats.data.pets[this.kind] : null;
+    return this.stats.data.pets?.[this.kind] ?? null;
   }
 
   get owned() {
     return !!this.data;
-  }
-
-  /** Heb je meer dan één huisdier? (dan kun je wisselen met P) */
-  get canSwitch() {
-    return Object.keys(this.stats.data.pets).length > 1;
-  }
-
-  /** P: een ander huisdier met je mee laten lopen. Geeft het nieuwe huisdier terug (of null). */
-  switchPet() {
-    const kinds = Object.keys(this.stats.data.pets);
-    if (kinds.length < 2) return null;
-    this.stats.data.activePet = kinds[(kinds.indexOf(this.kind) + 1) % kinds.length];
-    this.target = null;
-    this.happy = 1;
-    this.refresh();
-    play('pet');
-    return this.kind;
   }
 
   get position() {
@@ -229,48 +225,72 @@ export class Pet {
     return Math.round(this.cfg.damage + (this.level - 1) * this.cfg.perLevel);
   }
 
-  /** Grootte, model en bordje bijwerken (na een level omhoog of wisselen). */
+  get maxHp() {
+    return Math.round(this.cfg.hp + (this.level - 1) * this.cfg.hpPerLevel);
+  }
+
+  /** In de arena: nog niet flauwgevallen? */
+  get alive() {
+    return this.hp > 0;
+  }
+
+  /** Midden van zijn lijf (voor effecten). */
+  get center() {
+    return this.position.clone().setY(this.position.y + this.size * 0.5);
+  }
+
+  /** Grootte en bordje bijwerken (na een level omhoog). */
   refresh() {
     const cat = this.kind === 'pluis';
     const size = (cat ? 1.1 : 0.75) + (this.level - 1) * (cat ? 0.05 : 0.06); // ze groeien een beetje met hun level
     this.size = size;
     this.body.scale.setScalar(size);
-    for (const [kind, model] of Object.entries(this.models)) model.visible = kind === (this.kind ?? 'knokkie');
-    const top = cat ? 0.8 : 1;
-    this.label.position.y = size * top + 0.35;
+    this.label.position.y = size * (cat ? 0.8 : 1) + 0.35;
     this.label.userData.draw(`${this.name} · Lv ${this.level}`, this.cfg.color);
     this.mesh.visible = this.owned && !this.away;
   }
 
-  /** Een nieuw huisdier! (Knokkie uit het Dino-ei, Pluis uit de sterrenwinkel). Hij loopt meteen met je mee. */
-  hatch(at, kind = 'knokkie') {
-    this.stats.data.pets[kind] ??= { level: 1, kills: 0 };
-    this.stats.data.activePet = kind;
+  /** Een nieuw huisdier! Het verschijnt waar jij staat en loopt daarna rond in Muntdorp. */
+  hatch(at) {
+    this.stats.data.pets[this.kind] ??= { level: 1, kills: 0 };
     this.stats.save();
     this.position.copy(at).setY(0);
     this.happy = 1.5;
+    this.hp = this.maxHp;
     this.refresh();
-    play('pet');
+    play(this.kind === 'pluis' ? 'miauw' : 'pet');
   }
 
-  /** Zijn plekje naast de speler: rechts naast je, een klein stukje erachter (niet tussen jou en de camera). */
-  spotNear(pos, yaw, target = new THREE.Vector3()) {
-    return target.set(pos.x - Math.cos(yaw) * 1.6 - Math.sin(yaw) * 0.4, 0, pos.z + Math.sin(yaw) * 1.6 - Math.cos(yaw) * 0.4);
+  /** Aaien! (E) */
+  stroke() {
+    this.happy = 1.4;
+    this.wait = 2;
+    play(this.kind === 'pluis' ? 'miauw' : 'pet');
   }
 
-  /** Meteen naast de speler zetten (na snelreizen, of als hij te ver achter is geraakt). */
-  placeNear(pos, yaw = 0) {
-    this.spotNear(pos, yaw, this.position);
-    this.mesh.rotation.y = yaw;
-    this.target = null;
+  /** In de arena geraakt (door een monster). Geeft de schade terug. */
+  hurt(from, damage) {
+    if (!this.alive) return 0;
+    this.hp = Math.max(0, this.hp - damage);
+    const away = this.position.clone().sub(from).setY(0);
+    if (away.lengthSq() > 1e-6) this.knockback.copy(away.normalize().multiplyScalar(6));
+    return damage;
   }
 
-  /** Knokkie verslaat een vijand: telt mee voor zijn level. Geeft true als hij een level omhoog ging. */
+  /** Arena: vechten tegen dit monster (of null = terug naar huis). */
+  startFight(target, at) {
+    this.fighting = target ? { target } : null;
+    this.hp = this.maxHp;
+    if (at) this.position.copy(at);
+    this.mesh.rotation.x = 0;
+  }
+
+  /** Een gevecht gewonnen: telt mee voor zijn level. Geeft true als hij een level omhoog ging. */
   addKill() {
     const d = this.data;
     if (!d) return false;
     d.kills++;
-    if (d.level >= PET.maxLevel || d.kills < d.level * PET.killsPerLevel) return false;
+    if (d.level >= PET.maxLevel || d.kills < Math.ceil(d.level / 2)) return false; // (in de arena gaat het sneller)
     this.levelUp();
     return true;
   }
@@ -288,8 +308,8 @@ export class Pet {
   }
 
   /**
-   * Elke frame. ctx = { player, targets (vijanden en wakkere bosses), colliders, away (in Omars kasteel of zo: verstoppen) }
-   * Geeft { target, damage, id } terug op het moment dat een stoot raak is (main.js doet de schade), anders null.
+   * Elke frame. ctx = { player, colliders, away (in Omars kasteel: verstoppen) }
+   * In de arena geeft hij { target, damage, id } terug op het moment dat een stoot raak is (arena.js doet de schade).
    */
   update(dt, ctx) {
     this.away = !!ctx.away;
@@ -298,95 +318,104 @@ export class Pet {
     this.time += dt;
     this.cooldown -= dt;
     this.happy = Math.max(0, this.happy - dt);
-    const player = ctx.player;
     const pos = this.position;
-    const toPlayer = Math.hypot(player.position.x - pos.x, player.position.z - pos.z);
-    // Heel ver weg (snelreizen, of je vliegt op de draak)? Dan komt hij je achterna als je weer op de grond staat
-    if (toPlayer > 35 && player.position.y < 1.5) {
-      this.placeNear(player.position, player.mesh.rotation.y);
-      play('pet');
-    }
-
-    // Een doel kiezen: de dichtstbijzijnde vijand bij hem, niet te ver van jou
-    if (this.target && (!this.target.alive || this.target.awake === false || this.distTo(this.target) > this.cfg.sight * 1.6)) this.target = null;
-    if (!this.target && this.cooldown < 0.3) {
-      let best = null;
-      let bestD = this.cfg.sight;
-      for (const t of ctx.targets) {
-        if (!t.alive || t.type?.dummy) continue;
-        if (Math.hypot(t.position.x - player.position.x, t.position.z - player.position.z) > this.cfg.leash) continue;
-        if (t.position.y > 2.5) continue; // vliegt te hoog
-        const d = this.distTo(t);
-        if (d < bestD) {
-          best = t;
-          bestD = d;
-        }
-      }
-      this.target = best;
-    }
-
-    // Waar wil ik heen?
     let goal = null;
-    let speed = this.cfg.speed;
+    let speed = this.cfg.stroll;
     let hit = null;
-    if (this.target) {
-      const reach = (this.target.type?.radius ?? 0.6) + this.cfg.radius + 0.55;
-      const d = this.distTo(this.target);
-      if (d > reach) goal = this.target.position;
-      else {
-        this.face(this.target.position, dt, 14);
-        if (this.cooldown <= 0 && this.punch <= 0) {
-          this.punch = 0.32;
-          this.cooldown = this.cfg.cooldown;
-          this.hitDone = false;
-          play(this.kind === 'pluis' ? 'miauw' : 'petGrr');
+    let lying = false;
+
+    if (this.fighting) {
+      // ---------- In de arena: vechten! ----------
+      const target = this.fighting.target;
+      if (!this.alive) lying = true; // flauwgevallen
+      else if (target?.alive) {
+        speed = this.cfg.speed;
+        const reach = (target.type?.radius ?? 0.6) + this.cfg.radius + 0.55;
+        const d = this.distTo(target);
+        if (d > reach) goal = target.position;
+        else {
+          this.face(target.position, dt, 14);
+          if (this.cooldown <= 0 && this.punch <= 0) {
+            this.punch = 0.32;
+            this.cooldown = this.cfg.cooldown;
+            this.hitDone = false;
+            play(this.kind === 'pluis' ? 'miauw' : 'petGrr');
+          }
         }
+        if (this.punch > 0 && !this.hitDone && this.punch < 0.18) {
+          this.hitDone = true;
+          this.attackId++;
+          hit = { target, damage: this.damage, id: `${this.kind}-${this.attackId}` };
+        }
+      } else this.happy = Math.max(this.happy, 0.5); // gewonnen: blij springen
+    } else {
+      // ---------- In het dorp: rondscharrelen ----------
+      const player = ctx.player;
+      const toPlayer = Math.hypot(player.position.x - pos.x, player.position.z - pos.z);
+      if (toPlayer < 6 && player.position.y < 1.5) {
+        // Jij bent er! Kom eens kijken (maar niet tegen je aan)
+        if (toPlayer > 1.8) goal = player.position;
+        else this.face(player.position, dt, 6);
+      } else {
+        this.wait -= dt;
+        if (!this.goal && this.wait <= 0) {
+          const a = Math.random() * Math.PI * 2;
+          const r = 2 + Math.random() * this.cfg.roam;
+          this.goal = this.home.clone().add(new THREE.Vector3(Math.sin(a) * r, 0, Math.cos(a) * r));
+        }
+        goal = this.goal;
       }
-      if (this.punch > 0 && !this.hitDone && this.punch < 0.18) {
-        this.hitDone = true;
-        this.attackId++;
-        hit = { target: this.target, damage: this.damage, id: `${this.kind}-${this.attackId}` };
-      }
-      speed *= 1.4;
-    } else if (toPlayer > 2.8) {
-      // Met je mee (naast je)
-      goal = this.spotNear(player.position, player.mesh.rotation.y, tmp);
-      if (toPlayer > 8) speed *= 1.9; // rennen om bij te blijven
     }
+
     let moving = false;
     if (goal) {
       const dx = goal.x - pos.x;
       const dz = goal.z - pos.z;
       const d = Math.hypot(dx, dz);
-      if (d > 0.3) {
+      if (d > 0.4) {
         const step = Math.min(d, speed * dt);
         pos.x += (dx / d) * step;
         pos.z += (dz / d) * step;
-        this.face(goal, dt, 10);
+        this.face(goal, dt, 8);
         moving = true;
+      } else if (goal === this.goal) {
+        this.goal = null;
+        this.wait = 1.5 + Math.random() * 4;
       }
     }
+    pos.addScaledVector(this.knockback, dt);
+    this.knockback.multiplyScalar(Math.exp(-8 * dt));
+    if (this.stuck(moving, dt)) this.goal = null;
     this.pushOutOfBlocks(ctx.colliders);
     this.punch = Math.max(0, this.punch - dt);
 
-    // Animatie: huppelen bij het lopen, naar voren leunen bij een stoot, blij springen
-    if (moving) this.hops += dt * 13;
-    const hop = moving ? Math.abs(Math.sin(this.hops)) * 0.18 : 0;
+    // Animatie: huppelen bij het lopen, naar voren leunen bij een stoot, blij springen, omvallen als hij flauwvalt
+    if (moving) this.hops += dt * (speed > 4 ? 13 : 8);
+    const hop = moving ? Math.abs(Math.sin(this.hops)) * (speed > 4 ? 0.18 : 0.08) : 0;
     const jump = this.happy > 0 ? Math.abs(Math.sin(this.happy * 9)) * 0.5 : 0;
     this.body.position.y = hop + jump;
     const lunge = this.punch > 0 ? Math.sin((1 - this.punch / 0.32) * Math.PI) : 0;
     this.body.position.z = lunge * 0.35;
     this.body.rotation.x = lunge * 0.35 + (moving ? 0.08 : 0);
-    this.body.rotation.z = moving ? Math.sin(this.hops) * 0.08 : Math.sin(this.time * 2) * 0.03;
+    this.body.rotation.z = lying ? Math.PI / 2 : moving ? Math.sin(this.hops) * 0.08 : Math.sin(this.time * 2) * 0.03;
+    if (lying) this.body.position.y = 0.2;
     // De kat: pootjes lopen en de staart zwiept
-    const cat = this.models.pluis.userData.parts;
     if (this.kind === 'pluis') {
-      this.body.position.y = jump + (moving ? Math.abs(Math.sin(this.hops)) * 0.05 : 0);
+      const cat = this.model.userData.parts;
+      if (!lying) this.body.position.y = jump + (moving ? Math.abs(Math.sin(this.hops)) * 0.05 : 0);
       cat.legs.forEach((leg, i) => (leg.rotation.x = moving ? Math.sin(this.hops + (i === 0 || i === 3 ? 0 : Math.PI)) * 0.6 : 0));
-      cat.tail.forEach((seg, i) => (seg.rotation.z = Math.sin(this.time * 3 - i * 0.5) * 0.18));
+      cat.tail.forEach((seg, i) => (seg.rotation.z = Math.sin(this.time * (this.happy > 0 ? 8 : 3) - i * 0.5) * 0.18));
       cat.head.rotation.y = Math.sin(this.time * 0.7) * 0.25;
     }
     return hit;
+  }
+
+  /** Loopt hij al een tijdje tegen iets aan? Dan een ander plekje kiezen. */
+  stuck(moving, dt) {
+    const moved = this.lastPos ? this.position.distanceTo(this.lastPos) : 1;
+    this.lastPos = this.position.clone();
+    this.stuckT = moving && moved < 0.3 * dt * this.cfg.stroll ? (this.stuckT ?? 0) + dt : 0;
+    return this.stuckT > 1;
   }
 
   distTo(t) {

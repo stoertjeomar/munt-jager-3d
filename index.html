@@ -20,30 +20,35 @@
 <body>
   <!-- Levens, stamina en level (linksboven) -->
   <div id="bars">
-    <div id="level">Level 1</div>
-    <div id="hp-bar" class="bar"><div id="hp-lag" class="lag"></div><div id="hp-fill" class="fill"></div><span id="hp-text"></span></div>
-    <div id="st-bar" class="bar thin"><div id="st-fill" class="fill"></div></div>
-    <div id="xp-bar" class="bar thin"><div id="xp-fill" class="fill"></div></div>
+    <div id="level-badge"><small>LV</small><span id="level-num">1</span></div>
+    <div id="bars-col">
+      <div id="level">Level 1</div>
+      <div id="hp-bar" class="hud-bar"><div id="hp-lag" class="lag"></div><div id="hp-fill" class="fill"></div><span id="hp-text"></span></div>
+      <div id="st-bar" class="hud-bar thin"><div id="st-fill" class="fill"></div></div>
+      <div id="xp-bar" class="hud-bar xp"><div id="xp-fill" class="fill"></div></div>
+    </div>
   </div>
 
-  <!-- Minimap (rechtsboven) -->
-  <canvas id="minimap" width="170" height="170"></canvas>
+  <!-- Minimap (rechtsboven) met de naam van het gebied -->
+  <div id="map-wrap">
+    <canvas id="minimap" width="360" height="360"></canvas>
+    <div id="map-label"><b id="map-region"></b><small id="map-info"></small></div>
+  </div>
 
-  <!-- Uitrusting en krachten (linksonder) -->
+  <!-- Uitrusting en krachten (linksonder): de krachtenbalk -->
   <div id="equip">
-    <div id="flasks"></div>
     <div id="equip-weapon"></div>
+    <div id="hotbar"><div id="flasks" class="slot"></div><div id="powers"></div></div>
     <div id="equip-helmet"></div>
-    <div id="powers"></div>
   </div>
 
-  <!-- Munten (rechtsonder) -->
-  <div id="runes-box"><span id="runes-gain"></span><span class="coin">●</span><span id="runes">0</span></div>
+  <!-- Munten en sterren (rechtsonder) -->
+  <div id="runes-box"><span id="runes-gain"></span><span class="coin"></span><span id="runes">0</span><span class="star">⭐</span><span id="stars-count">0</span></div>
 
   <!-- Boss-balk (onderaan) -->
   <div id="boss" class="hidden">
     <div id="boss-name"></div>
-    <div class="bar boss-bar"><div id="boss-lag" class="lag"></div><div id="boss-fill" class="fill"></div></div>
+    <div class="hud-bar boss-bar"><div id="boss-lag" class="lag"></div><div id="boss-fill" class="fill"></div></div>
   </div>
 
   <!-- Quests (onder de minimap) -->
@@ -75,11 +80,13 @@
     <p id="level-title">Waar wil je beginnen?</p>
     <div id="level-select"></div>
     <button id="start-btn">Spelen</button>
+    <button id="mp-btn">🌐 Samen spelen</button>
     <div class="controls">
-      <b>WASD</b> lopen · <b>Shift</b> tik = rollen, houd = sprinten · <b>Spatie</b> springen<br />
-      <b>Klik / F</b> slaan · <b>Q</b> vastzetten op vijand · <b>R</b> flesje drinken · <b>E</b> praten / rusten / openen<br />
-      <b>C</b> dash · <b>V</b> wervelslag · <b>X</b> vuurzwaard · <b>I</b> uitrusting · <b>T</b> kaart / snelreizen · <b>K</b> trofeeën · <b>P</b> huisdier wisselen · <b>M</b> geluid · <b>N</b> muziek · <b>Esc</b> muis vrij<br />
-      <b>Scrollen</b> zoomen · <b>G</b> graphics: <span id="gfx-name">Normaal</span> (Laag / Normaal / Hoog)
+      <span><b>WASD</b> lopen</span><span><b>Shift</b> tik = rollen, houd = sprinten</span><span><b>Spatie</b> springen</span>
+      <span><b>Klik / F</b> slaan</span><span><b>Q</b> vastzetten op vijand</span><span><b>R</b> flesje drinken</span><span><b>E</b> praten / openen</span>
+      <span><b>C</b> dash</span><span><b>V</b> wervelslag</span><span><b>X</b> vuurzwaard</span><span><b>I</b> uitrusting</span><span><b>T</b> kaart / snelreizen</span>
+      <span><b>K</b> trofeeën</span><span><b>O</b> samen spelen (online)</span><span><b>M</b> geluid</span><span><b>N</b> muziek</span><span><b>Esc</b> muis vrij</span><span><b>Scrollen</b> zoomen</span>
+      <span><b>G</b> graphics: <i id="gfx-name">Normaal</i></span>
     </div>
   </div>
 

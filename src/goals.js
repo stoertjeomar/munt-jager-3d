@@ -1,4 +1,4 @@
-import { LEVELS, REGIONS } from './levels.js';
+import { LEVELS, REGIONS, WORLD, SKY } from './levels.js';
 import { ENEMY_TYPES } from './enemies.js';
 import { BOSS_INFO } from './bosses.js';
 
@@ -13,13 +13,16 @@ import { BOSS_INFO } from './bosses.js';
 
 /** Alle zij-quests die er zijn (uit de mensen in LEVELS). */
 const ALL_QUESTS = LEVELS.flatMap((l) => l.npcs.map((n) => n[3]).filter(Boolean));
-const ALL_DIAMONDS = LEVELS.reduce((n, l) => n + l.diamonds.length, 0);
-const ALL_CHESTS = LEVELS.reduce((n, l) => n + l.chests.length, 0);
-const ALL_FLAGS = LEVELS.reduce((n, l) => n + l.checkpoints.length, 0);
+// (WORLD = alle gebieden samen, plus het Wolkenrijk)
+const ALL_DIAMONDS = WORLD.diamonds.length;
+const ALL_CHESTS = WORLD.chests.length;
+const ALL_FLAGS = WORLD.checkpoints.length;
+const SKY_CHESTS = SKY ? SKY.chests.map((c) => c[0]) : [];
 const MAIN_BOSSES = REGIONS.filter((r) => !r.level.locked).map((r) => r.boss);
 const ALL_BOSSES = REGIONS.map((r) => r.boss);
 
 const count = (d, key) => d.counts?.[key] ?? 0;
+const flagsFound = (d) => WORLD.checkpoints.filter((c) => d.flags.includes(c[0])).length;
 
 // Trofeeën: [id, plaatje, naam, uitleg, sterren, test(save), voortgang(save) = [zoveel, van]]
 export const TROPHIES = [
@@ -36,7 +39,7 @@ export const TROPHIES = [
   ['ninjas', '🥷', 'Ninjaslachter', 'Versla 25 Ninjapoppen', 1, (d) => count(d, 'ninjapop') >= 25, (d) => [count(d, 'ninjapop'), 25]],
   ['diamanten', '💎', 'Diamantzoeker', 'Vind alle diamanten', 2, (d) => d.diamonds.length >= ALL_DIAMONDS, (d) => [d.diamonds.length, ALL_DIAMONDS]],
   ['kisten', '📦', 'Schatzoeker', 'Open alle kisten', 2, (d) => d.chests.length >= ALL_CHESTS, (d) => [d.chests.length, ALL_CHESTS]],
-  ['vlaggen', '⚑', 'Ontdekkingsreiziger', 'Raak alle vlaggen aan', 1, (d) => d.flags.filter((f) => !f.startsWith('omar')).length >= ALL_FLAGS, (d) => [d.flags.filter((f) => !f.startsWith('omar')).length, ALL_FLAGS]],
+  ['vlaggen', '⚑', 'Ontdekkingsreiziger', 'Raak alle vlaggen aan', 1, (d) => flagsFound(d) >= ALL_FLAGS, (d) => [flagsFound(d), ALL_FLAGS]],
   ['quests', '✔', 'Helper van iedereen', 'Maak alle zij-quests af', 2, (d) => ALL_QUESTS.every((q) => d.quests[q]?.state === 'beloond'), (d) => [ALL_QUESTS.filter((q) => d.quests[q]?.state === 'beloond').length, ALL_QUESTS.length]],
   ['invasie-1', '👻', 'Dorpsheld', 'Sla een Omar-invasie af', 1, (d) => (d.invasions ?? 0) >= 1],
   ['invasie-5', '👻', 'Beschermer', 'Sla 5 Omar-invasies af', 2, (d) => (d.invasions ?? 0) >= 5, (d) => [d.invasions ?? 0, 5]],
@@ -47,6 +50,8 @@ export const TROPHIES = [
   ['premies-5', '📜', 'Premiejager', 'Haal 5 premies op', 1, (d) => count(d, 'bounties') >= 5, (d) => [count(d, 'bounties'), 5]],
   ['premies-20', '📜', 'Meester-premiejager', 'Haal 20 premies op', 2, (d) => count(d, 'bounties') >= 20, (d) => [count(d, 'bounties'), 20]],
   ['drakenrijder', '🐉', 'Drakenrijder', 'Vlieg op Vuurtand de draak', 1, (d) => !!d.dragonTips],
+  ['wolkenrijk', '☁', 'Hemelbestormer', 'Vlieg met Vuurtand naar het Wolkenrijk, hoog boven de Ruïnevallei', 1, (d) => d.flags.includes('sky-start')],
+  ['hemelschat', '⚡', 'Hemelse schatten', 'Open alle kisten in het Wolkenrijk', 2, (d) => SKY_CHESTS.every((id) => d.chests.includes(id)), (d) => [SKY_CHESTS.filter((id) => d.chests.includes(id)).length, SKY_CHESTS.length]],
   ['knokkie', '🦖', 'Beste maatjes', 'Train Knokkie tot level 10', 2, (d) => (d.pets?.knokkie?.level ?? 0) >= 10, (d) => [d.pets?.knokkie?.level ?? 0, 10]],
   ['pluis', '🐱', 'Kattenvriend', 'Adopteer Pluis de kat (sterrenwinkel)', 1, (d) => !!d.pets?.pluis],
   ['rijk', '💰', 'Rijkaard', 'Heb 5000 munten tegelijk', 1, (d) => d.runes >= 5000, (d) => [Math.min(d.runes, 5000), 5000]],
@@ -82,6 +87,7 @@ const BOUNTY_KINDS = {
   coins: { stars: 1 },
   dragon: { stars: 1 },
   pet: { stars: 1 },
+  arena: { stars: 2 },
 };
 
 export class Goals {
@@ -145,6 +151,17 @@ export class Goals {
     this.progress((b) => b.kind === 'invasion');
   }
 
+  /** Je huisdier won een gevecht in de arena. */
+  onPetWin() {
+    this.progress((b) => b.kind === 'pet');
+  }
+
+  /** Je won in de arena (golven overleefd of een duel). */
+  onArena(kind) {
+    this.d.counts.arena = (this.d.counts.arena ?? 0) + 1;
+    this.progress((b) => b.kind === 'arena' || (b.kind === kind));
+  }
+
   onBoss(id, rage) {
     if (rage && !this.d.rage.includes(id)) this.d.rage.push(id);
     this.progress((b) => b.kind === 'boss' && b.target === id);
@@ -185,6 +202,7 @@ export class Goals {
     if (!have('coins')) options.push('coins');
     if (d.bosses.includes('mario') && !have('dragon')) options.push('dragon');
     if (d.pets && Object.keys(d.pets).length && !have('pet')) options.push('pet');
+    if (!have('arena')) options.push('arena');
     const kind = options[Math.floor(Math.random() * options.length)];
     const level = Math.max(1, open.length);
     const bounty = { id: `premie-${Date.now()}-${Math.floor(Math.random() * 1000)}`, kind, count: 0, n: 1, target: null };
@@ -200,7 +218,7 @@ export class Goals {
     } else if (kind === 'dragon') {
       bounty.n = 6 + Math.floor(Math.random() * 5);
     } else if (kind === 'pet') {
-      bounty.n = 4 + Math.floor(Math.random() * 4);
+      bounty.n = 1 + Math.floor(Math.random() * 3);
     }
     bounty.runes = Math.round((80 + level * 60 + (kind === 'kill' ? bounty.n * 10 : 120)) / 10) * 10;
     bounty.stars = BOUNTY_KINDS[kind].stars;
@@ -216,7 +234,8 @@ export class Goals {
       case 'boss': return `Versla ${BOSS_INFO[b.target]?.name ?? b.target} (nog een keer: hij is nu woedend!)`;
       case 'coins': return `Verdien ${b.n} munten`;
       case 'dragon': return `Verbrand ${b.n} vijanden met Vuurtand de draak`;
-      case 'pet': return `Laat je huisdier ${b.n} vijanden verslaan`;
+      case 'pet': return `Laat je huisdier ${b.n} ${b.n === 1 ? 'gevecht' : 'gevechten'} winnen in de Arena`;
+      case 'arena': return 'Overleef 5 golven in de Arena';
       default: return b.kind;
     }
   }

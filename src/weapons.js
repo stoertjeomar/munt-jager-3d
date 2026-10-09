@@ -51,8 +51,8 @@ export const WEAPONS = {
   },
   ijszwaard: {
     name: 'IJszwaard', rarity: 'episch', damage: 28, stamina: 12, range: 2.8, swingTime: 0.27,
-    pixels: 'ijs', blade: [0.2, 0.92], trail: 0x8fe8ff,
-    info: 'Gemaakt van eeuwig ijs. Snel, scherp en koud.',
+    pixels: 'ijs', blade: [0.2, 0.92], trail: 0x8fe8ff, special: 'ijs',
+    info: 'Gemaakt van eeuwig ijs. Vijanden die je raakt bevriezen een beetje en lopen langzaam.',
   },
   zonnezwaard: {
     name: 'Zonnezwaard', rarity: 'legendarisch', damage: 36, stamina: 13, range: 2.9, swingTime: 0.3,
@@ -86,6 +86,30 @@ export const WEAPONS = {
     name: 'Sterrenzwaard', rarity: 'legendarisch', damage: 55, stamina: 14, range: 3.1, swingTime: 0.28,
     pixels: 'ster', blade: [0.3, 1.0], trail: 0xfff27a,
     info: 'Gesmeed van sterrenstof. Het sterkste wapen van het hele spel!',
+  },
+  // ---------- Wapens uit het Wolkenrijk (sky.js), met een speciale kracht ----------
+  //   special = 'gif' (de vijand krijgt nog even schade), 'ijs' (bevriezen: langzaam lopen),
+  //             'bliksem' (de bliksem springt over naar andere vijanden), 'vampier' (jij krijgt leven terug),
+  //             'wind' (vijanden vliegen ver weg)
+  gifdolk: {
+    name: 'Gifdolk', rarity: 'episch', damage: 16, stamina: 6, range: 1.9, swingTime: 0.17,
+    pixels: 'gif', blade: [0.12, 0.45], trail: 0x7dff4a, special: 'gif',
+    info: 'Supersnel, en elke prik vergiftigt: de vijand krijgt nog 3 seconden lang schade.',
+  },
+  vampierzwaard: {
+    name: 'Vampierzwaard', rarity: 'legendarisch', damage: 38, stamina: 14, range: 2.8, swingTime: 0.31,
+    pixels: 'vampier', blade: [0.3, 1.0], trail: 0xff1a3a, special: 'vampier',
+    info: 'Elke klap geeft je een stukje leven terug!',
+  },
+  bliksemzwaard: {
+    name: 'Bliksemzwaard', rarity: 'legendarisch', damage: 44, stamina: 15, range: 2.9, swingTime: 0.3,
+    pixels: 'bliksem', blade: [0.25, 0.85], trail: 0x9be7ff, special: 'bliksem',
+    info: 'Vaak springt de bliksem over naar vijanden in de buurt. Zap!',
+  },
+  wolkenspeer: {
+    name: 'Wolkenspeer', rarity: 'legendarisch', damage: 46, stamina: 16, range: 3.7, swingTime: 0.34,
+    pixels: 'speer', blade: [0.7, 1.35], trail: 0xe8f6ff, special: 'wind',
+    info: 'Héél lang bereik, en een windstoot blaast vijanden ver weg.',
   },
 };
 
@@ -303,6 +327,96 @@ const PIXEL_ART = {
       w: { color: 0xffffff, roughness: 0.1, emissive: 0x4a6a7a },
       n: { color: 0x1d2f5a, roughness: 0.6 },
     },
+  },
+};
+// Groen en giftig (Gifdolk)
+PIXEL_ART.gif = {
+  hand: 9,
+  rows: [
+    '...l...',
+    '..gtg..',
+    '..gtg..',
+    '..gtg..',
+    '..gtg..',
+    '..gtg..',
+    '.ppppp.',
+    '...h...',
+    '...h...',
+    '...h...',
+    '..ppp..',
+  ],
+  colors: {
+    g: { color: 0x3aa82a, roughness: 0.35, emissive: 0x0a3a0a },
+    t: { color: 0xb8ff6a, roughness: 0.2, emissive: 0x2a6a10 },
+    l: { color: 0xe8ffc0, roughness: 0.2, emissive: 0x3a6a20 },
+    p: { color: 0x6a2a8a, roughness: 0.5 },
+    h: { color: 0x2a1a10, roughness: 0.8 },
+  },
+};
+// Bloedrood en zwart (Vampierzwaard)
+PIXEL_ART.vampier = {
+  hand: 19,
+  rows: SWORD_SHAPE,
+  colors: {
+    d: { color: 0x1a0508, roughness: 0.5 },
+    m: { color: 0x8a0a1a, roughness: 0.3, emissive: 0x3a0008 },
+    l: { color: 0xff3a4a, roughness: 0.25, emissive: 0x5a0a10 },
+    g: { color: 0x2a2a2a, roughness: 0.3, metalness: 0.7 },
+    b: { color: 0xb00020, roughness: 0.4, emissive: 0x3a0008 },
+  },
+};
+// Een kling als een bliksemschicht (Bliksemzwaard)
+PIXEL_ART.bliksem = {
+  hand: 17,
+  rows: [
+    '.....y...',
+    '....yly..',
+    '...yly...',
+    '..yly....',
+    '..yly....',
+    '...yly...',
+    '....yly..',
+    '.....yly.',
+    '....yly..',
+    '...yly...',
+    '..yly....',
+    '..yly....',
+    '...yly...',
+    '....yly..',
+    '....yly..',
+    'bbbbbbbbb',
+    '....n....',
+    '....n....',
+    '....n....',
+    '...bbb...',
+  ],
+  colors: {
+    y: { color: 0xffe14a, roughness: 0.25, emissive: 0x8a6a00 },
+    l: { color: 0xe8fbff, roughness: 0.1, emissive: 0x6ab8e0 },
+    b: { color: 0x1d3a8a, roughness: 0.4, metalness: 0.5 },
+    n: { color: 0x101830, roughness: 0.7 },
+  },
+};
+// Een lange witte speer met een punt van hemelstaal (Wolkenspeer)
+PIXEL_ART.speer = {
+  hand: 26,
+  rows: [
+    '...w...',
+    '..wsw..',
+    '..wsw..',
+    '.wsssw.',
+    '.wsssw.',
+    '..wsw..',
+    '...s...',
+    '..ggg..',
+    ...Array(23).fill('...h...'),
+    '..ggg..',
+  ],
+  colors: {
+    w: { color: 0xffffff, roughness: 0.15, emissive: 0x4a6a80 },
+    s: { color: 0xbfe8ff, roughness: 0.2, metalness: 0.4, emissive: 0x1a4a6a },
+    h: { color: 0xe8e0d0, roughness: 0.6 },
+    ...GOLD,
   },
 };
 const PIXEL = 0.052; // grootte van één blokje

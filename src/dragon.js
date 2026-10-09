@@ -289,13 +289,13 @@ export class Dragon {
     return DRAGON.fireRange + this.position.y * 1.2;
   }
 
-  /** Roep de draak: hij vliegt van achter de speler aan en landt naast hem. */
-  summon(playerPos, facingYaw) {
+  /** Roep de draak: hij vliegt van achter de speler aan en landt naast hem (groundY = hoe hoog de grond daar is, bijv. op een luchteiland). */
+  summon(playerPos, facingYaw, groundY = 0) {
     if (this.active) return false;
     const back = new THREE.Vector3(-Math.sin(facingYaw), 0, -Math.cos(facingYaw));
     const side = new THREE.Vector3(Math.cos(facingYaw), 0, -Math.sin(facingYaw));
-    this.landAt = playerPos.clone().addScaledVector(side, 3.2).setY(0);
-    this.from = this.landAt.clone().addScaledVector(back, 45).setY(28);
+    this.landAt = playerPos.clone().addScaledVector(side, groundY > 0 ? 1.5 : 3.2).setY(groundY);
+    this.from = this.landAt.clone().addScaledVector(back, 45).setY(groundY + 28);
     this.position.copy(this.from);
     this.yaw = facingYaw;
     this.velocity.set(0, 0, 0);
@@ -365,7 +365,7 @@ export class Dragon {
       const e = 1 - (1 - k) ** 3; // eerst snel, dan rustig landen
       const prev = this.position.clone();
       this.position.lerpVectors(this.from, this.landAt, e);
-      this.position.y = THREE.MathUtils.lerp(this.from.y, 0, 1 - (1 - k) ** 2);
+      this.position.y = THREE.MathUtils.lerp(this.from.y, this.landAt.y, 1 - (1 - k) ** 2);
       this.velocity.copy(this.position).sub(prev).divideScalar(Math.max(dt, 1e-3));
       flying = k < 0.97;
     } else if (this.state === 'vertrekt') {
@@ -421,7 +421,9 @@ export class Dragon {
   ride(dt, ctrl, world) {
     const pos = this.position;
     const moving = ctrl.move.lengthSq() > 0.01;
-    const onGround = pos.y <= 0.02;
+    // De grond: meestal 0, maar bovenop een luchteiland (sky.js) hoger
+    const ground = world.groundAt ? world.groundAt(pos.x, pos.z, pos.y) : 0;
+    const onGround = pos.y <= ground + 0.02;
     const flying = !onGround || ctrl.up;
     // Horizontaal: rustig optrekken en afremmen
     const speed = !moving ? 0 : flying ? (ctrl.boost ? DRAGON.boost : DRAGON.speed) : DRAGON.walk;
@@ -438,8 +440,8 @@ export class Dragon {
     vy = THREE.MathUtils.clamp(vy, -15, DRAGON.climb + 2);
     this.velocity.y += (vy - this.velocity.y) * Math.min(1, 3 * dt);
     pos.addScaledVector(this.velocity, dt);
-    if (pos.y <= 0) {
-      pos.y = 0;
+    if (pos.y <= ground) {
+      pos.y = ground;
       this.velocity.y = Math.max(0, this.velocity.y);
     }
     if (pos.y > DRAGON.maxHeight) {
@@ -480,7 +482,7 @@ export class Dragon {
         this.blocked = 3;
       }
     }
-    return pos.y > 0.02;
+    return pos.y > ground + 0.02;
   }
 
   animate(dt, flying, speed) {

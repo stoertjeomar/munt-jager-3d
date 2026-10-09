@@ -40,6 +40,7 @@ export const LEVELS = [
     dummies: [[-2, 88]], // een oefenpop bij het begin: sla erop om je schade te zien
     questItems: { 'strohoed-sterren': [[-26, 40], [24, -6], [-24, -52], [30, 34]] },
     village: { center: [-14, 62] },
+    colosseum: { center: [24, 66], radius: 11 }, // de Arena (arena.js), naast Muntdorp
     houses: [
       // [x, z, breedte, diepte, hoogte, muur-textuur, dak-textuur] — je kunt door de deur naar binnen lopen
       [-24, 55, 8, 7, 3.4, 'wall_timber_structure', 'roof_clay_red_center'],
@@ -182,7 +183,7 @@ function buildOpenWorld() {
     name: 'De wereld van Munt Jager', subtitle: 'Open wereld', open: true, theme: 'weide', music: 'weide', boss: null,
     half: { x: (REGION_WIDTH * LEVELS.length) / 2, z: 100 },
     regions, paths: [], arenas: [], checkpoints: [], chests: [], diamonds: [], npcs: [], dummies: [],
-    questItems: {}, houses: [], blocks: [], animals: [], village: null, trees: 0, path: [],
+    questItems: {}, houses: [], blocks: [], animals: [], village: null, colosseum: null, trees: 0, path: [],
   };
   for (const r of regions) {
     const L = r.level;
@@ -201,6 +202,14 @@ function buildOpenWorld() {
     world.blocks.push(...(L.blocks ?? []).map(([x, y, z, ...rest]) => { const [X, Z] = t(x, z); return [X, y, Z, ...rest]; }));
     world.animals.push(...(L.animals ?? []).map(([kind, homes, n]) => [kind, homes.map(([x, z]) => t(x, z)), n]));
     if (L.village) world.village = { center: t(...L.village.center) };
+    if (L.colosseum) world.colosseum = { center: t(...L.colosseum.center), radius: L.colosseum.radius, flip: r.flip };
+  }
+  // Het Wolkenrijk (hoog in de lucht, zie SKY hieronder): een vlag, kisten en diamanten
+  const sky = buildSky(regions);
+  if (sky) {
+    world.checkpoints.push(...sky.checkpoints);
+    world.chests.push(...sky.chests);
+    world.diamonds.push(...sky.diamonds);
   }
   // Verbindingspaden: van vlak voor de boss-arena van het ene gebied naar het begin van het volgende
   for (let i = 0; i < regions.length - 1; i++) {
@@ -211,7 +220,54 @@ function buildOpenWorld() {
   return world;
 }
 
+// ======================================================================
+// Het Wolkenrijk: zwevende eilanden hoog boven de Ruïnevallei
+// ======================================================================
+// Je komt er alleen met Vuurtand de draak (springen is veel te laag!). Alles staat hier in wereld-coördinaten,
+// rond het midden van gebied 2. De eilanden zelf worden gebouwd in sky.js.
+//   islands: [id, naam, x, z, hoogte van de grond bovenop, straal]   (x en z: vanaf het midden van het gebied)
+//   stones:  stapstenen van het ene eiland naar het andere (springen!)
+const SKY_REGION = 1;
+const SKY_LAYOUT = {
+  islands: [
+    ['poort', 'Hemelpoort', 0, -10, 31, 13],
+    ['storm', 'Stormeiland', 26, -30, 34, 9],
+    ['tuin', 'Wolkentuin', -26, 8, 28, 9],
+    ['top', 'Zonnetop', 4, -46, 40, 5.5],
+    ['kei', 'Wolkenkei', -16, -30, 36, 2.6],
+  ],
+  // [x, z, hoogte, straal]: van de Hemelpoort omhoog naar het Stormeiland
+  stones: [[11.85, -19.1, 31.5, 1], [14.6, -21.2, 32.4, 1], [17.35, -23.3, 33.3, 1]],
+  checkpoint: ['sky-start', 'Hemelpoort', 6, -6],
+  chests: [
+    ['sky-gif', -5, -16, 'poort', { kind: 'weapon', key: 'gifdolk' }],
+    ['sky-bliksem', 28, -32, 'storm', { kind: 'weapon', key: 'bliksemzwaard' }],
+    ['sky-vampier', -28, 11, 'tuin', { kind: 'weapon', key: 'vampierzwaard' }],
+    ['sky-speer', 4, -47, 'top', { kind: 'weapon', key: 'wolkenspeer' }],
+  ],
+  diamonds: [['sky-d1', -16, -30, 'kei'], ['sky-d2', -21, 3, 'tuin'], ['sky-d3', 14.6, -21.2, 'stone']],
+};
+
+function buildSky(regions) {
+  const r = regions[SKY_REGION];
+  if (!r) return null;
+  const X = (x) => r.ox + x;
+  const islands = SKY_LAYOUT.islands.map(([id, name, x, z, top, radius]) => ({ id, name, x: X(x), z, top, radius }));
+  const stones = SKY_LAYOUT.stones.map(([x, z, top, radius]) => ({ id: 'stone', name: 'Stapsteen', x: X(x), z, top, radius, stone: true }));
+  const topOf = (id, x) => (id === 'stone' ? stones.find((st) => Math.abs(st.x - X(x)) < 0.01)?.top : islands.find((i) => i.id === id).top);
+  const [cid, cname, cx, cz] = SKY_LAYOUT.checkpoint;
+  return {
+    region: SKY_REGION,
+    islands,
+    stones,
+    checkpoints: [[cid, cname, X(cx), cz, islands[0].top]],
+    chests: SKY_LAYOUT.chests.map(([id, x, z, on, item]) => [id, X(x), topOf(on, x), z, item]),
+    diamonds: SKY_LAYOUT.diamonds.map(([id, x, z, on]) => [id, X(x), topOf(on, x), z]),
+  };
+}
+
 export const WORLD = buildOpenWorld();
+export const SKY = buildSky(WORLD.regions);
 export const REGIONS = WORLD.regions;
 
 /** In welk gebied (0, 1, 2, 3) ligt dit punt? (de grens is een beetje golvend, dat ziet er natuurlijker uit) */
@@ -228,6 +284,7 @@ export const GATE_X = LOCKED_REGION ? LOCKED_REGION.x0 - 6.5 : Infinity;
 
 /** In welk gebied ligt deze vlag? */
 export function regionOfCheckpoint(id) {
+  if (id.startsWith('sky')) return SKY_REGION; // het Wolkenrijk hangt boven de Ruïnevallei
   const i = LEVELS.findIndex((l) => l.checkpoints.some((c) => c[0] === id));
   return i < 0 ? 0 : i;
 }

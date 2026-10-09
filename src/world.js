@@ -11,7 +11,7 @@ export const WALKABLE = { x: BOUNDS.x - 1.5, z: BOUNDS.z - 1.5 }; // verder kun 
 const v3 = (x, z, y = 0) => new THREE.Vector3(x, y, z);
 
 // Checkpoints: per gebied één aan het begin en een vlag halverwege
-export const CHECKPOINTS = LEVEL.checkpoints.map(([id, name, x, z]) => ({ id, name, position: v3(x, z) }));
+export const CHECKPOINTS = LEVEL.checkpoints.map(([id, name, x, z, y = 0]) => ({ id, name, position: v3(x, z, y) }));
 
 // De boss-arena's: aan het eind van het pad van elk gebied één. `open` = aan welke kant de ingang is (+z of -z).
 // In Omars kasteel staat er één arena midden op de binnenplaats.
@@ -22,6 +22,8 @@ export const ARENAS = LEVEL.arenas
 export const CHESTS = LEVEL.chests.map(([id, x, y, z, item]) => ({ id, position: v3(x, z, y), item }));
 
 export const VILLAGE_CENTER = LEVEL.village ? v3(LEVEL.village.center[0], LEVEL.village.center[1]) : null;
+// De Arena (een rond colosseum naast Muntdorp, zie arena.js): daar komen geen bomen, stenen of gras
+export const COLOSSEUM = LEVEL.colosseum ? { center: v3(LEVEL.colosseum.center[0], LEVEL.colosseum.center[1]), radius: LEVEL.colosseum.radius } : null;
 
 // Alle paden (en de verbindingspaden tussen de gebieden) als losse lijnstukken
 const PATHS = (LEVEL.paths ?? [LEVEL.path]).flatMap((path) => path.slice(1).map((p, i) => [path[i], p]));
@@ -203,6 +205,7 @@ export function isFree(x, z, margin = 0) {
   for (const [px, pz, pr] of PONDS) if (Math.hypot(x - px, z - pz) < pr + 1 + margin) return false;
   if (distToPath(x, z) < 4 + margin) return false;
   if (VILLAGE_CENTER && Math.hypot(x - VILLAGE_CENTER.x, z - VILLAGE_CENTER.z) < 18) return false;
+  if (COLOSSEUM && Math.hypot(x - COLOSSEUM.center.x, z - COLOSSEUM.center.z) < COLOSSEUM.radius + 7) return false;
   if (inHouse(x, z, margin)) return false;
   for (const a of ARENAS) if (Math.hypot(x - a.center.x, z - a.center.z) < a.radius + 5) return false;
   for (const c of CHECKPOINTS) if (Math.hypot(x - c.position.x, z - c.position.z) < 8) return false;
@@ -232,6 +235,7 @@ export function grassMask() {
       const z = min[1] + (j + 0.5) / RES;
       let k = THREE.MathUtils.smoothstep(distToPath(x, z), 2.4, 3.4); // het pad
       if (VILLAGE_CENTER && Math.hypot(x - VILLAGE_CENTER.x, z - VILLAGE_CENTER.z) < 8) k = 0;
+      if (COLOSSEUM && Math.hypot(x - COLOSSEUM.center.x, z - COLOSSEUM.center.z) < COLOSSEUM.radius + 2.5) k = 0;
       for (const a of ARENAS) k *= THREE.MathUtils.smoothstep(Math.hypot(x - a.center.x, z - a.center.z), a.radius + 1, a.radius + 2.5);
       if (inHouse(x, z, -1.4)) k = 0;
       for (const b of LEVEL.blocks ?? []) if (b[1] - b[4] / 2 < 0.3 && Math.abs(x - b[0]) < b[3] / 2 + 0.2 && Math.abs(z - b[2]) < b[5] / 2 + 0.2) k = 0;
@@ -1276,8 +1280,9 @@ export function createWorld(scene) {
     lightTuning: LIGHT_TUNING,
 
     /** Mist van het gebied waar je bent: in het Spookwoud dikker. Schuift langzaam mee (geen sprong). */
-    updateFog(theme, dt) {
-      const near = theme === 'woud' ? 25 : theme === 'schaduw' ? 30 : 50;
+    updateFog(theme, dt, altitude = 0) {
+      let near = theme === 'woud' ? 25 : theme === 'schaduw' ? 30 : 50;
+      if (altitude > 14) near = Math.max(near, 80); // hoog in de lucht (bij het Wolkenrijk) is het helder
       scene.fog.near += (near - scene.fog.near) * Math.min(1, dt * 0.6);
       scene.fog.far = scene.fog.near + 90;
       // In het Schaduwrijk zijn de mist en de lucht paars

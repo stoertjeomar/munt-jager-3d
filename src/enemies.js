@@ -361,7 +361,7 @@ class Enemy {
     this.mesh = new THREE.Group();
     let model;
     if (type.model) model = { body: new THREE.Group(), materials: [] };
-    else if (typeKey === 'spook') model = buildGhost(type);
+    else if (type.flies) model = buildGhost(type);
     else if (typeKey === 'golem') model = buildGolem(type);
     else model = buildSlime(type, typeKey === 'slijmbal');
     this.model = model;
@@ -523,7 +523,7 @@ class Enemy {
     this.stateTimer = 0;
     this.slamCooldown = 0;
     this.position.copy(this.pointA);
-    if (this.type.flies) this.position.y = 1.2;
+    this.position.y = (this.floor ?? 0) + (this.type.flies ? 1.2 : 0); // (op een luchteiland staat hij hoger)
     this.knockback.set(0, 0, 0);
     this.mesh.visible = true;
     this.mesh.scale.setScalar(1);
@@ -590,7 +590,7 @@ class Enemy {
 
   die() {
     this.dying = this.mixer ? 1.3 : DEATH_TIME;
-    if (!this.type.flies) this.position.y = 0; // (een Ninjapop die midden in zijn sprong verslagen wordt, valt meteen neer)
+    if (!this.type.flies) this.position.y = this.floor ?? 0; // (een Ninjapop die midden in zijn sprong verslagen wordt, valt meteen neer)
     if (this.mixer) this.playAnim('Death', true);
     if (this.laser) this.laser.visible = false;
     this.flash = 0.12;
@@ -651,6 +651,7 @@ class Enemy {
     if (!this.alive) return;
     if (this.position.distanceTo(ctx.player.position) > ACTIVE_RANGE) return;
     this.animateLife(dt, ctx);
+    if (this.slowT > 0) this.slowT -= dt; // bevroren (IJszwaard): loopt langzaam
 
     const playerPos = ctx.player.position;
     const toPlayer = playerPos.clone().sub(this.position);
@@ -739,7 +740,7 @@ class Enemy {
     } else {
       const goal = this.goingToB ? this.pointB : this.pointA;
       dir = goal.clone().sub(this.position);
-      if (type.flies) dir.y = 1.2 - this.position.y;
+      if (type.flies) dir.y = (this.floor ?? 0) + 1.2 - this.position.y;
       else dir.y = 0;
       reach = Math.hypot(dir.x, dir.z);
       if (reach < 0.3) this.goingToB = !this.goingToB;
@@ -761,12 +762,12 @@ class Enemy {
     // ---------- Bewegen (plus terugstoot van een klap) ----------
     const beforeX = this.position.x;
     const beforeZ = this.position.z;
-    this.velocity.copy(dir).multiplyScalar(speed).add(this.knockback);
+    this.velocity.copy(dir).multiplyScalar(this.slowT > 0 ? speed * 0.35 : speed).add(this.knockback);
     this.knockback.multiplyScalar(Math.exp(-8 * dt));
     this.position.addScaledVector(this.velocity, dt);
 
-    if (type.flies) this.position.y = Math.max(0.4, this.position.y); // zweven, maar niet door de grond
-    else this.position.y = 0;
+    if (type.flies) this.position.y = Math.max((this.floor ?? 0) + 0.4, this.position.y); // zweven, maar niet door de grond
+    else this.position.y = this.floor ?? 0;
     this.pushOutOfBlocks(ctx.colliders); // niemand loopt (of zweeft) door muren, bomen en stenen
     this.clampToBounds(ctx.bounds);
 
@@ -808,7 +809,7 @@ class Enemy {
   fitPatrol(colliders, bounds) {
     this.patrolChecked = true;
     const r = this.type.radius + 0.3; // een beetje ruimte over
-    const y = this.type.flies ? 1.2 : 0;
+    const y = (this.floor ?? 0) + (this.type.flies ? 1.2 : 0);
     const h = this.type.height;
     const free = (x, z) => Math.abs(x) < bounds.x - r && Math.abs(z) < bounds.z - r && !blockAt(x, z, r, y, h, colliders);
     // Kun je in een rechte lijn van a naar b lopen?
@@ -851,7 +852,7 @@ class Enemy {
     this.home.copy(this.pointA).lerp(this.pointB, 0.5);
     // Stond hij nog op zijn oude beginplek? Dan naar de nieuwe
     if (Math.hypot(this.position.x - oldA.x, this.position.z - oldA.z) < 0.01) {
-      this.position.set(this.pointA.x, this.type.flies ? 1.2 : 0, this.pointA.z);
+      this.position.set(this.pointA.x, y, this.pointA.z);
     }
   }
 
@@ -1039,9 +1040,9 @@ class Enemy {
         facePlayer(10);
         const k = 1 - Math.max(0, this.stateTimer) / LEAP_TIME;
         this.position.lerpVectors(this.leapFrom, this.leapTo, k);
-        this.position.y = 3.2 * 4 * k * (1 - k); // een boog door de lucht
+        this.position.y = (this.floor ?? 0) + 3.2 * 4 * k * (1 - k); // een boog door de lucht
         if (this.stateTimer <= 0) {
-          this.position.y = 0;
+          this.position.y = this.floor ?? 0;
           this.state = 'land';
           this.stateTimer = 0.45;
           this.leapCooldown = 3 + Math.random() * 2;
@@ -1313,6 +1314,18 @@ class Enemy {
     const r = this.type.radius;
     this.position.x = THREE.MathUtils.clamp(this.position.x, -bounds.x + r, bounds.x - r);
     this.position.z = THREE.MathUtils.clamp(this.position.z, -bounds.z + r, bounds.z - r);
+    // Op een luchteiland: niet van de rand af lopen
+    const isl = this.island;
+    if (isl) {
+      const dx = this.position.x - isl.center.x;
+      const dz = this.position.z - isl.center.z;
+      const d = Math.hypot(dx, dz);
+      const max = isl.radius - r - 0.3;
+      if (d > max) {
+        this.position.x = isl.center.x + (dx / d) * max;
+        this.position.z = isl.center.z + (dz / d) * max;
+      }
+    }
   }
 }
 

@@ -22,6 +22,53 @@ const VILLAGERS = [
   ['Idle_FoldArms_Loop', -9, 58, 30, 0xa0c0a0, 0x3a6a3a],
 ];
 
+// Dragers: ze lopen heen en weer door het dorp met een krat, een zak, een mand of een pompoen.
+// [route (punten in het dorp), wat ze dragen, kleur lijf, kleur gewrichten]. Kom je in de weg staan, dan wachten ze en knikken ze gedag.
+const WALKERS = [
+  [[[-10, 62], [-14, 66], [-18, 64.5], [-16, 59.5], [-11, 60]], 'krat', 0xd8c8a0, 0x7a5a3a],
+  [[[-13, 52], [-15.5, 57], [-12, 64], [-12, 69.5]], 'groente', 0xa8d888, 0x4a6a2a],
+  [[[-20.5, 73.5], [-19.5, 70], [-17, 64], [-5, 63], [-3, 59.5]], 'hout', 0xe0b890, 0x6a3a2a],
+  [[[2, 64], [6, 71], [2, 78], [-4, 72]], 'pompoen', 0xc8b0e0, 0x5a3a7a],
+  [[[-6, 66], [-1, 61], [3, 58]], 'zak', 0xb0c8e0, 0x3a4a6a],
+];
+const WALK_SPEED = 1.15; // meter per seconde (past bij de loop-animatie)
+
+/** Wat een drager vasthoudt (een simpel modelletje). */
+function makeLoad(kind) {
+  const g = new THREE.Group();
+  const m = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.8, flatShading: true, ...extra });
+  if (kind === 'krat' || kind === 'groente') {
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.32, 0.36), m(0xb08050));
+    g.add(crate);
+    if (kind === 'groente') {
+      for (let i = 0; i < 5; i++) {
+        const veg = new THREE.Mesh(new THREE.IcosahedronGeometry(0.08, 0), m(i % 2 ? 0xff7a2a : 0x5ab83a));
+        veg.position.set(-0.16 + i * 0.08, 0.2, (i % 2) * 0.08 - 0.04);
+        g.add(veg);
+      }
+    }
+  } else if (kind === 'hout') {
+    for (let i = 0; i < 3; i++) {
+      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.6, 7), m(0x7a5232));
+      log.rotation.z = Math.PI / 2;
+      log.position.set(0, (i === 2 ? 0.12 : 0), i === 2 ? 0 : i * 0.14 - 0.07);
+      g.add(log);
+    }
+  } else if (kind === 'pompoen') {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), m(0xff8a1a));
+    p.scale.y = 0.8;
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.1, 5), m(0x4a7a2a));
+    stem.position.y = 0.2;
+    g.add(p, stem);
+  } else {
+    const sack = new THREE.Mesh(new THREE.SphereGeometry(0.24, 9, 7), m(0xd8c090));
+    sack.scale.set(1, 1.15, 0.8);
+    g.add(sack);
+  }
+  g.traverse((c) => (c.castShadow = !!c.isMesh));
+  return g;
+}
+
 // Een akkertje met plantjes (bij de boeren), een boomstronk om op te hakken en een stapel hout
 // (allemaal binnen het dorp: daar groeien geen bomen en ligt het pad niet)
 const FIELD = { x: -13, z: 47, w: 6, d: 5 };
@@ -43,6 +90,7 @@ export class Villagers {
     }
     this.buildField(r);
     this.buildBoard(r, colliders);
+    this.walkers = [];
     loadGLB('models/extra/pop.glb').then((gltf) => {
       for (const [anim, x, z, deg, body, joints] of VILLAGERS) {
         const clip = gltf.animations.find((c) => c.name === anim);
@@ -71,7 +119,94 @@ export class Villagers {
         action.time = Math.random() * clip.duration; // niet allemaal tegelijk
         this.list.push({ holder, mixer });
       }
+      this.buildWalkers(gltf, r);
     }).catch(() => {});
+  }
+
+  /** Dragers die heen en weer door het dorp lopen (met de loop-met-iets-in-je-handen-animatie). */
+  buildWalkers(gltf, r) {
+    const carry = gltf.animations.find((c) => c.name === 'Walk_Carry_Loop');
+    const nod = gltf.animations.find((c) => c.name === 'Yes');
+    if (!carry) return;
+    for (const [route, load, body, joints] of WALKERS) {
+      const model = cloneSkinned(gltf.scene);
+      model.traverse((c) => {
+        if (!c.isMesh) return;
+        c.castShadow = true;
+        c.frustumCulled = false;
+        c.material = c.material.clone();
+        c.material.color.set(c.material.name === 'M_Joints' ? joints : body);
+      });
+      model.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(model);
+      model.scale.setScalar(1.75 / (box.max.y - box.min.y));
+      const holder = new THREE.Group();
+      holder.add(model);
+      const points = route.map(([x, z]) => {
+        const [wx, wz] = r.t(x, z);
+        return new THREE.Vector3(wx, 0, wz);
+      });
+      holder.position.copy(points[0]);
+      this.scene.add(holder);
+      const mixer = new THREE.AnimationMixer(model);
+      const walk = mixer.clipAction(carry);
+      walk.play();
+      walk.time = Math.random() * carry.duration;
+      const greet = nod ? mixer.clipAction(nod) : null;
+      // Het ding dat hij draagt: tussen zijn handen (we rekenen uit waar die zitten in de loop-houding)
+      mixer.update(0);
+      model.updateMatrixWorld(true);
+      const handR = model.getObjectByName('hand_r');
+      const handL = model.getObjectByName('hand_l');
+      const item = makeLoad(load);
+      if (handR && handL) {
+        const mid = handR.getWorldPosition(new THREE.Vector3()).add(handL.getWorldPosition(new THREE.Vector3())).multiplyScalar(0.5);
+        handR.add(item);
+        item.position.copy(handR.worldToLocal(mid));
+        item.quaternion.copy(handR.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(holder.getWorldQuaternion(new THREE.Quaternion())));
+        item.scale.divideScalar(handR.getWorldScale(new THREE.Vector3()).x);
+      }
+      this.walkers.push({ holder, mixer, walk, greet, points, next: 1, dir: 1, loop: route.length > 4, wait: 0, greeting: false });
+    }
+  }
+
+  /** Een drager een stukje verder laten lopen (of wachten als jij in de weg staat). */
+  updateWalker(w, dt, playerPos) {
+    const pos = w.holder.position;
+    const goal = w.points[w.next];
+    const to = goal.clone().sub(pos);
+    const dist = to.length();
+    // Sta jij vlak voor hem? Dan wacht hij even en knikt hij gedag
+    const toPlayer = playerPos.clone().sub(pos).setY(0);
+    const blocked = playerPos.y < 1.5 && toPlayer.length() < 1.6 && toPlayer.dot(to) > 0;
+    if (blocked !== w.greeting && w.greet) {
+      w.greeting = blocked;
+      if (blocked) {
+        w.walk.fadeOut(0.25);
+        w.greet.reset().fadeIn(0.25).play();
+      } else {
+        w.greet.fadeOut(0.3);
+        w.walk.reset().fadeIn(0.3).play();
+      }
+    }
+    if (blocked) {
+      // Kijk naar de speler
+      const yaw = Math.atan2(toPlayer.x, toPlayer.z);
+      w.holder.rotation.y += Math.atan2(Math.sin(yaw - w.holder.rotation.y), Math.cos(yaw - w.holder.rotation.y)) * Math.min(1, 4 * dt);
+      return;
+    }
+    if (dist < 0.2) {
+      // Volgende punt: rondjes lopen, of heen en terug
+      if (w.loop) w.next = (w.next + 1) % w.points.length;
+      else {
+        if (w.next + w.dir >= w.points.length || w.next + w.dir < 0) w.dir = -w.dir;
+        w.next += w.dir;
+      }
+      return;
+    }
+    pos.addScaledVector(to.divideScalar(dist), Math.min(dist, WALK_SPEED * dt));
+    const yaw = Math.atan2(goal.x - pos.x, goal.z - pos.z);
+    w.holder.rotation.y += Math.atan2(Math.sin(yaw - w.holder.rotation.y), Math.cos(yaw - w.holder.rotation.y)) * Math.min(1, 6 * dt);
   }
 
   /** Een bruin akkertje met rijen groene plantjes, en een stapel boomstammen. */
@@ -148,6 +283,11 @@ export class Villagers {
   update(dt, playerPos) {
     for (const v of this.list) {
       if (v.holder.position.distanceToSquared(playerPos) < 60 * 60) v.mixer.update(dt);
+    }
+    for (const w of this.walkers) {
+      if (w.holder.position.distanceToSquared(playerPos) > 90 * 90) continue;
+      this.updateWalker(w, dt, playerPos);
+      w.mixer.update(dt);
     }
   }
 }

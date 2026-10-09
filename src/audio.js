@@ -186,6 +186,15 @@ const SOUNDS = {
   whoosh: () => noise({ from: 200, to: 3000, duration: 0.9, volume: 0.35, q: 1 }),
   // "Ting!": Omars zwaard glinstert vlak voordat hij aanvalt (dan weet je: nu opletten!)
   glint: () => tone({ type: 'triangle', from: 1900, to: 2600, duration: 0.14, volume: 0.13 }),
+  // Bliksemzwaard: een korte elektrische "ZZAP"
+  zap: () => {
+    noise({ from: 3000, to: 900, duration: 0.18, volume: 0.3, q: 4 });
+    tone({ type: 'sawtooth', from: 900, to: 120, duration: 0.16, volume: 0.1 });
+  },
+  // Gif: een zacht borrelend geluidje
+  bubble: () => [0, 0.07].forEach((d) => tone({ type: 'sine', from: 300, to: 620, duration: 0.07, volume: 0.08, delay: d })),
+  // Wind (Wolkenspeer, het Windaltaar)
+  gust: () => noise({ from: 400, to: 1800, duration: 0.45, volume: 0.25, q: 0.8 }),
   // Menu's: klikje, openen (omhoog) en dicht (omlaag)
   click: () => tone({ type: 'square', from: 1300, to: 1100, duration: 0.035, volume: 0.05 }),
   menuOpen: () => {

@@ -452,6 +452,7 @@ export class OmarFighter extends Boss {
     p.animator.update(dt, { moving: false, onGround: true, attack: null, pickup: null, drink: null, spin: false, tuck: false, ...s });
     patch?.(p.rig);
     p.rig.apply?.();
+    p.clips?.apply(dt, null); // geen echte animaties tijdens een eigen houding
   }
 
   animateMode(dt) {

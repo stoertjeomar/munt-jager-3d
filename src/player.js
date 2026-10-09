@@ -7,6 +7,7 @@ import { CharacterAnimator } from './animator.js';
 import { HELMETS, createHelmetMesh } from './gear.js';
 import { POWERS } from './stats.js';
 import { createMixamoRig } from './mixamo.js';
+import { ClipPlayer } from './retarget.js';
 
 // Personages waaruit je kunt kiezen (aan het begin van het spel, of later in het startscherm met Esc)
 // Alle personages. Alleen Eve en Soldaat kun je zelf spelen; de rest woont in de wereld als NPC (zie npcs.js).
@@ -41,6 +42,27 @@ const SLAM_SPEED = 32;
 const MODEL_TURN = 0; // kijkt het model de verkeerde kant op? Probeer Math.PI of Math.PI / 2
 const MODEL_HAND = [-0.34, 0.55, 0.14]; // alleen voor modellen zonder rig: waar de rechterhand zit
 const PICKUP_TIME = 0.6; // hoe lang bukken en oppakken duurt (seconden)
+const FLIP_TIME = 0.45; // salto bij de dubbele sprong
+
+// Echte animaties (uit de Universal Animation Library 2, zie retarget.js) voor als je iets doet.
+// Lopen en rennen doet onze eigen animator; deze komen er bovenop.
+//   name = animatie   from/to = welk stuk (0 = begin, 1 = eind)   time = hoe lang (seconden)
+//   mask = welke botten ('full' = alles, 'upper' = alleen bovenlijf)   root = mogen de heupen zakken/verschuiven
+const CLIPS = {
+  slashA: { name: 'Sword_Regular_A', from: 0, to: 1 }, // slag van rechtsonder naar linksboven
+  slashB: { name: 'Sword_Regular_B', from: 0, to: 1 }, // slag van boven naar beneden
+  smash: { name: 'Sword_Heavy_Combo', from: 0.14, to: 0.3 }, // zware wapens: hoog optillen en neer meppen
+  dash: { name: 'Sword_Dash', from: 0.3, to: 0.6, root: 'none' }, // uitval naar voren
+  jump: { name: 'NinjaJump_Start', from: 0.14, to: 0.45, time: 0.28, root: 'none' }, // afzetten
+  air: { name: 'NinjaJump_Idle_Loop', from: 0, to: 1, time: 2, root: 'none', loop: true }, // knie omhoog in de lucht
+  land: { name: 'NinjaJump_Land', from: 0.12, to: 0.62, time: 0.5, root: 'down' }, // door de knieën na een hoge sprong
+  heroLand: { name: 'NinjaJump_Land', from: 0.1, to: 0.62, time: 0.7, root: 'down' }, // na de grondslag
+  hurt: { name: 'Hit_Knockback', from: 0, to: 0.14, time: 0.28, mask: 'upper', weight: 0.85 }, // auw!
+  die: { name: 'Hit_Knockback', from: 0, to: 0.98, time: 1.2, root: 'all' }, // achterover vallen
+  drink: { name: 'Consume', from: 0.05, to: 0.95, mask: 'upper', mirror: true }, // drinken met je linkerhand
+  pickup: { name: 'Chest_Open', from: 0, to: 0.6, root: 'down', weight: 0.85 }, // bukken
+};
+const HEAVY = ['club', 'hamer', 'bijl'];
 
 /** Kopie van een model; skeletten (Mixamo) hebben een speciale kopie nodig. */
 function cloneModel(scene) {
@@ -164,6 +186,12 @@ export class Player {
     this.airJumps = 0;
     this.airDashes = 0;
     this.onGrab = null;
+    this.oneShot = null; // een korte echte animatie (springen, landen, auw)
+    this.flipTimer = 0;
+    this.combo = 0;
+    this.clock ??= 0; // speeltijd (seconden), voor combo's
+    this.lastSwingEnd = -1;
+    this.deathTime = 0;
     this.events = []; // bijv. 'roll', 'dash', 'spinHit', 'slamLand', 'heal' — main.js reageert daarop
     this.mesh.visible = true;
     this.body.rotation.set(0, 0, 0);
@@ -180,6 +208,7 @@ export class Player {
   useRig(rig) {
     this.rig = rig;
     this.animator = new CharacterAnimator(rig);
+    this.clips = null;
     this.sword.attachTo(rig.gripParent ?? rig.handR, rig.unit);
   }
 
@@ -197,7 +226,7 @@ export class Player {
   /** Schade die jouw wapen nu doet (met je level en Vuurzwaard). */
   get attackDamage() {
     const fire = this.fireTimer > 0 ? 1.5 : 1;
-    return Math.round(this.sword.damage * this.stats.damageMultiplier * fire);
+    return Math.round(this.sword.damage * this.stats.damageMultiplier * fire * (this.boost?.damage ?? 1));
   }
 
   /** Een 3D-personage laden. */
@@ -250,6 +279,10 @@ export class Player {
           this.useRig(mixamoRig);
           this.headSlot = mixamoRig.headSlot;
           this.setHelmet(this.helmetKey);
+          // Echte animaties erbij (als die geladen zijn)
+          ClipPlayer.create(mixamoRig.skeleton).then((clips) => {
+            if (token === this.loadToken && this.rig === mixamoRig && clips.ok) this.clips = clips;
+          }).catch((e) => console.info('Geen echte animaties:', e));
           return;
         }
 
@@ -285,7 +318,12 @@ export class Player {
   tryAttack() {
     if (this.isBusy || this.sword.attackProgress !== null) return false;
     if (!this.useStamina(this.sword.stamina)) return false;
-    return this.sword.swing();
+    if (!this.sword.swing()) return false;
+    // Snel achter elkaar slaan = een combo: om en om een andere slag
+    const now = this.clock;
+    this.combo = now - this.lastSwingEnd < 0.45 ? this.combo + 1 : 0;
+    this.lastSwingEnd = now + this.sword.swingTime;
+    return true;
   }
 
   tryRoll(direction) {
@@ -364,6 +402,7 @@ export class Player {
     this.invulnerable = INVULNERABLE_TIME;
     this.drinkTimer = 0; // drinken wordt onderbroken
     this.pickupTimer = 0;
+    this.playOnce('hurt');
 
     // Wegstoten, met een klein sprongetje
     const away = this.position.clone().sub(from).setY(0);
@@ -396,6 +435,7 @@ export class Player {
     if (hasMove) move.normalize();
 
     // Timers
+    this.clock += dt;
     for (const key of ['invulnerable', 'dashCooldown', 'spinCooldown', 'fireCooldown', 'fireTimer']) this[key] = Math.max(0, this[key] - dt);
     this.sword.update(dt);
 
@@ -413,7 +453,7 @@ export class Player {
     this.mesh.visible = this.invulnerable <= 0 || this.rollTimer > 0 || Math.floor(this.invulnerable * 14) % 2 === 0;
 
     // ---------- Snelheid bepalen ----------
-    let speed = SPEED * this.stats.speedMultiplier * (sprinting ? SPRINT : 1);
+    let speed = SPEED * this.stats.speedMultiplier * (this.boost?.speed ?? 1) * (sprinting ? SPRINT : 1);
     if (this.sword.attackProgress !== null) speed *= 0.35; // langzamer tijdens een slag
     if (this.drinkTimer > 0 || this.pickupTimer > 0) speed *= 0.3;
     let horizontal = move.clone().multiplyScalar(speed);
@@ -463,10 +503,12 @@ export class Player {
         this.velocity.y = JUMP_SPEED;
         this.onGround = false;
         this.jumped = true;
+        this.playOnce('jump');
       } else if (this.stats.hasPower('doubleJump') && this.airJumps === 0 && this.useStamina(POWERS.doubleJump.stamina)) {
         this.velocity.y = JUMP_SPEED * 0.9;
         this.airJumps++;
         this.jumped = true;
+        this.flipTimer = FLIP_TIME; // salto!
         this.events.push('doubleJump');
       }
     }
@@ -485,6 +527,7 @@ export class Player {
 
     const prevY = pos.y;
     const wasInAir = !this.onGround;
+    const fallSpeed = -this.velocity.y;
     pos.y += this.velocity.y * dt;
     this.onGround = false;
     this.resolveVertical(prevY, colliders);
@@ -494,7 +537,21 @@ export class Player {
       if (this.slamming) {
         this.slamming = false;
         this.events.push('slamLand');
-      } else if (wasInAir) this.events.push('land');
+        this.playOnce('heroLand'); // superheldenlanding
+      } else if (wasInAir) {
+        this.events.push('land');
+        if (fallSpeed > 13 && !hasMove) this.playOnce('land');
+        else if (this.oneShot?.key === 'jump') this.oneShot = null;
+      }
+      this.flipTimer = 0;
+    }
+
+    // Salto bij de dubbele sprong (het hele lijf draait één keer voorover)
+    if (this.flipTimer > 0) {
+      this.flipTimer = Math.max(0, this.flipTimer - dt);
+      const k = 1 - this.flipTimer / FLIP_TIME;
+      this.body.rotation.x = (k * k * (3 - 2 * k)) * Math.PI * 2;
+      if (this.flipTimer <= 0) this.body.rotation.x = 0;
     }
 
     this.updateDrink(dt);
@@ -542,7 +599,76 @@ export class Player {
     if (this.rig) {
       this.animator.update(dt, { moving: false, vy: 0, turn: 0, run: false, onGround: true, attack: null, pickup: null, drink: this.drinkTimer > 0 ? 1 - this.drinkTimer / DRINK.time : null, spin: false, tuck: false, ride: true });
       this.rig.apply?.();
+      this.oneShot = null;
+      this.clips?.apply(dt, null);
     }
+  }
+
+  /** Een korte echte animatie één keer afspelen (zie CLIPS), bijv. 'hurt' of 'land'. */
+  playOnce(key) {
+    if (!this.clips) return;
+    this.oneShot = { key, t: 0, restart: true };
+  }
+
+  /** Hoe je eruitziet als je net dood bent: achterover vallen en blijven liggen. */
+  animateDeath(dt) {
+    if (!this.rig) return;
+    this.deathTime += dt;
+    this.body.rotation.set(0, 0, 0);
+    this.animator.update(dt, { moving: false, vy: 0, turn: 0, run: false, onGround: true, attack: null, pickup: null, drink: null, spin: false, tuck: false });
+    this.rig.apply?.();
+    const c = CLIPS.die;
+    const k = Math.min(1, this.deathTime / c.time);
+    this.clips?.apply(dt, this.clipWant(c, k, { fadeIn: 0.05 }));
+  }
+
+  /** Wat de ClipPlayer moet afspelen voor animatie c op moment k (0 → 1). */
+  clipWant(c, k, extra) {
+    const clip = this.clips;
+    const dur = clip.duration(c.name);
+    let f = c.from + (c.to - c.from) * k;
+    if (c.loop) f %= 1;
+    return { name: c.name, time: f * dur, weight: c.weight ?? 1, mask: c.mask ?? 'full', root: c.root ?? 'all', mirror: c.mirror, ...extra };
+  }
+
+  /** Welke echte animatie er nu bij hoort (of null: dan alleen onze eigen animator). */
+  chooseClip(dt) {
+    const sword = this.sword;
+    const moving = this.moving && this.onGround;
+    // Een korte animatie die nog loopt (springen, landen, geraakt worden)
+    let once = null;
+    if (this.oneShot) {
+      const c = CLIPS[this.oneShot.key];
+      this.oneShot.t += dt;
+      const k = this.oneShot.t / c.time;
+      const cancel = (this.oneShot.key === 'land' || this.oneShot.key === 'heroLand') && this.moving;
+      if (k >= 1 || cancel) this.oneShot = null;
+      else {
+        once = this.clipWant(c, k, { restart: this.oneShot.restart });
+        this.oneShot.restart = false;
+      }
+    }
+    if (this.rollTimer > 0 || this.spinTimer > 0 || this.flipTimer > 0 || this.slamming) return null; // die doet onze animator
+    if (sword.attackProgress !== null) {
+      const key = HEAVY.includes(sword.weaponKey) ? 'smash' : this.combo % 2 ? 'slashB' : 'slashA';
+      const restart = this.lastClipSwing !== sword.swingId;
+      this.lastClipSwing = sword.swingId;
+      return this.clipWant(CLIPS[key], sword.attackProgress, {
+        restart,
+        mask: moving || !this.onGround ? 'upper' : 'full', // lopend slaan: je benen lopen gewoon door
+        fadeIn: 0.05,
+        fadeOut: 0.18,
+      });
+    }
+    if (this.dashTimer > 0) return this.clipWant(CLIPS.dash, 1 - this.dashTimer / DASH.time, { fadeIn: 0.03, fadeOut: 0.2 });
+    if (this.drinkTimer > 0) return this.clipWant(CLIPS.drink, 1 - this.drinkTimer / DRINK.time, { fadeIn: 0.15, fadeOut: 0.2 });
+    if (this.pickupTimer > 0) return this.clipWant(CLIPS.pickup, 1 - this.pickupTimer / PICKUP_TIME, { mask: moving ? 'upper' : 'full', fadeIn: 0.1 });
+    if (once) return once;
+    // In de lucht na een sprong: knie omhoog zolang je stijgt
+    if (!this.onGround && this.velocity.y > -3 && this.airJumps === 0) {
+      return this.clipWant(CLIPS.air, (this.clock / CLIPS.air.time) % 1, { weight: 0.8, fadeIn: 0.12, fadeOut: 0.3 });
+    }
+    return null;
   }
 
   updateAnimation(dt) {
@@ -571,9 +697,10 @@ export class Player {
         pickup,
         drink,
         spin: this.spinTimer > 0,
-        tuck: this.rollTimer > 0 || this.dashTimer > 0 || this.slamming,
+        tuck: this.rollTimer > 0 || (this.dashTimer > 0 && !this.clips) || this.slamming || this.flipTimer > 0,
       });
       this.rig.apply?.(); // Mixamo-skelet bijwerken
+      if (this.clips) this.clips.apply(dt, this.chooseClip(dt)); // en de echte animaties erover
       return;
     }
     if (!this.mixer) {

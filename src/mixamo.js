@@ -36,6 +36,20 @@ export function createMixamoRig(model) {
   // Draaiingen in rust (T-pose)
   const rest = {};
   for (const [key, b] of Object.entries(bones)) rest[key] = charQ(b);
+  // Ook van alle andere grote botten (voor echte animaties uit een bestand, zie retarget.js)
+  const MIXAMO_BONES = ['Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'Head', 'LeftShoulder', 'LeftArm', 'LeftForeArm', 'LeftHand',
+    'RightShoulder', 'RightArm', 'RightForeArm', 'RightHand', 'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'LeftToeBase', 'RightUpLeg', 'RightLeg', 'RightFoot', 'RightToeBase'];
+  const restAll = {};
+  const restLocal = {};
+  const restPos = {};
+  const modelQInv0 = modelQInv.clone();
+  for (const name of MIXAMO_BONES) {
+    const b = bone(name);
+    if (!b) continue;
+    restAll[name] = charQ(b);
+    restLocal[name] = b.quaternion.clone();
+    restPos[name] = b.getWorldPosition(new THREE.Vector3()).sub(model.getWorldPosition(new THREE.Vector3())).applyQuaternion(modelQInv0);
+  }
   // T-pose → armen naar beneden laten hangen
   const down = {
     armL: Q().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2),
@@ -82,6 +96,22 @@ export function createMixamoRig(model) {
     gripParent: handFrame,
     headSlot,
     unit: 1 / worldScale,
+    // Voor echte animaties (retarget.js): de botten, hoe ze in rust stonden, en hulpjes om ze te draaien
+    skeleton: {
+      model,
+      bone,
+      restAll,
+      restLocal,
+      restPos,
+      handFrame,
+      charQ: (obj) => {
+        modelQInv = model.getWorldQuaternion(Q()).invert();
+        return charQ(obj);
+      },
+      get baseY() {
+        return baseY ?? model.position.y;
+      },
+    },
     apply() {
       model.updateMatrixWorld(true);
       modelQInv = model.getWorldQuaternion(Q()).invert();
