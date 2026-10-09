@@ -4,8 +4,37 @@ import * as THREE from 'three';
 // schokgolven op de grond en het schudden van de camera.
 
 const MAX_PARTICLES = 400;
+const MAX_PUFFS = 320; // zachte wolkjes (Sky, NightWalker, het Wolkenrijk)
 const GRAVITY = 14;
 const BOLT_GEO = new THREE.CylinderGeometry(1, 1, 1, 5, 1, true);
+
+// Een zacht rond wolkje: een stip die naar de rand toe doorzichtig wordt, met bovenaan een beetje licht.
+// Alle wolkjes samen zijn één "Points"-ding (dat is snel); elk wolkje heeft een eigen grootte, kleur en doorzichtigheid.
+const PUFF_VERTEX = /* glsl */ `
+attribute float aSize;
+attribute float aAlpha;
+attribute vec3 aColor;
+uniform float scale;
+varying float vAlpha;
+varying vec3 vColor;
+void main() {
+  vAlpha = aAlpha;
+  vColor = aColor;
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  gl_PointSize = aSize * scale / max(0.1, -mv.z);
+  gl_Position = projectionMatrix * mv;
+}`;
+const PUFF_FRAGMENT = /* glsl */ `
+varying float vAlpha;
+varying vec3 vColor;
+void main() {
+  vec2 p = gl_PointCoord - 0.5;
+  float d = length(p);
+  float a = smoothstep(0.5, 0.12, d) * vAlpha;
+  if (a < 0.01) discard;
+  float light = 1.08 - p.y * 0.5; // bovenkant iets lichter (gl_PointCoord.y loopt naar beneden)
+  gl_FragColor = vec4(vColor * light, a);
+}`;
 
 export class Effects {
   constructor(scene) {
@@ -23,6 +52,24 @@ export class Effects {
     this.particleMesh.count = 0;
     this.particleMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_PARTICLES * 3), 3);
     scene.add(this.particleMesh);
+
+    // ---------- Wolkjes: zachte ronde puffjes (zie puff) ----------
+    this.puffs = [];
+    const puffGeo = new THREE.BufferGeometry();
+    puffGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAX_PUFFS * 3), 3));
+    puffGeo.setAttribute('aSize', new THREE.BufferAttribute(new Float32Array(MAX_PUFFS), 1));
+    puffGeo.setAttribute('aAlpha', new THREE.BufferAttribute(new Float32Array(MAX_PUFFS), 1));
+    puffGeo.setAttribute('aColor', new THREE.BufferAttribute(new Float32Array(MAX_PUFFS * 3), 3));
+    this.puffMesh = new THREE.Points(puffGeo, new THREE.ShaderMaterial({
+      uniforms: { scale: { value: 500 } },
+      vertexShader: PUFF_VERTEX,
+      fragmentShader: PUFF_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+    }));
+    this.puffMesh.frustumCulled = false;
+    this.puffMesh.renderOrder = 2;
+    scene.add(this.puffMesh);
 
     this.texts = []; // zwevende getallen
     this.rings = []; // schokgolven
@@ -54,6 +101,26 @@ export class Effects {
         age: 0,
         gravity,
         color: new THREE.Color(color).offsetHSL(0, 0, (Math.random() - 0.5) * 0.2),
+      });
+    }
+  }
+
+  /**
+   * Zachte wolkjes die opbollen en weer vervagen (in plaats van blokjes).
+   * @param {object} opts  count, speed, size (meter), life, up (omhoog), grow (zoveel keer groter aan het eind), opacity
+   */
+  puff(pos, color, { count = 1, speed = 0.6, size = 0.6, life = 0.9, up = 0.3, grow = 1.6, opacity = 0.85 } = {}) {
+    for (let i = 0; i < count && this.puffs.length < MAX_PUFFS; i++) {
+      const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.4, Math.random() - 0.5).normalize();
+      this.puffs.push({
+        pos: pos.clone(),
+        vel: dir.multiplyScalar(speed * (0.4 + Math.random() * 0.6)).add(new THREE.Vector3(0, up, 0)),
+        size: size * (0.7 + Math.random() * 0.6),
+        grow,
+        life: life * (0.8 + Math.random() * 0.4),
+        age: 0,
+        opacity,
+        color: new THREE.Color(color).offsetHSL(0, 0, (Math.random() - 0.5) * 0.08),
       });
     }
   }
@@ -194,6 +261,31 @@ export class Effects {
     this.particleMesh.instanceMatrix.needsUpdate = true;
     if (this.particleMesh.instanceColor) this.particleMesh.instanceColor.needsUpdate = true;
 
+    // Wolkjes: zweven, worden groter en vervagen (zacht erin, zacht eruit)
+    const geo = this.puffMesh.geometry;
+    const at = geo.attributes;
+    n = 0;
+    for (let i = this.puffs.length - 1; i >= 0; i--) {
+      const p = this.puffs[i];
+      p.age += dt;
+      if (p.age >= p.life) {
+        this.puffs.splice(i, 1);
+        continue;
+      }
+      p.vel.multiplyScalar(Math.exp(-2.5 * dt));
+      p.pos.addScaledVector(p.vel, dt);
+      const k = p.age / p.life;
+      at.position.setXYZ(n, p.pos.x, p.pos.y, p.pos.z);
+      at.aSize.setX(n, p.size * (1 + (p.grow - 1) * k));
+      at.aAlpha.setX(n, p.opacity * Math.min(1, k * 6) * (1 - k * k));
+      at.aColor.setXYZ(n, p.color.r, p.color.g, p.color.b);
+      n++;
+    }
+    geo.setDrawRange(0, n);
+    for (const key of ['position', 'aSize', 'aAlpha', 'aColor']) at[key].needsUpdate = true;
+    // Hoe groot een wolkje van 1 meter op het scherm is (de camera kijkt 60 graden wijd)
+    this.puffMesh.material.uniforms.scale.value = window.innerHeight * Math.min(2, window.devicePixelRatio || 1) * 0.866;
+
     // Zwevende teksten: omhoog en vervagen, met een klein "plop"-effect aan het begin
     for (let i = this.texts.length - 1; i >= 0; i--) {
       const t = this.texts[i];
@@ -267,6 +359,7 @@ export class Effects {
 
   clear() {
     this.particles.length = 0;
+    this.puffs.length = 0;
     for (const w of this.warnings) this.scene.remove(w.group);
     this.warnings.length = 0;
     for (const t of this.texts) this.scene.remove(t.sprite);

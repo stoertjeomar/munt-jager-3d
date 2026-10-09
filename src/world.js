@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { LEVEL, REGIONS, REGION_WIDTH, regionIndexAt, GATE_X } from './levels.js';
 import { createCastleWorld } from './castle.js';
+import { createSkyWorld } from './skyworld.js';
 
 // De open wereld: grond, paden, huizen (waar je in kunt!), ruïnes, natuur,
 // de boss-arena's, de checkpoints en de kisten. Wat er in elk gebied staat, staat in levels.js.
@@ -14,9 +15,10 @@ const v3 = (x, z, y = 0) => new THREE.Vector3(x, y, z);
 export const CHECKPOINTS = LEVEL.checkpoints.map(([id, name, x, z, y = 0]) => ({ id, name, position: v3(x, z, y) }));
 
 // De boss-arena's: aan het eind van het pad van elk gebied één. `open` = aan welke kant de ingang is (+z of -z).
-// In Omars kasteel staat er één arena midden op de binnenplaats.
+// In Omars kasteel en in het Wolkenrijk staat er één arena in het midden.
+// kind 'kerkhof' = het Knekelhof van Rames: geen pilaren maar grafstenen, met de poort aan de kant van `gate` (een hoek).
 export const ARENAS = LEVEL.arenas
-  ? LEVEL.arenas.map((a) => ({ id: a.id, center: v3(a.x, a.z), radius: a.radius, open: a.open, region: a.region }))
+  ? LEVEL.arenas.map((a) => ({ id: a.id, name: a.name, center: v3(a.x, a.z), radius: a.radius, open: a.open, region: a.region, kind: a.kind, gate: a.gate }))
   : [{ id: LEVEL.boss, center: v3(LEVEL.arena.x, LEVEL.arena.z), radius: LEVEL.arena.radius, open: 1 }];
 
 export const CHESTS = LEVEL.chests.map(([id, x, y, z, item]) => ({ id, position: v3(x, z, y), item }));
@@ -24,6 +26,32 @@ export const CHESTS = LEVEL.chests.map(([id, x, y, z, item]) => ({ id, position:
 export const VILLAGE_CENTER = LEVEL.village ? v3(LEVEL.village.center[0], LEVEL.village.center[1]) : null;
 // De Arena (een rond colosseum naast Muntdorp, zie arena.js): daar komen geen bomen, stenen of gras
 export const COLOSSEUM = LEVEL.colosseum ? { center: v3(LEVEL.colosseum.center[0], LEVEL.colosseum.center[1]), radius: LEVEL.colosseum.radius } : null;
+
+// Het Knekelhof: zoveel dingen (grafstenen, kruizen, kapotte pilaren, vuurschalen) staan er in de kring eromheen
+const GRAVE_RING = 24;
+const GRAVE_BRAZIERS = [3, 8, 15, 20]; // op deze plekken in de kring staat een vuurschaal met groen vuur
+
+/**
+ * Waar alles staat op het Knekelhof (het kerkhof van Rames). world.js bouwt het hiermee, en rames.js en
+ * ramesFighter.js gebruiken dezelfde plekken voor het gevecht en de filmpjes.
+ *   at(vooruit, rechts, hoogte) = een plek gezien vanaf het midden: "vooruit" is richting de poort
+ */
+export function graveyardLayout(arena) {
+  const forward = new THREE.Vector3(Math.sin(arena.gate), 0, Math.cos(arena.gate)); // van het midden naar de poort
+  const side = new THREE.Vector3(forward.z, 0, -forward.x);
+  const at = (fwd, right = 0, y = 0) => arena.center.clone().addScaledVector(forward, fwd).addScaledVector(side, right).setY(y);
+  const R = arena.radius;
+  const ringAngle = (i) => arena.gate + 0.17 + ((i + 1) * (Math.PI * 2 - 0.34)) / (GRAVE_RING + 1);
+  const ring = (i, y = 0) => arena.center.clone().add(new THREE.Vector3(Math.sin(ringAngle(i)), 0, Math.cos(ringAngle(i))).multiplyScalar(R + 1.5)).setY(y);
+  return {
+    forward, side, at, ring, ringAngle,
+    yaw: arena.gate, // zo kijkt Rames vanaf zijn troon: naar de poort
+    throne: at(-(R - 2.6)), // de troon staat tegenover de poort
+    fightSpot: at(R * 0.45), // hier sta jij als het gevecht begint
+    graves: [[0.12, -0.55], [0.12, 0.55], [0.52, -0.6], [0.52, 0.6], [-0.3, -0.62], [-0.3, 0.62]].map(([a, b]) => at(a * R, b * R)), // hier komen de bullys uit de grond
+    braziers: GRAVE_BRAZIERS.map((i) => ring(i, 1.7)), // de vlammen van de vuurschalen
+  };
+}
 
 // Alle paden (en de verbindingspaden tussen de gebieden) als losse lijnstukken
 const PATHS = (LEVEL.paths ?? [LEVEL.path]).flatMap((path) => path.slice(1).map((p, i) => [path[i], p]));
@@ -486,8 +514,9 @@ function createGround(scene) {
       const dist = Math.hypot(x - a.center.x, z - a.center.z);
       if (dist < a.radius + 1) {
         const k = Math.min(1, (a.radius + 1 - dist) / 2);
-        wgt = wgt.map((v, j) => v * (1 - k) + (j === 3 ? k : 0));
-        c.lerp(new THREE.Color(0.85, 0.85, 0.85), k);
+        const grave = a.kind === 'kerkhof'; // het Knekelhof: donkere, omgewoelde aarde in plaats van een stenen vloer
+        wgt = wgt.map((v, j) => v * (1 - k) + (j === (grave ? 1 : 3) ? k : 0));
+        c.lerp(grave ? new THREE.Color(0.42, 0.38, 0.46) : new THREE.Color(0.85, 0.85, 0.85), k);
       }
     }
     colors.push(c.r, c.g, c.b);
@@ -1150,8 +1179,165 @@ function createGate(scene, colliders) {
   };
 }
 
+/**
+ * Het Knekelhof: het kerkhof van Rames. Een kring van scheve grafstenen, kruizen en kapotte pilaren, een poort
+ * met groene lantaarns, vuurschalen met groen vuur, graven waar de bullys uit komen, en achterin zijn troon van bot.
+ */
+function createGraveyard(scene, colliders, arena) {
+  const L = graveyardLayout(arena);
+  const rand = seededRandom(666);
+  const stone = texMat('wall_stone', { color: 0x8d8a9c });
+  const darkStone = texMat('wall_stone', { color: 0x4d4860 });
+  const bone = new THREE.MeshStandardMaterial({ color: 0xe6dfc8, roughness: 0.65 });
+  const iron = new THREE.MeshStandardMaterial({ color: 0x1c1a22, roughness: 0.6, metalness: 0.4 });
+  const dirt = new THREE.MeshStandardMaterial({ color: 0x3a2f2a, roughness: 1 });
+  const deadWood = new THREE.MeshStandardMaterial({ color: 0x2b2420, roughness: 1 });
+  const ghostFire = new THREE.MeshBasicMaterial({ color: 0x6dff8a, toneMapped: false });
+  const solid = (object) => {
+    object.updateMatrixWorld(true);
+    colliders.push(new THREE.Box3().setFromObject(object));
+  };
+  const mesh = (geo, material, x, y, z, parent) => {
+    const m = new THREE.Mesh(geo, material);
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    parent.add(m);
+    return m;
+  };
+  /** Een blok van donkere steen (met een textuur die netjes herhaalt). */
+  const block = (w, h, d, x, y, z, parent) => {
+    const m = texturedBox(w, h, d, darkStone, 1.4);
+    m.position.set(x, y, z);
+    parent.add(m);
+    return m;
+  };
+  /** Een groen spookvlammetje (flakkert vanzelf mee met de haardvuren). */
+  const flame = (x, y, z, size, parent) => {
+    const f = mesh(new THREE.ConeGeometry(0.34 * size, 0.95 * size, 6), ghostFire, x, y, z, parent);
+    f.castShadow = f.receiveShadow = false;
+    f.userData.noAO = true;
+    glowingFires.push(f);
+  };
+
+  // ---------- De kring: grafstenen, kruizen, kapotte pilaren en vuurschalen ----------
+  for (let i = 0; i < GRAVE_RING; i++) {
+    const item = new THREE.Group();
+    item.position.copy(L.ring(i));
+    item.rotation.y = L.ringAngle(i) + Math.PI; // voorkant naar het midden
+    scene.add(item);
+    const kind = GRAVE_BRAZIERS.includes(i) ? 'schaal' : i % 5 === 1 ? 'pilaar' : i % 3 === 0 ? 'kruis' : 'steen';
+    const tilt = (rand() - 0.5) * 0.22; // scheef gezakt
+    if (kind === 'schaal') {
+      mesh(new THREE.CylinderGeometry(0.34, 0.46, 1.1, 8), darkStone, 0, 0.55, 0, item);
+      mesh(new THREE.CylinderGeometry(0.62, 0.34, 0.34, 10), iron, 0, 1.27, 0, item);
+      flame(0, 1.85, 0, 1, item);
+    } else if (kind === 'pilaar') {
+      const h = 2 + Math.floor(rand() * 3) * 1.4;
+      block(1.2, h, 1.2, 0, h / 2, 0, item);
+    } else if (kind === 'kruis') {
+      const h = 2 + rand() * 0.6;
+      item.rotation.z = tilt;
+      mesh(new THREE.BoxGeometry(0.34, h, 0.3), stone, 0, h / 2, 0, item);
+      mesh(new THREE.BoxGeometry(1.2, 0.34, 0.3), stone, 0, h * 0.7, 0, item);
+    } else {
+      const h = 1.1 + rand() * 0.6;
+      item.rotation.z = tilt;
+      mesh(new THREE.BoxGeometry(1.05, h, 0.3), stone, 0, h / 2, 0, item);
+      const top = mesh(new THREE.CylinderGeometry(0.525, 0.525, 0.3, 14, 1, false, 0, Math.PI), stone, 0, h, 0, item); // ronde bovenkant
+      top.rotation.set(Math.PI / 2, Math.PI / 2, 0);
+    }
+    solid(item);
+  }
+
+  // ---------- De poort: twee hoge pilaren met een boog en groene lantaarns ----------
+  const gateBeam = new THREE.Group();
+  gateBeam.position.copy(arena.center).addScaledVector(L.forward, arena.radius + 1.5).setY(4.9);
+  gateBeam.rotation.y = arena.gate;
+  scene.add(gateBeam);
+  mesh(new THREE.BoxGeometry(6.6, 0.5, 0.7), darkStone, 0, 0, 0, gateBeam);
+  for (let i = -3; i <= 3; i++) mesh(new THREE.ConeGeometry(0.13, 0.7, 5), iron, i * 0.9, 0.6, 0, gateBeam); // punten op de boog
+  const skull = mesh(new THREE.SphereGeometry(0.42, 12, 10), bone, 0, -0.1, 0.36, gateBeam);
+  skull.scale.set(1, 1.1, 0.9);
+  for (const sx of [-1, 1]) mesh(new THREE.SphereGeometry(0.1, 8, 6), ghostFire, sx * 0.15, -0.04, 0.72, gateBeam).castShadow = false;
+  for (const sx of [-1, 1]) {
+    const post = new THREE.Group();
+    post.position.copy(arena.center).add(new THREE.Vector3(Math.sin(arena.gate + sx * 0.17), 0, Math.cos(arena.gate + sx * 0.17)).multiplyScalar(arena.radius + 1.5));
+    post.rotation.y = arena.gate;
+    scene.add(post);
+    block(1.1, 4.7, 1.1, 0, 2.35, 0, post);
+    mesh(new THREE.BoxGeometry(0.5, 0.08, 0.5), iron, 0, 5.2, 0, post);
+    flame(0, 5.7, 0, 0.7, post);
+    solid(post);
+  }
+
+  // ---------- De graven in de arena: omgewoelde aarde met een scheef houten kruisje (hier komen de bullys uit) ----------
+  for (const spot of L.graves) {
+    const grave = new THREE.Group();
+    grave.position.copy(spot);
+    grave.rotation.y = Math.atan2(arena.center.x - spot.x, arena.center.z - spot.z) + (rand() - 0.5) * 0.5;
+    scene.add(grave);
+    const mound = mesh(new THREE.SphereGeometry(1, 10, 6), dirt, 0, 0, 0, grave);
+    mound.scale.set(0.85, 0.16, 1.45);
+    mound.castShadow = false;
+    const cross = new THREE.Group();
+    cross.position.set(0, 0, -1.5);
+    cross.rotation.set((rand() - 0.5) * 0.3, 0, (rand() - 0.5) * 0.4);
+    grave.add(cross);
+    mesh(new THREE.BoxGeometry(0.09, 0.95, 0.07), deadWood, 0, 0.47, 0, cross);
+    mesh(new THREE.BoxGeometry(0.5, 0.09, 0.07), deadWood, 0, 0.68, 0, cross);
+  }
+
+  // ---------- De troon van bot: hier zit Rames te wachten ----------
+  const throne = new THREE.Group();
+  throne.position.copy(L.throne);
+  throne.rotation.y = L.yaw; // voorkant naar de poort
+  scene.add(throne);
+  block(2.0, 0.9, 1.5, 0, 0.45, 0, throne); // zitting
+  block(2.3, 4.4, 0.45, 0, 2.2, -0.95, throne); // rugleuning
+  block(1.6, 0.4, 0.75, 0, 0.2, 1.1, throne); // voetenbankje
+  for (const sx of [-1, 1]) {
+    mesh(new THREE.BoxGeometry(0.34, 0.5, 1.45), darkStone, sx * 1.02, 1.15, 0, throne); // armleuning
+    mesh(new THREE.SphereGeometry(0.2, 10, 8), bone, sx * 1.02, 1.5, 0.62, throne); // schedeltje op de armleuning
+    const horn = mesh(new THREE.ConeGeometry(0.2, 1.7, 6), bone, sx * 0.95, 5.1, -0.95, throne); // hoorns bovenop
+    horn.rotation.z = -sx * 0.35;
+  }
+  for (let i = -1; i <= 1; i++) mesh(new THREE.ConeGeometry(0.16, 1.1 + (i === 0 ? 0.5 : 0), 6), bone, i * 0.45, 5.0 + (i === 0 ? 0.25 : 0), -0.95, throne);
+  const face = mesh(new THREE.SphereGeometry(0.5, 14, 10), bone, 0, 3.75, -0.62, throne); // grote schedel boven zijn hoofd
+  face.scale.set(1, 1.12, 0.8);
+  for (const sx of [-1, 1]) mesh(new THREE.SphereGeometry(0.12, 8, 6), ghostFire, sx * 0.19, 3.82, -0.27, throne).castShadow = false;
+  for (let i = 0; i < 7; i++) {
+    // een stapel schedels en botten aan de voet van de troon
+    const s = 0.16 + rand() * 0.08;
+    mesh(new THREE.SphereGeometry(s, 8, 6), bone, (rand() < 0.5 ? -1 : 1) * (1.35 + rand() * 0.7), s * 0.9, -0.4 + rand() * 1.6, throne);
+  }
+  solid(throne);
+
+  // ---------- Dode bomen rond het kerkhof ----------
+  for (let i = 0; i < 6; i++) {
+    const a = arena.gate + 0.7 + i * 0.98 + rand() * 0.3;
+    const r = arena.radius + 5 + rand() * 2.5;
+    const tree = new THREE.Group();
+    tree.position.set(arena.center.x + Math.sin(a) * r, 0, arena.center.z + Math.cos(a) * r);
+    tree.rotation.set((rand() - 0.5) * 0.2, rand() * 6, (rand() - 0.5) * 0.2);
+    scene.add(tree);
+    const h = 4 + rand() * 2;
+    mesh(new THREE.CylinderGeometry(0.14, 0.36, h, 6), deadWood, 0, h / 2, 0, tree);
+    for (let b = 0; b < 4; b++) {
+      const branch = new THREE.Group();
+      branch.position.y = h * (0.5 + b * 0.14);
+      branch.rotation.set(0, b * 1.7 + rand(), 0.7 + rand() * 0.5);
+      tree.add(branch);
+      const len = 1.2 + rand() * 1.3;
+      mesh(new THREE.CylinderGeometry(0.03, 0.1, len, 5), deadWood, 0, len / 2, 0, branch);
+    }
+    colliders.push(new THREE.Box3(new THREE.Vector3(tree.position.x - 0.3, 0, tree.position.z - 0.3), new THREE.Vector3(tree.position.x + 0.3, h, tree.position.z + 0.3)));
+  }
+}
+
 /** Boss-arena: stenen vloer en een kring van (gebroken) pilaren. */
 function createArena(scene, colliders, arena) {
+  if (arena.kind === 'kerkhof') return createGraveyard(scene, colliders, arena); // Rames woont op een kerkhof
   const mat = texMat('wall_brick_stone_center');
   const count = 12;
   for (let i = 0; i < count; i++) {
@@ -1169,6 +1355,7 @@ function createArena(scene, colliders, arena) {
 
 export function createWorld(scene) {
   if (LEVEL.castle) return createCastleWorld(scene, { tex, texturedBox }); // Omars Gekke Kasteel bouwt zijn eigen wereld (castle.js)
+  if (LEVEL.sky) return createSkyWorld(scene); // het Wolkenrijk van Sky ook (skyworld.js)
   const sky = createSky(scene);
   const mountains = createMountains(scene, sky.material.uniforms);
   // Mist: in het Spookwoud dikker (main.js verandert hem als je een ander gebied in loopt, zie setFog)

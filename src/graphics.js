@@ -199,8 +199,8 @@ export function createGraphics({ renderer, scene, camera, world, ui }) {
 
   /** De wereld tekenen (met alle nabewerking). */
   function render() {
-    // 's Nachts wat feller: je ogen wennen aan het donker
-    renderer.toneMappingExposure = world.exposure ?? 1;
+    // 's Nachts wat feller: je ogen wennen aan het donker. (world.gloom < 1 = alles donkerder: het Knekelhof van Rames)
+    renderer.toneMappingExposure = (world.exposure ?? 1) * (world.gloom ?? 1);
     const night = world.night ?? 0;
     grade.uniforms.night.value = night;
     // Waar staat de zon op het scherm? Daar komt een warme gloed (niet bij de maan)

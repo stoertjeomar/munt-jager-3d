@@ -489,6 +489,42 @@ body.omar-film #map-wrap {
   background: linear-gradient(#ff6a5a, #c01a28 45%, #5a0810);
 }
 
+/* Elden Ring-stijl (Sky): een brede, dunne balk helemaal onderin, met een grote naam in hoofdletters */
+#boss.elden {
+  bottom: 46px;
+  width: min(1100px, 70vw); /* (niet over je flesjes en wapen linksonder) */
+}
+
+#boss.elden #boss-name {
+  font-family: 'Trajan Pro', 'Cinzel', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+  font-size: clamp(14px, 1.7vw, 22px);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: #f1ead6;
+  margin-bottom: 6px;
+  text-shadow: 0 0 6px #000, 0 1px 2px #000;
+}
+
+#boss.elden .boss-bar {
+  height: 6px;
+  border: 1px solid rgba(200, 185, 140, 0.6);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7);
+}
+
+#boss.elden #boss-fill {
+  background: linear-gradient(#a3141c, #5a080d);
+}
+
+/* Sky's flits: het hele scherm even wit (skyFighter.js zet de doorzichtigheid) */
+#sky-flits {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
 /* ---------- Teksten in beeld ---------- */
 #prompt {
   position: fixed;
@@ -613,6 +649,40 @@ body.omar-film #map-wrap {
 .banner-power #banner-text {
   color: #9be7ff;
   text-shadow: 0 0 18px rgba(155, 231, 255, 0.6);
+}
+
+/* Rames: paars, en groen als hij uit de dood is opgestaan */
+.banner-rames #banner-text {
+  color: #c79bff;
+  text-shadow: 0 0 22px rgba(155, 77, 255, 0.85);
+}
+
+.banner-herrezen #banner-text {
+  color: #8dffa0;
+  text-shadow: 0 0 22px rgba(93, 255, 122, 0.85);
+}
+
+/* ---------- Rames (rames.js): duisternis rond het beeld op het Knekelhof, en de flits van de bliksem ---------- */
+#rames-dark {
+  position: fixed;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 45%, transparent 30%, rgba(24, 6, 44, 0.75) 75%, rgba(4, 0, 10, 0.96) 100%);
+}
+
+#rames-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 14;
+  pointer-events: none;
+  background: #e9d6ff;
+  animation: rames-flash 0.6s ease-out forwards;
+}
+
+@keyframes rames-flash {
+  from { opacity: 0.9; }
+  to { opacity: 0; }
 }
 
 /* ---------- Menu ---------- */
@@ -868,6 +938,22 @@ body.omar-film #map-wrap {
 
 .stat-row span b {
   color: var(--gold-hi);
+}
+
+/* Het vakje voor de admin-code (Enter) */
+.admin-code {
+  display: block;
+  width: 100%;
+  margin: 6px 0;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid #f3d27a;
+  color: #f1e6c4;
+  font: inherit;
+  font-size: 22px;
+  letter-spacing: 6px;
+  text-align: center;
+  outline: none;
 }
 
 .power-row {
@@ -1404,4 +1490,17 @@ body.omar-kasteel #lock-hint h1::after {
 #mp-btn:hover {
   border-color: #9be7ff;
   box-shadow: 0 0 16px rgba(90, 216, 255, 0.4);
+}
+
+/* Het admin-vakje in een menu: grote letters in het midden */
+#menu-body .admin-code {
+  font-size: 22px;
+  letter-spacing: 6px;
+  text-align: center;
+}
+
+/* Elden Ring-balk (Sky): zonder doodshoofdjes */
+#boss.elden #boss-name::before,
+#boss.elden #boss-name::after {
+  content: none;
 }

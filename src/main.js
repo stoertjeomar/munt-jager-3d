@@ -6,7 +6,7 @@ import { BlobShadows } from './blobs.js';
 import { GrassField } from './grass.js';
 import { Player, PLAYABLE } from './player.js';
 import { createWorld, CHECKPOINTS, ARENAS, CHESTS, grassMask } from './world.js';
-import { LEVELS, LEVEL, IN_CASTLE, REGIONS, REGION_WIDTH, URL_REGION, LOCKED_REGION, GATE_X, regionIndexAt, regionOfCheckpoint } from './levels.js';
+import { LEVELS, LEVEL, IN_CASTLE, IN_SKY, IN_SPECIAL, REGIONS, REGION_WIDTH, URL_REGION, LOCKED_REGION, GATE_X, regionIndexAt, regionOfCheckpoint } from './levels.js';
 import { NPCs } from './npcs.js';
 import { createEnemies, spawnEnemy } from './enemies.js';
 import { createBosses, BOSS_INFO, BOSS_POWER, RAGE } from './bosses.js';
@@ -24,6 +24,8 @@ import { Music } from './music.js';
 import { Pickups, DIAMONDS } from './pickups.js';
 import { Projectiles } from './projectiles.js';
 import { OmarFlow } from './omar.js';
+import { SkyFlow } from './sky.js';
+import { NightWalker, NIGHTWALKER } from './nightwalker.js';
 import { Dragon } from './dragon.js';
 import { Pet, PET, PETS } from './pet.js';
 import { Invasions } from './invasions.js';
@@ -33,6 +35,8 @@ import { Villagers } from './villagers.js';
 import { Arena } from './arena.js';
 import { Islands, ALTAR } from './islands.js';
 import { Multiplayer, DUEL } from './multiplayer.js';
+import { RamesFlow } from './rames.js';
+import { Admin } from './admin.js';
 
 // ---------- Basis: renderer, scene, camera ----------
 // Geen "antialias" hier: alles gaat eerst door de nabewerking, daar zitten de gladde randjes (zie graphics.js).
@@ -49,10 +53,10 @@ const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerH
 // ---------- Game-objecten ----------
 const stats = new Stats();
 // Om te testen: ?level=3 in de adresbalk = begin aan het begin van gebied 3
-if (!IN_CASTLE && URL_REGION !== null) stats.data.checkpoint = LEVELS[URL_REGION].checkpoints[0][0];
+if (!IN_SPECIAL && URL_REGION !== null) stats.data.checkpoint = LEVELS[URL_REGION].checkpoints[0][0];
 // Nieuw spel (of een oude save)? Begin in Muntdorp.
 if (!CHECKPOINTS.some((c) => c.id === stats.data.checkpoint)) stats.data.checkpoint = CHECKPOINTS[0].id;
-if (!IN_CASTLE && !stats.data.flags.includes(stats.data.checkpoint)) stats.data.flags.push(stats.data.checkpoint);
+if (!IN_SPECIAL && !stats.data.flags.includes(stats.data.checkpoint)) stats.data.flags.push(stats.data.checkpoint);
 const ui = new UI(stats);
 // Doelen: trofeeën (met sterren) en premies (goals.js)
 const goals = new Goals(stats, {
@@ -81,9 +85,9 @@ const npcs = new NPCs(scene, stats, world.colliders);
 const dragon = new Dragon(scene, stats.data.dragonSkin); // Vuurtand de draak: B (na de eerste boss)
 // Huisdieren: Knokkie het Boks-Dinootje (Dino-ei) en Pluis de kat (sterrenwinkel). Ze lopen los rond in Muntdorp.
 const villageHome = LEVEL.village ? new THREE.Vector3(LEVEL.village.center[0], 0, LEVEL.village.center[1]) : new THREE.Vector3();
-const pets = IN_CASTLE ? [] : Object.keys(PETS).map((kind) => new Pet(scene, stats, kind, villageHome));
+const pets = IN_SPECIAL ? [] : Object.keys(PETS).map((kind) => new Pet(scene, stats, kind, villageHome));
 const ownedPets = () => pets.filter((p) => p.owned);
-const villagers = IN_CASTLE ? null : new Villagers(scene, world.colliders); // dorpelingen en het Premiebord in Muntdorp
+const villagers = IN_SPECIAL ? null : new Villagers(scene, world.colliders); // dorpelingen en het Premiebord in Muntdorp
 const effects = new Effects(scene);
 const trail = new SwordTrail(scene);
 const cameraRig = new CameraRig(camera, renderer.domElement);
@@ -91,9 +95,9 @@ const cameraRig = new CameraRig(camera, renderer.domElement);
 const gfx = createGraphics({ renderer, scene, camera, world, ui });
 const composer = gfx.composer;
 const blobs = new BlobShadows(scene);
-// Dicht gras rond de speler (niet in Omars kasteel); hoeveel hangt af van de graphics-stand (G).
+// Dicht gras rond de speler (niet in Omars kasteel of het Wolkenrijk); hoeveel hangt af van de graphics-stand (G).
 // Het gras krijgt de kleur van het gebied waar het groeit.
-const grass = LEVEL.castle ? null : new GrassField(scene, {
+const grass = LEVEL.special ? null : new GrassField(scene, {
   regions: { themes: REGIONS.map((r) => r.theme), width: REGION_WIDTH, halfX: LEVEL.half.x },
   mask: grassMask(),
 });
@@ -122,13 +126,13 @@ const state = {
 /** Waar je terugkomt bij een checkpoint (net naast de vlag, aan de kant waar het pad vandaan komt). */
 function checkpointSpawn(id) {
   const checkpoint = sites.checkpoint(id) ?? sites.checkpoints[0];
-  const flip = !IN_CASTLE && REGIONS[regionOfCheckpoint(checkpoint.id)].flip;
+  const flip = !IN_SPECIAL && REGIONS[regionOfCheckpoint(checkpoint.id)].flip;
   return checkpoint.position.clone().add(new THREE.Vector3(0, 0, flip ? -2.5 : 2.5));
 }
 
 /** Jij en de camera kijken de kant op waar het pad heen loopt (naar de boss van dit gebied). */
 function lookAlongPath() {
-  const flip = !IN_CASTLE && REGIONS[regionIndexAt(player.position.x, player.position.z)].flip;
+  const flip = !IN_SPECIAL && REGIONS[regionIndexAt(player.position.x, player.position.z)].flip;
   cameraRig.yaw = flip ? Math.PI : 0;
   player.mesh.rotation.y = flip ? 0 : Math.PI;
   cameraRig.snapTo(player.position);
@@ -261,6 +265,7 @@ function onDefeated(target) {
   effects.burst(target.center, target.type.color, { count: 26, speed: 7, size: 0.16, life: 0.8, up: 3 });
   effects.burst(target.center, 0xffd700, { count: 8, speed: 3, size: 0.08, life: 0.6, up: 4 });
   const finished = target.typeKey ? npcs.onKill(target.typeKey) : null;
+  sky.onEnemyDefeated(target); // een Wolkenwacht laat soms een Wolkenkelk vallen (sky.js)
   if (finished) questReady(finished);
   if (!target.summoned) {
     if (!state.byDragon) giveKills(1); // de draak helpt, maar sterker worden doe je zelf
@@ -276,7 +281,7 @@ function onDefeated(target) {
     giveRunes(target.type.runes);
     pickups.coinBurst(target.center, target.type.runes);
     if (Math.random() < 0.2) pickups.dropHeart(target.position);
-  }
+  } else if (Math.random() < (target.type.heart ?? 0)) pickups.dropHeart(target.position); // de bullys van Rames laten soms een hartje vallen
   if (state.lockTarget === target) state.lockTarget = null;
 }
 
@@ -309,7 +314,7 @@ function openGate() {
 let gateToast = 0;
 /** Zolang de poort dicht is: jij, je draak en je huisdier kunnen er niet door (en de vijanden van het Schaduwrijk niet terug). */
 function keepGateClosed(dt) {
-  if (IN_CASTLE || !LOCKED_REGION || gateOpen()) return;
+  if (IN_SPECIAL || !LOCKED_REGION || gateOpen()) return;
   gateToast -= dt;
   const max = GATE_X - 0.6;
   if (player.position.x > max) {
@@ -326,6 +331,8 @@ function keepGateClosed(dt) {
 
 function onBossDefeated(boss) {
   if (boss.id === 'omar') return omar.onWin(boss); // Omar verslagen: eigen feest, beloning en terugreis (omar.js)
+  if (boss.id === 'sky') return sky.onWin(boss); // Sky ook (sky.js)
+  if (boss.id === 'rames') return rames.onWin(boss); // Rames verslagen: zijn laatste filmpje en zijn katana (rames.js)
   const firstTime = !stats.data.bosses.includes(boss.id);
   const wasOpen = gateOpen();
   const rage = !!boss.rage;
@@ -535,7 +542,7 @@ const seat = new THREE.Vector3();
 
 /** B: de draak roepen (of afstappen). */
 function toggleDragon() {
-  if (IN_CASTLE) return;
+  if (IN_SPECIAL) return;
   if (dragon.riding || dragon.state === 'komt') {
     getOffDragon();
     return;
@@ -619,7 +626,7 @@ function toggleWorldMap() {
     closeMenuAndPlay();
     return;
   }
-  if (ui.menuOpen || IN_CASTLE) return;
+  if (ui.menuOpen || IN_SPECIAL) return;
   document.exitPointerLock?.();
   const fighting = state.activeBoss && !state.activeBoss.dead;
   ui.openWorldMap(player, {
@@ -773,6 +780,7 @@ function swordHits() {
   if (!player.sword.isHitting) return;
   const facing = player.facing;
   const chest = player.position.y + 0.9;
+  const strikes = []; // NightWalker: hier slaat de bliksem in
   for (const target of targets()) {
     const toTarget = target.position.clone().sub(player.position);
     if (Math.abs(target.center.y - chest) > target.type.height / 2 + 1.2) continue; // te ver boven of onder je
@@ -784,8 +792,21 @@ function swordHits() {
     const result = target.hit(player.position, player.sword.swingId, player.attackDamage);
     if (result) onHit(target, result, player.fireTimer > 0 ? 0xff8a2b : player.sword.trailColor);
     if (result && !result.blocked) weaponSpecial(target, result);
+    if (result && nightwalker.countHit()) strikes.push(target.position.clone());
   }
+  for (const at of strikes) lightningStrike(at);
   remoteHit(multiplayer?.checkHit(player, player.attackDamage), player.attackDamage);
+}
+
+/** NightWalker: de bliksem slaat in (elke 3e klap), en raakt alles wat er vlakbij staat. */
+function lightningStrike(at) {
+  nightwalker.strike(at);
+  const id = `bliksem-${Math.random()}`;
+  for (const target of targets()) {
+    if (target.position.clone().setY(0).distanceTo(at.clone().setY(0)) > NIGHTWALKER.strikeRadius + target.type.radius) continue;
+    const result = target.hit(player.position, id, Math.round(player.attackDamage * NIGHTWALKER.strikeDamage));
+    if (result) onHit(target, result, 0xffe066);
+  }
 }
 
 /** Je raakt je vriend in een duel: getal en vonken (de schade zelf doet zijn computer). */
@@ -943,7 +964,7 @@ function die() {
     multiplayer.iLost(); // verslagen in een duel: geen echte dood
     return;
   }
-  if (omar.onDeath()) return; // in Omars kasteel ga je niet echt dood: Omar lacht je uit en je mag terug
+  if (omar.onDeath() || sky.onDeath()) return; // in Omars kasteel (en bij Sky) ga je niet echt dood: je wordt uitgelachen en je mag terug
   if (arena.onPlayerDeath()) {
     // In de arena kost doodgaan niks: je staat weer bij de poort
     const keepFlasks = player.flasks;
@@ -960,7 +981,8 @@ function die() {
   if (invasions.active) invasions.finish(false, 'dood');
   state.deathTimer = 4;
   play('lose');
-  ui.banner('JE BENT GESTORVEN', 'Je komt terug bij het laatste checkpoint.', 'death', 3.8);
+  // (ga je dood tegen Rames, dan lacht hij je uit: rames.js)
+  ui.banner('JE BENT GESTORVEN', rames.onPlayerDeath() ?? 'Je komt terug bij het laatste checkpoint.', 'death', 3.8);
 }
 
 function respawnAfterDeath() {
@@ -1083,8 +1105,8 @@ charSelectEl.addEventListener('click', (e) => {
 // Waar wil je beginnen? Je kunt beginnen in elk gebied dat al open is (of gewoon waar je was)
 const levelSelectEl = document.getElementById('level-select');
 function renderLevelSelect() {
-  if (IN_CASTLE) {
-    // In Omars kasteel kies je niks: daar ben je gewoon
+  if (IN_SPECIAL) {
+    // In Omars kasteel of het Wolkenrijk kies je niks: daar ben je gewoon
     levelSelectEl.classList.add('hidden');
     document.getElementById('level-title').classList.add('hidden');
     return;
@@ -1124,11 +1146,11 @@ document.addEventListener('pointerlockchange', () => {
   lockHintEl.classList.toggle('hidden', cameraRig.locked || !!ui.menuOpen);
   // Na het begin is dit scherm ook het pauzescherm (dan kun je geen level meer kiezen)
   startBtn.textContent = gameStarted ? 'Doorgaan' : 'Spelen';
-  levelSelectEl.classList.toggle('hidden', gameStarted || IN_CASTLE);
-  document.getElementById('level-title').classList.toggle('hidden', gameStarted || IN_CASTLE);
+  levelSelectEl.classList.toggle('hidden', gameStarted || IN_SPECIAL);
+  document.getElementById('level-title').classList.toggle('hidden', gameStarted || IN_SPECIAL);
   if (gameStarted && cameraRig.locked && !state.introShown) {
     state.introShown = true;
-    if (IN_CASTLE) ui.banner(LEVEL.name.toUpperCase(), `${LEVEL.subtitle} — versla ${BOSS_INFO[LEVEL.boss].name}`, 'gold', 4.5);
+    if (IN_SPECIAL) ui.banner(LEVEL.name.toUpperCase(), `${LEVEL.subtitle} — versla ${BOSS_INFO[LEVEL.boss].name}`, 'gold', 4.5);
     else {
       const r = REGIONS[regionIndexAt(player.position.x, player.position.z)];
       const goal = stats.data.bosses.includes(r.boss) ? `${BOSS_INFO[r.boss].name} heb je al verslagen ✔` : `versla ${BOSS_INFO[r.boss].name} aan het eind van het pad`;
@@ -1177,6 +1199,7 @@ function handleActions(move) {
     if (!player.onGround && player.position.y > 1.2 && player.trySlam()) play('heavySwing');
     else if (player.tryAttack()) {
       play(player.sword.weaponKey === 'club' ? 'heavySwing' : 'swing');
+      nightwalker.onSwing(); // NightWalker: zap!
       trail.cut();
     }
   }
@@ -1222,6 +1245,12 @@ function handleActions(move) {
     const ready = (stats.data.bounties ?? []).filter((b) => b.count >= b.n).length;
     ui.prompt(`<b>E</b> Premiebord bekijken${ready ? ` — <b>${ready} klaar!</b>` : ''}`);
     if (input.wasPressed('KeyE')) openBounties();
+    return;
+  }
+  // Op de Donderpoort van Opa Donder (sky.js)
+  if (!player.isBusy && sky.nearPortal(player.position)) {
+    ui.prompt(sky.portalPrompt());
+    if (input.wasPressed('KeyE')) sky.usePortal();
     return;
   }
   const near = player.isBusy ? null : sites.nearbyInteraction(player.position);
@@ -1287,13 +1316,16 @@ function updateTrail(dt) {
 
 // ---------- Muziek ----------
 const music = new Music();
-music.preload(IN_CASTLE ? 'omar' : 'boss');
+music.preload(IN_CASTLE ? 'omar' : IN_SKY ? 'sky' : 'boss');
 
 /** Welk liedje past nu? Elk gebied heeft zijn eigen deuntje, bosses hebben enge muziek en Omar de engste. */
 function updateMusic() {
   const boss = state.activeBoss;
+  const ramesMusic = rames.musicWanted(); // Rames regelt zijn eigen muziek (ook stilte, als hij "dood" neervalt)
   if (!gameStarted) music.play(null);
   else if (IN_CASTLE) music.play(...omar.musicWanted());
+  else if (IN_SKY) music.play(...sky.musicWanted());
+  else if (ramesMusic) music.play(...ramesMusic);
   else if ((boss && boss.awake && !boss.dead) || arena.mode === 'waves') music.play('boss');
   else music.play(currentRegion()?.music ?? LEVEL.music ?? 'weide');
   music.update();
@@ -1302,14 +1334,14 @@ function updateMusic() {
 // ---------- Gebieden: waar ben je in de open wereld? ----------
 const regionState = { index: -1, warned: [] };
 
-/** Het gebied waar je nu bent (null in Omars kasteel). */
+/** Het gebied waar je nu bent (null in Omars kasteel en het Wolkenrijk). */
 function currentRegion() {
-  return IN_CASTLE ? null : REGIONS[Math.max(0, regionState.index)];
+  return IN_SPECIAL ? null : REGIONS[Math.max(0, regionState.index)];
 }
 
 /** Loop je een ander gebied in? Dan zie je de naam, en verandert de muziek, de mist en de geluiden. */
 function updateRegion(dt) {
-  if (IN_CASTLE) return;
+  if (IN_SPECIAL) return;
   const index = regionIndexAt(player.position.x, player.position.z);
   const r = REGIONS[index];
   if (index !== regionState.index) {
@@ -1337,8 +1369,12 @@ function updateBossFights() {
       if (b.dead || b.awake) continue;
       const d = player.position.clone().setY(0).distanceTo(b.arena.center);
       if (d < b.arena.radius - 1.5) {
+        if (b.id === 'rames') {
+          rames.enter(); // Rames begint met een filmpje, en start daarna zelf het gevecht (rames.js)
+          continue;
+        }
         // Al eens verslagen? Dan is hij nu WOEDEND (meer leven, harder en sneller, en hij geeft sterren)
-        if (b.id !== 'omar') b.setRage(stats.data.bosses.includes(b.id));
+        if (!b.special) b.setRage(stats.data.bosses.includes(b.id));
         b.wake();
         state.activeBoss = b;
         if (b.rage) ui.banner(`😡 ${b.info.name.toUpperCase()}`, 'Hij is terug... en hij is WOEDEND! Versla hem voor 2 ⭐', 'death', 3.5);
@@ -1362,7 +1398,8 @@ function updateBossFights() {
 
 // ---------- Game loop ----------
 const clock = new THREE.Clock();
-const bossCtx = { player, effects, hurtPlayer, spawnEnemy: addSummon, camera, projectiles };
+// hitstop(t): het spel staat heel even stil (bijv. als Sky's flits je raakt)
+const bossCtx = { player, effects, hurtPlayer, spawnEnemy: addSummon, camera, projectiles, hitstop: (t) => { state.hitstop = Math.max(state.hitstop, t); } };
 // Gewone bosses doen meer schade (ook met vuurballen) en zijn sneller: zie BOSS_POWER in bosses.js
 const strongBossCtx = {
   ...bossCtx,
@@ -1378,6 +1415,10 @@ const rageBossCtx = {
 const BOSS_RESPAWN = 180; // zoveel seconden na het verslaan komt een boss terug in zijn arena (woedend)
 // Omar woont in Muntdorp en neemt je mee naar zijn Gekke Kasteel (alles daarover staat in omar.js)
 const omar = new OmarFlow({ scene, camera, cameraRig, input, state, stats, ui, player, bosses, npcs, sites, world, effects, pickups, decor, giveKills, giveRunes, announceNewPowers });
+// Opa Donder in het Rotshoogland stuurt je naar het Wolkenrijk van Sky (alles daarover staat in sky.js)
+const sky = new SkyFlow({ scene, camera, cameraRig, input, state, stats, ui, player, bosses, npcs, sites, world, effects, pickups, decor, giveKills, giveRunes, announceNewPowers });
+// De extra krachten van NightWalker, het bliksemzwaard van Sky (nightwalker.js)
+const nightwalker = new NightWalker({ scene, player, effects });
 // Af en toe valt Omars schaduwleger een kamp aan (invasions.js)
 const invasions = new Invasions({ scene, ui, stats, effects, giveRunes, addEnemy: addSummon, removeEnemy, onWin: () => goals.onInvasion() });
 // Gouden Kampioenen in elk gebied waar je al bent geweest (champions.js)
@@ -1385,7 +1426,7 @@ const champions = new Champions({ stats, effects, addEnemy: addSummon, removeEne
 // De Arena naast Muntdorp (arena.js)
 const arena = new Arena({ scene, stats, ui, effects, colliders: world.colliders, addEnemy: addSummon, removeEnemy, player, pets, goals, giveRunes, giveStars });
 // Online samen spelen (multiplayer.js): elkaar zien, en een duel in de Arena
-const multiplayer = IN_CASTLE ? null : new Multiplayer({
+const multiplayer = IN_SPECIAL ? null : new Multiplayer({
   scene, player, stats, ui, effects, dragon, arena,
   onDuelStart: (side) => {
     closeMenuAndPlay();
@@ -1415,9 +1456,13 @@ const multiplayer = IN_CASTLE ? null : new Multiplayer({
   },
 });
 // De Hemeleilanden: zwevende eilanden hoog in de lucht, alleen met de draak te bereiken (islands.js)
-const islands = IN_CASTLE ? null : new Islands(scene, { colliders: world.colliders, addEnemy: addSummon, stats, effects, ui, giveStars });
+const islands = IN_SPECIAL ? null : new Islands(scene, { colliders: world.colliders, addEnemy: addSummon, stats, effects, ui, giveStars });
 // Staat de Schaduwpoort al open? (bij een oude save waarin de vier bosses al verslagen zijn)
 if (gateOpen()) openGate();
+// Rames, de ondode boss op het Knekelhof in het Spookwoud: zijn filmpjes en zijn beloning (rames.js)
+const rames = new RamesFlow({ camera, cameraRig, input, state, stats, ui, player, bosses, world, effects, pickups, projectiles, dragon, omar, giveKills, giveRunes, announceNewPowers, removeSummons });
+// Het admin-menu: Enter, dan de code (admin.js)
+const admin = new Admin({ stats, player, ui, equip, close: () => cameraRig.lock() });
 
 function gameLoop() {
   // realDt = tijd sinds vorige frame. Begrensd zodat een lag-piek je niet door de vloer laat vallen.
@@ -1450,7 +1495,11 @@ function gameLoop() {
   if (closeInventory) toggleInventory();
   if (closeShopKey) closeShop();
   if (closeMap) closeMenuAndPlay();
-  const canAct = player.alive && !ui.menuOpen && !inDialog && state.deathTimer <= 0 && !paused && !closeInventory && !closeShopKey && !closeMap;
+  const closeAdmin = menuAtStart === 'admin' && input.wasPressed('Escape');
+  if (closeAdmin) admin.close();
+  // Enter (niet in een gesprek, menu of filmpje): het vakje voor de admin-code
+  if (input.wasPressed('Enter') && !menuAtStart && !paused && !document.body.classList.contains('omar-film')) admin.askCode();
+  const canAct = player.alive && !ui.menuOpen && !inDialog && state.deathTimer <= 0 && !paused && !closeInventory && !closeShopKey && !closeMap && !closeAdmin;
   if (canAct) handleActions(move);
   else ui.prompt(null);
 
@@ -1473,6 +1522,7 @@ function gameLoop() {
     }
     if (player.jumped) play('jump');
     handlePlayerEvents();
+    nightwalker.update(dt);
     swordHits();
     spinHits();
     updatePoisons(dt);
@@ -1508,7 +1558,7 @@ function gameLoop() {
   arena.update(dt, enemyCtx, player); // (monsters in de arena krijgen hun eigen tegenstander)
   for (const enemy of enemies) enemy.update(dt, enemy.arenaCtx ?? (enemy.champion ? championCtx : enemyCtx));
   keepGateClosed(realDt);
-  champions.update(dt, player.position, gameStarted && !IN_CASTLE);
+  champions.update(dt, player.position, gameStarted && !IN_SPECIAL);
   islands?.update(dt, player, dragon.riding);
   // Zegen van de Wind (het Windaltaar): meer schade en sneller lopen
   player.boost = islands?.buffT > 0 ? { damage: ALTAR.damage, speed: ALTAR.speed, t: islands.buffT } : null;
@@ -1520,15 +1570,15 @@ function gameLoop() {
     if (petHit) arena?.petHit(p, petHit);
   }
   // Omar-invasies (alleen als je gewoon aan het spelen bent)
-  invasions.update(dt, player.position, gameStarted && !paused && !IN_CASTLE && !state.activeBoss && !arena.busy && player.alive && state.deathTimer <= 0);
+  invasions.update(dt, player.position, gameStarted && !paused && !IN_SPECIAL && !state.activeBoss && !arena.busy && player.alive && state.deathTimer <= 0);
   for (const boss of bosses) {
-    if (boss.id === 'omar') boss.update(dt, bossCtx);
+    if (boss.special) boss.update(dt, bossCtx); // Omar en Sky hebben hun eigen instellingen
     else boss.update(dt * BOSS_POWER.speed * (boss.rage ? RAGE.speed : 1), boss.rage ? rageBossCtx : strongBossCtx);
     if (boss.rage && boss.awake && !boss.dead && dt > 0 && Math.random() < 0.3) {
       effects.burst(boss.center, 0xff2a2a, { count: 1, speed: 2, size: 0.18, life: 0.6, up: 1.5, gravity: 0 }); // rode woede-damp
     }
     // Verslagen bosses komen na een tijdje terug in hun arena (niet als je erbij staat)
-    if (boss.dead && boss.respawnT !== undefined && boss.id !== 'omar' && dt > 0) {
+    if (boss.dead && boss.respawnT !== undefined && !boss.special && dt > 0) {
       boss.respawnT -= dt;
       const far = player.position.distanceTo(boss.arena.center) > boss.arena.radius + 25;
       if (boss.respawnT <= 0 && far) {
@@ -1555,7 +1605,7 @@ function gameLoop() {
     else ui.toast(`${picked.quest.goal.label[0].toUpperCase() + picked.quest.goal.label.slice(1)}: <b>${picked.count} / ${picked.quest.goal.count}</b>`, 2);
   }
   ui.setQuests([...invasions.tracker(), ...npcs.tracker()]);
-  ui.markers = [...npcs.mapMarkers(), ...invasions.mapMarkers(), ...champions.mapMarkers(), ...arena.mapMarkers(), ...(islands?.mapMarkers() ?? []), ...(multiplayer?.mapMarkers() ?? [])];
+  ui.markers = [...npcs.mapMarkers(), ...invasions.mapMarkers(), ...champions.mapMarkers(), ...arena.mapMarkers(), ...sky.mapMarkers(), ...(islands?.mapMarkers() ?? []), ...(multiplayer?.mapMarkers() ?? [])];
   pickups.update(dt, elapsed, player, {
     onCoin: () => play('coin'),
     onHeart: (fraction) => {
@@ -1573,9 +1623,9 @@ function gameLoop() {
       effects.burst(d.position.clone().setY(d.position.y + 1), 0x5aa8ff, { count: 24, speed: 5, size: 0.12, life: 0.8, up: 3 });
       // Hoeveel diamanten heb je al in dit gebied?
       const region = regionIndexAt(d.position.x, d.position.z);
-      const inRegion = DIAMONDS.filter((x) => IN_CASTLE || regionIndexAt(x.position.x, x.position.z) === region);
+      const inRegion = DIAMONDS.filter((x) => IN_SPECIAL || regionIndexAt(x.position.x, x.position.z) === region);
       const here = inRegion.filter((x) => stats.data.diamonds.includes(x.id)).length;
-      ui.toast(`💎 <b>Diamant gevonden!</b> +${value} munten<br><small>${here} / ${inRegion.length} diamanten in ${IN_CASTLE ? 'het kasteel' : REGIONS[region].name}</small>`, 4);
+      ui.toast(`💎 <b>Diamant gevonden!</b> +${value} munten<br><small>${here} / ${inRegion.length} diamanten in ${IN_SPECIAL ? LEVEL.name : REGIONS[region].name}</small>`, 4);
     },
   });
   const walking = player.moving && player.onGround && player.rollTimer <= 0 && !ui.menuOpen && player.alive && !paused;
@@ -1609,6 +1659,8 @@ function gameLoop() {
   multiplayer?.update(realDt);
   ui.update(realDt, player, state.activeBoss ?? arena.hud ?? multiplayer?.hud, elapsed);
   omar.update(realDt); // Omar: keuzes, reizen en tussenfilmpjes (mag de camera overnemen)
+  sky.update(realDt); // Sky: de Donderpoort, de Wolkenkelken en het Wolkenrijk (sky.js)
+  rames.update(realDt); // Rames: zijn filmpjes (mag de camera ook overnemen)
   updateRegion(realDt);
   updateMusic();
   updateAmbience(dt, { theme: currentRegion()?.theme ?? LEVEL.theme, night: world.night ?? 0 });
@@ -1668,5 +1720,7 @@ if (stats.level === 1 && stats.runes === 0 && stats.data.bosses.length === 0) {
 // Handig voor debuggen in de browser-console (F12): typ bijvoorbeeld `game.player.position`
 window.game = { scene, player, enemies, bosses, sites, npcs, stats, ui, world, state, camera, cameraRig, renderer, composer, gfx, nightLight, grass, decor, effects, trail, onDefeated, loop: gameLoop };
 window.game.omar = omar;
-Object.assign(window.game, { arena, openArenaMenu, dragon, pets, invasions, travelTo, hatchPet, spawnEnemy: addSummon, goals, champions, villagers, gateOpen, openBounties, openTrophies, islands, multiplayer, openMultiplayerMenu });
+window.game.sky = sky;
+window.game.nightwalker = nightwalker;
+Object.assign(window.game, { arena, openArenaMenu, dragon, pets, invasions, rames, admin, travelTo, hatchPet, spawnEnemy: addSummon, goals, champions, villagers, gateOpen, openBounties, openTrophies, islands, multiplayer, openMultiplayerMenu });
 window.game.music = music;

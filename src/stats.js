@@ -62,18 +62,30 @@ export const SHOP_ITEMS = {
   zaadje: { name: 'Gouden Zaadje', icon: '🧪', price: [200, 450, 800], info: 'Je flesjes helen 10% meer.' },
   hart: { name: 'Hartversterker', icon: '❤', price: [150, 300, 500, 800, 1200], info: '+10 levenspunten.' },
   slijpen: { name: 'Wapen slijpen', icon: '⚔', price: [150, 300, 500, 800, 1200], info: '+10% schade met al je wapens.' },
-  dino: { name: 'Dino-ei', icon: '🥚', price: [250], info: 'Er komt Knokkie uit: een Boks-Dinootje dat met je meeloopt en meevecht!' },
+  dino: { name: 'Dino-ei', icon: '🥚', price: [250], info: 'Er komt Knokkie uit: een Boks-Dinootje dat in Muntdorp woont en in de Arena vecht!' },
 };
 
 // De sterrenwinkel (ook bij Koopman Kobus): hier betaal je met ⭐ sterren (die verdien je met trofeeën en premies)
 export const STAR_ITEMS = {
   sterrenzwaard: { name: 'Sterrenzwaard', icon: '⭐', price: [8], info: 'Het sterkste wapen van het hele spel!' },
-  pluis: { name: 'Pluis de kat', icon: '🐱', price: [4], info: 'Een eigen kat die met je meeloopt en vijanden krabt. Wissel van huisdier met P.' },
+  pluis: { name: 'Pluis de kat', icon: '🐱', price: [4], info: 'Een eigen kat: ze woont in Muntdorp, je kunt haar aaien en ze vecht in de Arena.' },
   draakIjs: { name: 'Vuurtand: IJsblauw', icon: '🐉', price: [3], info: 'Je draak wordt ijsblauw.' },
   draakGoud: { name: 'Vuurtand: Goud', icon: '🐉', price: [5], info: 'Je draak wordt van goud!' },
   draakSchaduw: { name: 'Vuurtand: Schaduw', icon: '🐉', price: [6], info: 'Je draak wordt zwart-paars, net als de Schaduwdraak.' },
   appel: { name: 'Sterrenappel', icon: '🍎', price: [2, 3, 4], info: '+8 levenspunten.' },
   snoepje: { name: 'Huisdiersnoepje', icon: '🍬', price: [2], repeat: true, info: 'Je huisdier gaat meteen een level omhoog.' },
+};
+
+// Het admin-menu (admin.js, Enter + de code): hoe sterk ben je?
+//   health/stamina = zoveel heb je (vast), damage = keer je gewone schade, defense = minder schade (max 0.75),
+//   all = alle krachten en bonussen meteen vrij
+export const ADMIN_KRACHT = {
+  normaal: { name: 'Normaal', info: 'Gewoon jij: wat je zelf hebt verdiend.' },
+  matig: { name: 'Matig sterk', health: 300, info: '300 levenspunten.' },
+  op: {
+    name: 'OP!!!', health: 9999, stamina: 500, damage: 10, defense: 0.75, all: true,
+    info: 'Alles op max: 9999 leven, 500 stamina, 10× schade, 75% minder schade en alle krachten en bonussen.',
+  },
 };
 
 /** Hoeveel vijanden je moet verslaan om van `level` naar `level + 1` te gaan. */
@@ -113,6 +125,16 @@ function freshSave() {
       trip: null, // { level, checkpoint }: waar je was toen Omar je meenam
       back: null, // { level, checkpoint, result }: zo kom je terug in je level
     },
+    // Sky (zie sky.js): net als bij Omar, plus je Wolkenkelken (die kosten een reis met de Donderpoort)
+    sky: {
+      wins: 0, losses: 0, visits: 0, seen: false, trip: null, back: null,
+      kelken: 0, // Wolkenkelken (van de Wolkenwachten in het Rotshoogland)
+      drops: 0, // zo vaak liet Sky NightWalker vallen
+    },
+    // Rames (zie rames.js): heb je zijn lange filmpje al gezien, en hoe vaak je won of verloor
+    rames: { seen: false, wins: 0, losses: 0 },
+    // Het admin-menu (admin.js): hoe sterk je bent (zie ADMIN_KRACHT) en wat er oneindig is
+    admin: { kracht: 'normaal', stamina: false, geld: false, levels: false },
     victory: false,
   };
 }
@@ -124,15 +146,26 @@ export class Stats {
   }
 
   get level() { return this.data.level; }
-  get runes() { return this.data.runes; }
+  get runes() { return this.data.admin.geld ? Infinity : this.data.runes; } // admin: oneindig geld
   get xp() { return this.data.xp; }
   get xpNeeded() { return killsNeeded(this.data.level); }
-  get maxHealth() { return 150 + (this.data.level - 1) * PER_LEVEL.health + this.bought('hart') * 10 + this.perkBonus('health') + this.data.apples * APPLE_HEALTH; }
-  get maxStamina() { return 100 + (this.data.level - 1) * PER_LEVEL.stamina; }
-  get damageMultiplier() { return 1 + (this.data.level - 1) * PER_LEVEL.damage + this.bought('slijpen') * 0.1; }
+  get maxHealth() { return this.kracht.health ?? this.normalMaxHealth; }
+  get maxStamina() { return this.kracht.stamina ?? 100 + (this.data.level - 1) * PER_LEVEL.stamina; }
+  get damageMultiplier() { return this.normalDamageMultiplier * (this.kracht.damage ?? 1); }
   get flasksMax() { return MAX_FLASKS; }
   get speedMultiplier() { return 1 + this.perkBonus('speed'); }
-  get defenseBonus() { return this.perkBonus('defense'); }
+  get defenseBonus() { return this.kracht.defense ?? this.perkBonus('defense'); }
+
+  // Zonder het admin-menu. Omar, Sky en Rames rekenen hiermee hun leven en hun klappen uit,
+  // anders zou OP!!! tegen hen niks uitmaken.
+  get normalMaxHealth() { return 150 + (this.data.level - 1) * PER_LEVEL.health + this.bought('hart') * 10 + this.perkBonus('health') + this.data.apples * APPLE_HEALTH; }
+  get normalDamageMultiplier() { return 1 + (this.data.level - 1) * PER_LEVEL.damage + this.bought('slijpen') * 0.1; }
+
+  // ---------- Admin (admin.js) ----------
+  get admin() { return this.data.admin; }
+  /** Hoe sterk je bent volgens het admin-menu (zie ADMIN_KRACHT). */
+  get kracht() { return ADMIN_KRACHT[this.data.admin.kracht] ?? ADMIN_KRACHT.normaal; }
+  get infiniteStamina() { return this.data.admin.stamina; }
   get healBonus() { return this.perkBonus('heal') + this.bought('zaadje') * 0.1; }
 
   addRunes(amount) {
@@ -142,6 +175,13 @@ export class Stats {
   /** Vijanden verslagen: telt op naar je volgende level. Geeft het aantal nieuwe levels terug. */
   addKills(amount) {
     this.data.kills += amount;
+    // Admin: oneindig levels = elke verslagen vijand is meteen een level erbij
+    if (this.data.admin.levels) {
+      this.data.level += amount;
+      this.data.xp = 0;
+      this.save();
+      return amount;
+    }
     this.data.xp += amount;
     let gained = 0;
     while (this.data.xp >= this.xpNeeded) {
@@ -169,17 +209,17 @@ export class Stats {
   buy(key) {
     const price = this.shopPrice(key);
     const stars = !!STAR_ITEMS[key];
-    const have = stars ? this.data.stars ?? 0 : this.data.runes;
+    const have = stars ? this.data.stars ?? 0 : this.runes;
     if (price === null || have < price) return false;
     if (stars) this.data.stars -= price;
-    else this.data.runes -= price;
+    else if (!this.data.admin.geld) this.data.runes -= price; // met oneindig geld kost niks iets
     this.data.shop = { ...this.data.shop, [key]: this.bought(key) + 1 };
     this.save();
     return true;
   }
 
   hasPerk(key) {
-    return this.data.level >= PERKS[key].level;
+    return this.kracht.all || this.data.level >= PERKS[key].level;
   }
 
   unlockedPerks() {
@@ -192,6 +232,7 @@ export class Stats {
   }
 
   hasPower(key) {
+    if (this.kracht.all) return true;
     const unlock = POWERS[key].unlock;
     if (unlock.level) return this.data.level >= unlock.level;
     return this.data.bosses.includes(unlock.boss);

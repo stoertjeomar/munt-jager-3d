@@ -4,6 +4,7 @@
 
 let ctx = null;
 let master = null;
+let musicBus = null; // alle muziek gaat hierdoor: zo kan een boss de muziek even zachter zetten (duckMusic)
 let noiseBuffer = null;
 let muted = false;
 
@@ -22,16 +23,32 @@ const SAMPLE_FILES = {
 const SAMPLE_VOLUME = { lose: 0.8, boing: 1, punch: 0.15, defeat: 0.35, wow: 0.7, faaah: 0.6, shine: 0.7, donder: 0.9 };
 const MASTER = 0.9; // hoofdvolume (hoger = harder)
 const samples = {};
+const extraFiles = {}; // geluiden die een ander bestand zelf aanmeldt (zie loadSounds): { naam: relatief pad }
 let footsteps = null;
 
+async function loadSample(name, path) {
+  try {
+    const data = await (await fetch(path)).arrayBuffer();
+    samples[name] = await ctx.decodeAudioData(data);
+  } catch {
+    // geen probleem: dan gebruiken we het zelfgemaakte geluid
+  }
+}
+
 async function loadSamples() {
-  for (const [name, file] of Object.entries(SAMPLE_FILES)) {
-    try {
-      const data = await (await fetch(`sounds/${file}`)).arrayBuffer();
-      samples[name] = await ctx.decodeAudioData(data);
-    } catch {
-      // geen probleem: dan gebruiken we het zelfgemaakte geluid
-    }
+  for (const [name, file] of Object.entries(SAMPLE_FILES)) await loadSample(name, `sounds/${file}`);
+  for (const [name, path] of Object.entries(extraFiles)) await loadSample(name, path);
+}
+
+/**
+ * Eigen geluidsbestanden aanmelden: { naam: 'sounds/iets.mp3' } (null = geen bestand, dan het zelfgemaakte geluid).
+ * Ze worden meteen geladen als het geluid al aan mag, anders bij de eerste klik of toets (zie unlockAudio).
+ */
+export function loadSounds(files) {
+  for (const [name, path] of Object.entries(files)) {
+    if (!path || extraFiles[name]) continue;
+    extraFiles[name] = path;
+    if (ctx) loadSample(name, path);
   }
 }
 
@@ -78,6 +95,8 @@ export function unlockAudio() {
     limiter.attack.value = 0.003;
     limiter.release.value = 0.25;
     master.connect(limiter).connect(ctx.destination);
+    musicBus = ctx.createGain();
+    musicBus.connect(master);
 
     // Een seconde witte ruis, voor zwiep- en klap-geluiden
     noiseBuffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
@@ -98,9 +117,19 @@ function ready() {
   return ctx && !muted && ctx.state === 'running';
 }
 
-/** Voor music.js: de geluidskaart, de hoofdvolumeknop en de ruis (of null als het geluid nog niet mag). */
+/** Voor music.js: de geluidskaart, de hoofdvolumeknop, de muziekknop en de ruis (of null als het geluid nog niet mag). */
 export function getAudio() {
-  return ctx && ctx.state === 'running' ? { ctx, master, noise: noiseBuffer } : null;
+  return ctx && ctx.state === 'running' ? { ctx, master, music: musicBus, noise: noiseBuffer } : null;
+}
+
+/** De muziek zachter zetten (level 0.1 = 10%) of weer vol (1), in `fade` seconden. Geluidseffecten blijven even hard. */
+export function duckMusic(level, fade = 0.2) {
+  if (!musicBus) return;
+  const t = ctx.currentTime;
+  const g = musicBus.gain;
+  g.cancelScheduledValues(t);
+  g.setValueAtTime(g.value, t);
+  g.linearRampToValueAtTime(level, t + Math.max(0.01, fade));
 }
 
 /** Toon met een frequentie die verschuift van `from` naar `to`. pan = links (-1) of rechts (1). */
@@ -123,11 +152,12 @@ function tone({ type = 'sine', from, to = from, duration, volume = 0.3, delay = 
   osc.stop(t + duration + 0.02);
 }
 
-/** Ruis door een filter (bandpass) waarvan de frequentie verschuift. */
-function noise({ from, to = from, duration, volume = 0.3, q = 1, delay = 0 }) {
+/** Ruis door een filter (bandpass) waarvan de frequentie verschuift. loop = voor geluiden langer dan een seconde. */
+function noise({ from, to = from, duration, volume = 0.3, q = 1, delay = 0, loop = false }) {
   const t = ctx.currentTime + delay;
   const src = ctx.createBufferSource();
   src.buffer = noiseBuffer;
+  src.loop = loop; // langer dan een seconde? Dan de ruis herhalen
   const filter = ctx.createBiquadFilter();
   filter.type = 'bandpass';
   filter.Q.value = q;
@@ -142,7 +172,67 @@ function noise({ from, to = from, duration, volume = 0.3, q = 1, delay = 0 }) {
   src.stop(t + duration + 0.02);
 }
 
+/** Ruis door een laag- of hoogdoorlaatfilter, die meteen hard is en dan uitsterft (`decay` seconden). */
+function burst({ type = 'lowpass', freq, duration, volume = 0.3, attack = 0.005, delay = 0 }) {
+  const t = ctx.currentTime + delay;
+  const src = ctx.createBufferSource();
+  src.buffer = noiseBuffer;
+  src.loop = true; // (de ruis is maar een seconde lang)
+  const filter = ctx.createBiquadFilter();
+  filter.type = type;
+  filter.frequency.value = freq;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(volume, t + attack);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+  src.connect(filter).connect(gain).connect(master);
+  src.start(t, Math.random() * 0.5);
+  src.stop(t + duration + 0.02);
+}
+
 const SOUNDS = {
+  // ---------- Sky (skyFighter.js): stilte → zoem → KRAK → gerommel → klikje ----------
+  // Een elektrisch gezoem dat hoger en harder wordt (zo lang als hij klaarzit: duration)
+  skyBuzz: ({ duration = 0.8 } = {}) => {
+    const t = ctx.currentTime;
+    for (const [type, f, v] of [['sawtooth', 70, 0.11], ['square', 141, 0.035]]) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(f, t);
+      osc.frequency.exponentialRampToValueAtTime(f * 6, t + duration);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(v, t + duration * 0.95);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + duration + 0.03);
+      osc.connect(gain).connect(master);
+      osc.start(t);
+      osc.stop(t + duration + 0.05);
+    }
+    noise({ from: 1500, to: 6000, duration, volume: 0.06, q: 4, loop: true });
+  },
+  // De donderklap: een korte, harde ruisklap die heel snel uitsterft, met een dreun eronder
+  skyCrack: () => {
+    burst({ type: 'highpass', freq: 900, duration: 0.22, volume: 0.9, attack: 0.002 });
+    burst({ type: 'lowpass', freq: 2500, duration: 0.35, volume: 0.6, attack: 0.002 });
+    tone({ type: 'triangle', from: 160, to: 40, duration: 0.3, volume: 0.5 });
+  },
+  // Laag gerommel daarna: lange ruis door een laagdoorlaatfilter (~150Hz) die langzaam uitsterft
+  skyRumble: () => {
+    burst({ type: 'lowpass', freq: 150, duration: 2.6, volume: 0.7, attack: 0.08 });
+    burst({ type: 'lowpass', freq: 90, duration: 3.2, volume: 0.45, attack: 0.3, delay: 0.25 });
+  },
+  // Het zwaard gaat terug in de schede: een zacht schuifje en een klein klikje
+  skySheathe: () => {
+    noise({ from: 2500, to: 5000, duration: 0.16, volume: 0.05, q: 2 });
+    tone({ type: 'square', from: 2300, to: 1900, duration: 0.03, volume: 0.05, delay: 0.17 });
+    tone({ type: 'triangle', from: 900, to: 700, duration: 0.05, volume: 0.06, delay: 0.17 });
+  },
+  // Fase 2: Sky brult, en de donder brult mee
+  skyRoar: () => {
+    SOUNDS.roar();
+    SOUNDS.skyCrack();
+    SOUNDS.skyRumble();
+  },
   // Zwaard door de lucht: ruis die snel van laag naar hoog en weer terug gaat
   swing: () => noise({ from: 500, to: 2600, duration: 0.18, volume: 0.35, q: 1.5 }),
   heavySwing: () => noise({ from: 250, to: 900, duration: 0.3, volume: 0.45, q: 1.2 }),
@@ -186,11 +276,6 @@ const SOUNDS = {
   whoosh: () => noise({ from: 200, to: 3000, duration: 0.9, volume: 0.35, q: 1 }),
   // "Ting!": Omars zwaard glinstert vlak voordat hij aanvalt (dan weet je: nu opletten!)
   glint: () => tone({ type: 'triangle', from: 1900, to: 2600, duration: 0.14, volume: 0.13 }),
-  // Bliksemzwaard: een korte elektrische "ZZAP"
-  zap: () => {
-    noise({ from: 3000, to: 900, duration: 0.18, volume: 0.3, q: 4 });
-    tone({ type: 'sawtooth', from: 900, to: 120, duration: 0.16, volume: 0.1 });
-  },
   // Gif: een zacht borrelend geluidje
   bubble: () => [0, 0.07].forEach((d) => tone({ type: 'sine', from: 300, to: 620, duration: 0.07, volume: 0.08, delay: d })),
   // Wind (Wolkenspeer, het Windaltaar)
@@ -241,6 +326,19 @@ const SOUNDS = {
     noise({ from: 3200, to: 300, duration: 0.25, volume: 0.35, q: 2 });
     tone({ type: 'sine', from: 900, to: 180, duration: 0.22, volume: 0.15 });
   },
+  // Zap! Een knetterende elektrische klap (Sky's zwaard, NightWalker en de bliksemwolven)
+  zap: () => {
+    noise({ from: 5200, to: 900, duration: 0.16, volume: 0.32, q: 3 });
+    tone({ type: 'sawtooth', from: 1900, to: 140, duration: 0.14, volume: 0.1 });
+    tone({ type: 'square', from: 2600, to: 1800, duration: 0.05, volume: 0.05, delay: 0.03 });
+    noise({ from: 2400, to: 3800, duration: 0.07, volume: 0.15, q: 6, delay: 0.06 });
+  },
+  // Donder in de verte (het onweer in het Wolkenrijk): een lang, diep gerommel
+  rommel: () => {
+    noise({ from: 120, to: 60, duration: 2.6, volume: 0.34, q: 0.6, loop: true });
+    noise({ from: 260, to: 90, duration: 1.8, volume: 0.18, q: 0.8, delay: 0.25, loop: true });
+    tone({ type: 'sine', from: 52, to: 38, duration: 2.2, volume: 0.12 });
+  },
   // De draak brult: een diepe, rauwe grom die omhoog gaat en weer zakt
   roar: () => {
     tone({ type: 'sawtooth', from: 70, to: 140, duration: 0.5, volume: 0.22 });
@@ -276,29 +374,30 @@ const SOUNDS = {
 
 /**
  * Praatgeluidjes, als iemand iets zegt (zoals in sommige spelletjes: "blablabla" in piepjes).
- * Iedereen heeft zijn eigen stem: Omar praat diep en snel, een robot piept.
+ * Iedereen heeft zijn eigen stem: Omar praat diep en snel, Rames nog dieper en langzaam, een robot piept.
  */
 export function talk(name = '', text = '') {
   if (!ready()) return;
   let h = 0;
   for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 997;
   const omar = /omar/i.test(name);
+  const rames = /rames/i.test(name); // Rames is ondood: zijn stem is nog dieper, en langzaam
   const robot = /robot|biep|bot/i.test(name);
-  const base = omar ? 118 : 200 + (h % 9) * 26;
-  const type = omar ? 'sawtooth' : robot ? 'sine' : h % 2 ? 'square' : 'triangle';
+  const base = rames ? 84 : omar ? 118 : 200 + (h % 9) * 26;
+  const type = omar || rames ? 'sawtooth' : robot ? 'sine' : h % 2 ? 'square' : 'triangle';
   const letters = text.replace(/<[^>]+>/g, '').length;
   const n = Math.max(3, Math.min(14, Math.round(letters / 5)));
-  const step = omar ? 0.065 : 0.075;
+  const step = rames ? 0.09 : omar ? 0.065 : 0.075;
   for (let i = 0; i < n; i++) {
     const f = robot ? base * (i % 2 ? 2 : 1.5) : base * (0.85 + Math.random() * 0.5);
-    tone({ type, from: f, to: f * (0.9 + Math.random() * 0.25), duration: step * 0.8, volume: omar ? 0.06 : type === 'square' ? 0.035 : 0.06, delay: i * step });
+    tone({ type, from: f, to: f * (0.9 + Math.random() * 0.25), duration: step * 0.8, volume: rames ? 0.075 : omar ? 0.06 : type === 'square' ? 0.035 : 0.06, delay: i * step });
   }
 }
 
 // ---------- Geluiden van de wereld om je heen ----------
 const amb = { bird: 2, cricket: 1, wind: 5, owl: 6, crackle: 0.3, whisper: 4 };
 
-/** Elke frame: vogeltjes overdag, krekels 's nachts, een uil in het Spookwoud, wind in de bergen, knetterende fakkels in het kasteel. */
+/** Elke frame: vogeltjes overdag, krekels 's nachts, een uil in het Spookwoud, wind in de bergen en in het Wolkenrijk, knetterende fakkels in het kasteel. */
 export function updateAmbience(dt, { theme, night = 0 }) {
   if (!ready() || dt <= 0) return;
   for (const key in amb) amb[key] -= dt;
@@ -316,6 +415,14 @@ export function updateAmbience(dt, { theme, night = 0 }) {
       amb.whisper = 5 + Math.random() * 7;
       noise({ from: 3000 + Math.random() * 2000, to: 1500, duration: 1.4, volume: 0.035, q: 6 });
       tone({ type: 'sine', from: 55, to: 48, duration: 3, volume: 0.06 });
+    }
+    return;
+  }
+  if (theme === 'wolken') {
+    // Het Wolkenrijk: gierende wind (de donder komt van het onweer zelf, zie skyworld.js)
+    if (amb.wind <= 0) {
+      amb.wind = 3 + Math.random() * 4;
+      noise({ from: 300 + Math.random() * 200, to: 1100, duration: 2.5, volume: 0.06, q: 0.6, loop: true });
     }
     return;
   }
@@ -343,9 +450,9 @@ export function updateAmbience(dt, { theme, night = 0 }) {
   }
 }
 
-/** Speel een geluid, bijvoorbeeld play('hit'). */
-export function play(name) {
+/** Speel een geluid, bijvoorbeeld play('hit'). Sommige zelfgemaakte geluiden hebben opties, zoals play('skyBuzz', { duration: 0.6 }). */
+export function play(name, options) {
   if (!ready()) return;
   if (samples[name]) playSample(name, SAMPLE_VOLUME[name] ?? 0.6);
-  else SOUNDS[name]?.();
+  else SOUNDS[name]?.(options);
 }

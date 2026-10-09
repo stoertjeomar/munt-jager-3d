@@ -60,6 +60,7 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 | G | Graphics: Laag / Normaal / Hoog (wordt onthouden) |
 | Scrollen | In- en uitzoomen (je begint helemaal ingezoomd) |
 | Esc | Pauze / muis vrij |
+| Enter | Admin-menu (met de geheime code) |
 
 **Op de draak:** WASD = vliegen · Spatie = omhoog · kijk omlaag met de muis = dalen · Shift = extra snel ·
 klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, dat doet geen pijn).
@@ -158,11 +159,19 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
 - **5 krachten**: Dash, Dubbele sprong, Wervelslag, Grondslag en Vuurzwaard (vrijspelen door te levelen en bosses te verslaan)
 - **Wapens** (alleen slagwapens): kort zwaard, dolk, bijl, ridderzwaard, katana, knots, strijdhamer, IJszwaard,
   Zonnezwaard, het diamanten zwaard, het **Demonenzwaard** (in een kist in het Rotshoogland) en de **Zeis van de Dood**
-  (die krijg je als je Omar verslaat) — plus 3 helmen. Te vinden in kisten, bij quests en bij bosses
+  (die krijg je als je Omar verslaat) en de **Schaduwkatana** (van Rames) — plus 3 helmen. Te vinden in kisten, bij quests en bij bosses
 - **Vijanden**: slijmpjes, slijmballen, spoken, rotsgolems, zombies, Spierbonken, Mecha-Wachters, **Boks-Dino's**
-  (spring op hun hoofd: BOING!), **Bigfoots** en Omars **schaduwkrijgers**. Alle vijanden zijn een stuk sterker geworden
+  (spring op hun hoofd: BOING!), **Bigfoots**, Omars **schaduwkrijgers** en de **bullys** van Rames (skeletten). Alle vijanden zijn een stuk sterker geworden
 - **4 bosses** met een mistmuur, boss-balk en een tweede fase: Koning Slijm, De Gevallen Ridder,
   Steenreus Gorath en Budget Mario. Ze hebben meer leven, doen meer schade en zijn sneller
+- **Rames, de Heer van de Ondoden**: een geheime, héél sterke boss op **het Knekelhof**, een kerkhof in het Spookwoud
+  (neem het zijpad bij de vlag *Woudruïne*; op de kaart staat een paars ✝). Hij is een ondode samoerai met een
+  **Schaduwkatana** vol duistere magie en hij praat zoals de echte Rames typt ("neef je gaat niet halen").
+  Hij heeft **vier filmpjes**: hij wordt wakker op zijn troon van bot en de bliksem slaat in op zijn katana, hij roept zijn
+  **bullys** (skeletten die uit de graven kruipen), hij valt "dood" neer maar staat groen en razend weer op
+  (*Rames de Herrezene*), en zijn echte einde. Zijn aanvallen: katana-combo met een dreun, de **Schaduwsnede** (hij flitst dwars
+  door je heen), een waaier van magie, **botstekels** onder je voeten, de **Schaduwstap** (poef, achter je!) en als hij
+  herrezen is de **Zielenstorm**. Versla hem en je krijgt de **Schaduwkatana**: het snelste wapen van het spel
 - In Muntdorp staan een **oefenpop** (sla erop om je schade te zien, hij valt nooit om) en **Zorp de Alien** (praat met hem!)
 - 3 verstopte **diamanten** per gebied, hartjes, munten die naar je toe vliegen
 - **Omar, de maker van het spel**, woont in Muntdorp. Daag hem uit (E) en hij neemt je mee naar zijn **Gekke Kasteel**:
@@ -171,7 +180,23 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
   álle krachten: dash, wervelslag, dubbele sprong met grondslag, vuurzwaard, rollen en zelf flesjes drinken. Hij kan
   **teleporteren** ("Achter je!"), de **bliksem** laten inslaan en als hij boos is roept hij **schaduwklonen** op die op je
   af stormen. Verlies je? Dan ben je niks kwijt. Win je? Dan krijg je de **Kroon van Omar**, zijn **Zeis** en een gek feest
-- **Muziek** (zie Credits): bij **alle boss-gevechten** speelt *Where Is Your God Now*, tegen **Omar** zijn eigen epische
+- **Sky, de Heer van de Storm** (de eindbaas): in het Rotshoogland woont **Opa Donder** met de quest *De storm van Sky*.
+  **Wolkenwachten** (zwevende onweerswolkjes) laten soms een **Wolkenkelk** vallen. Met 4 kelken brengt de **Donderpoort**
+  je naar het **Wolkenrijk**: een wolkenplateau onder een onweerslucht vol bliksem en donder. Sky zit op een troon van
+  wolken, wordt een wolk en slaat als bliksem de arena in. In de grote balk onderin heet hij
+  **SKY, THUNDERBORN DEVIL OF THE SEVERED HEAVENS**. Hij draagt een gele **haori** met witte driehoekjes, heeft een
+  stormhuid met gele bliksemaders, rode ogen en een wolken-aura. Hij is **doodstil**, hand op zijn zwaard in de schede...
+  en dan **bliksemsnel**: elke aanval begint met een waarschuwing, en daarna staat hij even uit te blazen (dán slaan!).
+  Zijn aanvallen: **Thunderclap and Flash** (door de knieën, de muziek valt stil, een zoem, "ting!"... en in één flits staat
+  hij achter je, met een bliksemspoor), **Chain Lightning** (3 flitsen achter elkaar), **Heaven's Fall** (hij springt uit
+  beeld, de bliksem slaat in in rode cirkels en hij landt met een schokgolf) en **Storm Crescent** (een waaier
+  bliksemsikkels: ren ertussendoor of rol erdoorheen). Raak je hem vaak terwijl hij stilstaat, dan **wankelt** hij.
+  Op de helft van zijn leven slaat de bliksem in op hem: **witte ogen**, wit-hete aders, een donkere lucht, snellere
+  aanvallen en 6 flitsen per ketting. Alle getallen staan in `src/skyConfig.js`.
+  Win je? Altijd **1500 munten**, en 1 op de 10 keer laat hij zijn bliksemzwaard
+  **NightWalker** vallen: elke klap zapt, elke 3e raak-klap slaat de bliksem in en met **C** word je even een wolk
+- **Muziek** (zie Credits): bij **alle boss-gevechten** speelt *Where Is Your God Now* (bij Rames komt hij al zachtjes op
+  tijdens zijn filmpje, en gaat hij sneller als hij herrezen is), tegen **Omar** zijn eigen epische
   boss-muziek, die al zachtjes opkomt terwijl hij praat en sneller gaat als hij boos wordt. In het Spookwoud en het
   Rotshoogland speelt duistere muziek, en de Weide en de Ruïnevallei hebben een zelfgemaakt deuntje (gemaakt in de code).
   De muziek wisselt vanzelf als je een ander gebied in loopt
@@ -200,7 +225,7 @@ munt-jager-3d/
     ├── blobs.js      → zachte schaduw-vlekjes onder de speler, vijanden en mensen
     ├── grass.js      → dicht, wuivend gras rond de speler (alleen op Normaal en Hoog)
     ├── levels.js     → de 4 gebieden: pad, vijanden, kisten, NPC's, huizen (pas hier je gebieden aan!) en hoe ze samen de open wereld vormen
-    ├── world.js      → bouwt de wereld: grond, paden, huizen, ruïnes, natuur, arena's, mist, dag en nacht
+    ├── world.js      → bouwt de wereld: grond, paden, huizen, ruïnes, natuur, arena's, het Knekelhof, mist, dag en nacht
     ├── npcs.js       → NPC's en hun zij-quests
     ├── decor.js      → planten, stenen, bolle wolken, riet bij de vijvers en dieren
     ├── player.js     → speler: bewegen, rollen, krachten, flesjes, personages
@@ -225,11 +250,22 @@ munt-jager-3d/
     ├── sites.js      → checkpoint-vlaggen en kisten
     ├── pickups.js    → munten, hartjes, diamanten
     ├── stats.js      → level (door vijanden te verslaan), bonussen, krachten, opslaan
+    ├── admin.js      → het admin-menu (Enter + code): sterkte, oneindig stamina/geld/levels, alle items
     ├── ui.js         → balken, menu's, banners, minimap en de wereldkaart
     ├── effects.js    → deeltjes, schokgolven, waarschuwingscirkels
     ├── omar.js       → alles rond Omar: uitdagen, het kasteel-filmpje, winnen (feest!) en verliezen
     ├── omarFighter.js→ Omar zelf in het gevecht: zijn brein, aanvallen, teleporteren en praatjes
     ├── castle.js     → het Gekke Kasteel van Omar met de arena en zijn troon
+    ├── sky.js        → alles rond Sky: Opa Donder, Wolkenkelken, de Donderpoort, het filmpje en de beloning
+    ├── skyFighter.js → Sky zelf in het gevecht: stil → waarschuwen → aanval → uitblazen, zijn vier aanvallen en fase 2
+    ├── skyConfig.js  → alle getallen van het gevecht tegen Sky (leven, schade, tijden, kansen): pas hier aan!
+    ├── skyworld.js   → het Wolkenrijk met onweer · skyLook.js → Sky's stormhuid · haori.js → zijn jasje
+    ├── wolf.js       → bliksemwolven (niet meer in gebruik sinds Sky's nieuwe gevecht)
+    ├── nightwalkerModel.js → het cartoon-model van NightWalker
+    ├── lightning.js  → bliksemschichten (Omar, Sky, NightWalker en het onweer)
+    ├── nightwalker.js→ de krachten van NightWalker: zap, blikseminslag en de wolk-dash
+    ├── rames.js      → alles rond Rames: zijn filmpjes, wat hij zegt en je beloning
+    ├── ramesFighter.js→ Rames zelf in het gevecht: zijn model, aanvallen, bullys en opstaan uit de dood
     ├── music.js      → de muziek: liedjes als "bladmuziek" in tekst en een kleine sequencer
     ├── audio.js      → geluiden · camera.js · input.js · assets.js
 ```
@@ -250,7 +286,17 @@ munt-jager-3d/
 - **Krachten en levelen** → `POWERS`, `PERKS` en `killsNeeded` in `src/stats.js`
 - **Personages** → `CHARACTERS` en `PLAYABLE` bovenaan `src/player.js`
 - **Omar sterker of zwakker maken** → `OMAR` bovenaan `src/omarFighter.js`. Test het kasteel met `?level=omar`
+- **Sky sterker of zwakker maken** → `SKY_BOSS` in `src/skyConfig.js` (leven, schade, hoe lang hij waarschuwt, hoeveel
+  flitsen, kansen per aanval...), de beloning en kelken in `SKY_LOOT` in `src/sky.js`. Eigen geluiden voor Sky (bijv. een
+  echte donderklap) zet je in `sounds/` en geef je op bij `audio.files` in `src/skyConfig.js`.
+  Test het Wolkenrijk met `?level=sky`
+- **Rames sterker of zwakker maken** → `RAMES` bovenaan `src/ramesFighter.js` (zijn leven: `BOSS_INFO` in `src/bosses.js`).
+  Wat hij zegt → `LINES` bovenaan `src/rames.js` (en `BARKS` in `src/ramesFighter.js`). Testen: begin met `?level=3`, en typ
+  in de console (F12) `game.rames.skipToFight()` of `game.rames.setHp(0.01)` (één klap en hij "sterft")
 - **Muziek** → `SONGS` in `src/music.js`: schrijf je eigen liedje met noten als `C5 - E5 G5`
+- **Admin-menu** → druk op **Enter** en typ `123123`. Kies hoe sterk je bent (*Normaal*, *Matig sterk* = 300 leven,
+  *OP!!!* = alles op max), zet oneindig stamina, geld en levels aan, en pak elk wapen en elke helm die je wilt.
+  Het wordt bewaard in je save. De code staat in `ADMIN_CODE` (`src/admin.js`), de sterktes in `ADMIN_KRACHT` (`src/stats.js`)
 - **Opnieuw beginnen** → uitrusting (I) → *Nieuw spel beginnen*
 
 ## Credits

@@ -53,12 +53,13 @@ function drawLand(ctx, toMap, scale, bosses) {
     const [mx, my] = toMap(hx - w / 2, hz - d / 2);
     ctx.fillRect(mx, my, w * scale, d * scale);
   }
-  // Arena's (doodshoofd, of een vinkje als je die boss al versloeg; bij Omar een paarse kroon)
+  // Arena's (doodshoofd, of een vinkje als je die boss al versloeg; bij Omar een paarse kroon, het Knekelhof een paars kruis)
   for (const a of ARENAS) {
     const [mx, my] = toMap(a.center.x, a.center.z);
     const beaten = bosses.includes(a.id);
-    ctx.fillStyle = a.id === 'omar' ? '#c77dff' : beaten ? '#8dff9a' : '#ff5a5a';
-    ctx.fillText(a.id === 'omar' ? '♛' : beaten ? '✔' : '☠', mx, my);
+    const grave = a.kind === 'kerkhof';
+    ctx.fillStyle = a.id === 'omar' || (grave && !beaten) ? '#c77dff' : beaten ? '#8dff9a' : '#ff5a5a';
+    ctx.fillText(a.id === 'omar' ? '♛' : beaten ? '✔' : grave ? '✝' : '☠', mx, my);
   }
 }
 
@@ -160,7 +161,10 @@ export class UI {
     // Boss-balk
     if (boss) {
       this.el.boss.classList.remove('hidden');
-      this.el.bossName.textContent = boss.name;
+      // Een boss kan een eigen naam en stijl voor de balk hebben (Sky: barName en barStyle 'elden', zie skyFighter.js)
+      const name = boss.barName ?? boss.name;
+      if (this.el.bossName.textContent !== name) this.el.bossName.textContent = name;
+      this.el.boss.className = boss.barStyle ?? '';
       const b = boss.hp / (boss.maxHp ?? boss.info.hp);
       this.bossLag = Math.max(b, this.bossLag - dt * 0.3);
       this.el.bossFill.style.width = `${b * 100}%`;
@@ -538,7 +542,7 @@ export class UI {
       return `<button data-equip='${JSON.stringify(item)}' class="card ${equipped ? 'equipped' : ''}" style="--rar:${itemColor(item)}" title="${info.info}">
         <span class="ic">${icon}</span><b>${info.name}</b><small>${stat}</small>${equipped ? '<em>aan</em>' : ''}</button>`;
     };
-    const diamonds = `<div class="stat-row"><span>💎 Diamanten <b>${(d.diamonds ?? []).length} / ${WORLD.diamonds.length}</b></span><span>📦 Kisten <b>${d.chests.length}</b></span><span>☠ Bosses <b>${d.bosses.length} / ${REGIONS.length}</b></span></div>`;
+    const diamonds = `<div class="stat-row"><span>💎 Diamanten <b>${(d.diamonds ?? []).length} / ${WORLD.diamonds.length}</b></span><span>📦 Kisten <b>${d.chests.length}</b></span><span>☠ Bosses <b>${d.bosses.length} / ${REGIONS.length}</b></span>${d.sky?.kelken ? `<span>⚡ Wolkenkelken <b>${d.sky.kelken}</b></span>` : ''}</div>`;
     return diamonds + `<h3>⚔ Wapens</h3><div class="grid">${d.inventory.filter((i) => i.kind === 'weapon').map(card).join('')}</div>
       <h3>⛑ Helmen</h3><div class="grid">${d.inventory.filter((i) => i.kind === 'helmet').map(card).join('')}</div>`;
   }
@@ -566,7 +570,7 @@ export class UI {
 
   /** Checkpoints: een vlaggetje (goud als je er al was: daar kun je heen snelreizen). */
   drawFlags(ctx, toMap) {
-    if (LEVEL.castle) return; // in Omars kasteel zijn er geen vlaggen
+    if (LEVEL.special) return; // in Omars kasteel en het Wolkenrijk zijn er geen vlaggen
     const d = this.stats.data;
     for (const c of CHECKPOINTS) {
       const [mx, my] = toMap(c.position.x, c.position.z);
@@ -761,7 +765,7 @@ export class UI {
     }
 
     // Onder de kaart: waar ben je, en is het dag of nacht?
-    const name = LEVEL.castle ? LEVEL.name : REGIONS[regionIndexAt(px, pz)]?.name ?? '';
+    const name = LEVEL.special ? LEVEL.name : REGIONS[regionIndexAt(px, pz)]?.name ?? '';
     if (name !== this.mapName) {
       this.mapName = name;
       $('map-region').textContent = name;

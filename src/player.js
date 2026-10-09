@@ -308,6 +308,7 @@ export class Player {
   // ---------------- Acties ----------------
 
   useStamina(amount) {
+    if (this.stats.infiniteStamina) return true; // admin: oneindig stamina
     if (this.stamina < 1) return false;
     this.stamina = Math.max(0, this.stamina - amount);
     this.staminaDelay = STAMINA_DELAY;
@@ -448,6 +449,7 @@ export class Player {
     } else if (this.staminaDelay <= 0 && !this.isBusy) {
       this.stamina = Math.min(this.maxStamina, this.stamina + STAMINA_REGEN * dt);
     }
+    if (this.stats.infiniteStamina) this.stamina = this.maxStamina;
 
     // Knipperen als je net geraakt bent
     this.mesh.visible = this.invulnerable <= 0 || this.rollTimer > 0 || Math.floor(this.invulnerable * 14) % 2 === 0;

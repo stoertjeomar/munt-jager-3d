@@ -12,10 +12,12 @@
 //   chests    = [id, x, y, z, voorwerp]
 //   npcs      = [personage, x, z, quest]  (zie quests.js)
 //               ['omar', x, z] is Omar zelf: hij geeft geen quest, maar daagt je uit (zie omar.js).
+//   portal    = [x, z]  de Donderpoort naar het Wolkenrijk van Sky (zie sky.js)
 //   dummies   = [x, z]  oefenpoppen: daar kun je op slaan om je schade te zien (ze vallen nooit om)
 //               Hij staat in elk level vlak bij het begin.
 //   blocks    = losse stenen blokken / platforms [x, y, z, breedte, hoogte, diepte, kleur]
 //   houses    = huizen (alleen in level 1: Muntdorp)
+//   secret    = een geheime boss met een eigen arena naast het pad: { boss, name, arena: [x, z, straal], path: zijpad ernaartoe }
 
 export const SAVE_KEY = 'munt-jager-3d-save-v3';
 
@@ -101,7 +103,9 @@ export const LEVELS = [
     npcs: [['ridder', 22, 82, 'ridder-zombies'], ['omar', 1.5, 80]],
     questItems: {},
     blocks: [[-26, 1.2, 36, 6, 2.4, 1], [-30, 1.2, 40, 1, 2.4, 6], [24, 1.5, -10, 8, 3, 1]],
-    animals: [['bear', [[-24, 60], [24, 0], [-24, -30]], 4]],
+    // Het Knekelhof: het kerkhof van Rames, de ondode boss (zie rames.js). Een zijpad bij de Woudruïne loopt ernaartoe.
+    secret: { boss: 'rames', name: 'Het Knekelhof', arena: [19, 7, 14], path: [[-13.3, 7], [4.5, 7]] },
+    animals: [['bear', [[-24, 60], [27, -26], [-24, -30]], 4]],
     trees: 170,
   },
   {
@@ -113,14 +117,16 @@ export const LEVELS = [
     boss: 'reus',
     path: [[0, 92], [-14, 64], [-8, 34], [14, 10], [14, -20], [0, -44], [0, -60]],
     checkpoints: [['l4-start', 'Voet van het Hoogland', 0, 88], ['l4-mid', 'Rotsentop', 16, 0]],
-    spawns: [['golem', 4], ['mecha', 3], ['spierbonk', 3], ['bigfoot', 2], ['spook', 2]],
+    spawns: [['golem', 4], ['mecha', 3], ['spierbonk', 3], ['bigfoot', 2], ['spook', 2], ['wolkenwacht', 6]],
     chests: [
       ['l4-sluip', -30, 0, 10, { kind: 'weapon', key: 'zonnezwaard' }],
       ['l4-fles', 30, 0, 50, { kind: 'flask' }],
       ['l4-fles2', -30, 0, -44, { kind: 'weapon', key: 'demonenzwaard' }],
     ],
     diamonds: [['l4-d1', 32, 0, 88], ['l4-d2', -29, 0, 44], ['l4-d3', 32, 0, -30]], // (niet te ver naar links: daar is de Schaduwpoort)
-    npcs: [['mila', -20, 80, 'mila-mecha'], ['omar', -0.5, 80]],
+    // Opa Donder stuurt je naar het Wolkenrijk van Sky (zie sky.js). Zijn Donderpoort staat ernaast.
+    npcs: [['mila', -20, 80, 'mila-mecha'], ['omar', -0.5, 80], ['donder', 18, 80, 'donder-sky']],
+    portal: [24, 75],
     questItems: {},
     blocks: [[28, 1.5, 20, 1, 3, 7], [22, 1, 28, 6, 2, 1]],
     animals: [],
@@ -183,7 +189,7 @@ function buildOpenWorld() {
     name: 'De wereld van Munt Jager', subtitle: 'Open wereld', open: true, theme: 'weide', music: 'weide', boss: null,
     half: { x: (REGION_WIDTH * LEVELS.length) / 2, z: 100 },
     regions, paths: [], arenas: [], checkpoints: [], chests: [], diamonds: [], npcs: [], dummies: [],
-    questItems: {}, houses: [], blocks: [], animals: [], village: null, colosseum: null, trees: 0, path: [],
+    questItems: {}, houses: [], blocks: [], animals: [], village: null, colosseum: null, portal: null, trees: 0, path: [],
   };
   for (const r of regions) {
     const L = r.level;
@@ -203,6 +209,7 @@ function buildOpenWorld() {
     world.animals.push(...(L.animals ?? []).map(([kind, homes, n]) => [kind, homes.map(([x, z]) => t(x, z)), n]));
     if (L.village) world.village = { center: t(...L.village.center) };
     if (L.colosseum) world.colosseum = { center: t(...L.colosseum.center), radius: L.colosseum.radius, flip: r.flip };
+    if (L.portal) world.portal = t(...L.portal);
   }
   // De Hemeleilanden (hoog in de lucht, zie ISLANDS hieronder): een vlag, kisten en diamanten
   const isl = buildIslands(regions);
@@ -216,6 +223,17 @@ function buildOpenWorld() {
     const a = world.paths[i];
     const b = world.paths[i + 1];
     world.paths.push([a[a.length - 2], b[0]]);
+  }
+  // Geheime bosses (Rames op het Knekelhof): een eigen arena met een zijpad ernaartoe. Ze komen ná de gewone
+  // arena's en paden, zodat de volgorde daarvan hetzelfde blijft. `gate` = aan welke kant de poort zit (waar het zijpad aankomt).
+  for (const r of regions) {
+    const secret = r.level.secret;
+    if (!secret) continue;
+    const [x, z] = r.t(secret.arena[0], secret.arena[1]);
+    const path = secret.path.map(([px, pz]) => r.t(px, pz));
+    const [gx, gz] = path[path.length - 1];
+    world.arenas.push({ id: secret.boss, name: secret.name, x, z, radius: secret.arena[2], region: r.index, kind: 'kerkhof', gate: Math.atan2(gx - x, gz - z) });
+    world.paths.push(path);
   }
   return world;
 }
@@ -331,9 +349,40 @@ export const CASTLE = {
   trees: 0,
 };
 
-/** Zitten we in het kasteel van Omar? (?level=omar in de adresbalk) */
-export const IN_CASTLE = new URLSearchParams(location.search).get('level') === 'omar';
+// Het Wolkenrijk van Sky: ook een geheim level. Opa Donder stuurt je erheen met zijn Donderpoort
+// (index.html?level=sky), en na het gevecht ga je terug naar het Rotshoogland.
+// De wereld zelf wordt gebouwd in skyworld.js, Sky zelf staat in skyFighter.js, het verhaal eromheen in sky.js.
+export const SKY_REALM = {
+  name: 'Het Wolkenrijk van Sky',
+  subtitle: 'Geheim rijk',
+  theme: 'wolken',
+  music: 'sky',
+  sky: true,
+  special: true,
+  half: { x: 36, z: 40 },
+  boss: 'sky',
+  arena: { x: 0, z: 0, radius: 15 }, // de arena is een groot wolkenplateau
+  path: [],
+  checkpoints: [['sky-poort', 'Wolkenpoort', 0, 26]],
+  spawns: [],
+  chests: [],
+  diamonds: [],
+  npcs: [],
+  questItems: {},
+  blocks: [],
+  animals: [],
+  trees: 0,
+};
+CASTLE.special = true;
 
-// LEVEL_INDEX = het gebied waar je (bij het laden) bent. In het kasteel: waar je vandaan kwam.
+const LEVEL_PARAM = new URLSearchParams(location.search).get('level');
+/** Zitten we in het kasteel van Omar? (?level=omar in de adresbalk) */
+export const IN_CASTLE = LEVEL_PARAM === 'omar';
+/** Zitten we in het Wolkenrijk van Sky? (?level=sky in de adresbalk) */
+export const IN_SKY = LEVEL_PARAM === 'sky';
+/** In een geheim level (kasteel of Wolkenrijk)? Daar is geen open wereld: geen kaart, draak, gras of vlaggen. */
+export const IN_SPECIAL = IN_CASTLE || IN_SKY;
+
+// LEVEL_INDEX = het gebied waar je (bij het laden) bent. In een geheim level: waar je vandaan kwam.
 export const LEVEL_INDEX = currentLevelIndex();
-export const LEVEL = IN_CASTLE ? CASTLE : WORLD;
+export const LEVEL = IN_CASTLE ? CASTLE : IN_SKY ? SKY_REALM : WORLD;
