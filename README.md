@@ -55,7 +55,7 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 | B | Vuurtand de draak roepen / afstappen (na de eerste boss) |
 | K | Trofeeënkast (je trofeeën, sterren en rang) |
 | O | Samen spelen (online): kamer maken, meedoen met een code, duel |
-| H | Claude, je computer-maatje: volgen, wachten, even weg, of een oefenduel |
+| H | Claude, je computer-maatje: volgen, wachten, terug naar Muntdorp, of een duel |
 | M | Geluid aan/uit |
 | N | Muziek aan/uit (wordt onthouden) |
 | G | Graphics: Laag / Normaal / Hoog (wordt onthouden) |
@@ -91,7 +91,7 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
   - **Golven overleven**: jij tegen steeds meer en sterkere monsters (munten per golf, een ⭐ per 5 golven; doodgaan kost hier niks)
   - **Huisdiergevecht**: Knokkie of Pluis tegen een monster
   - **Monstergevecht**: twee monsters vechten tegen elkaar en jij **wedt** munten op de winnaar (goed gegokt = dubbel terug)
-  - **Oefenduel tegen Claude**: je computer-maatje (makkelijk, normaal of moeilijk)
+  - **Duel tegen Claude**: 8 niveaus, van 😊 Makkelijk tot ☠️ ONMOGELIJK. Win een niveau om het volgende te openen
   - **Duel**: online tegen een vriend (zie *Samen spelen*)
 - **De Hemeleilanden** ☁: vijf zwevende eilanden hoog boven de Ruïnevallei, waar je **alleen met Vuurtand** komt. Met
   roze wolkenbomen, een waterval die naar beneden valt, kristallen, een regenboog, stapstenen om over te springen,
@@ -101,12 +101,15 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
 - **Wapens met een speciale kracht**: de **Gifdolk** (vergiftigt), het **IJszwaard** (bevriest: vijanden lopen langzaam),
   het **Bliksemzwaard** (de bliksem springt over naar andere vijanden), het **Vampierzwaard** (je krijgt leven terug)
   en de **Wolkenspeer** (héél lang bereik, en een windstoot blaast vijanden weg)
-- **Claude, je computer-maatje** 🤖: een held die door de computer wordt bestuurd en met je meespeelt. Hij loopt
-  achter je aan, vecht mee tegen vijanden in de buurt (ook bij bosses, maar dan wat zachter), flitst naar je toe als hij
-  achterblijft en wacht even als jij op je draak vliegt. Hij kletst in tekstwolkjes ("Daar! Een slijmpje!", "Mooie klap!").
-  Met **H** zeg je dat hij moet volgen, wachten of even weg moet gaan, en in de **Arena** kun je een **oefenduel** tegen
-  hem doen: makkelijk, normaal of moeilijk (verliezen kost niks, winnen geeft munten). Vijanden die Claude verslaat geven
-  munten, maar tellen niet mee voor je level
+- **Claude, je computer-maatje** 🤖: een held die door de computer wordt bestuurd. Hij staat in **Muntdorp, vlak voor
+  waar je begint** (🤖 op de kaart). Praat met hem (**E**) en kies of hij met je meegaat. Dan loopt hij achter je aan,
+  vecht mee tegen vijanden in de buurt (ook bij bosses, maar dan wat zachter), flitst naar je toe als hij achterblijft en
+  wacht even als jij op je draak vliegt. Hij kletst in tekstwolkjes ("Daar! Een slijmpje!", "Mooie klap!").
+  Met **H** zeg je dat hij moet volgen, wachten of teruggaan naar Muntdorp. In de **Arena** kun je tegen hem vechten:
+  **8 niveaus** (Makkelijk, Normaal, Moeilijk, Expert, Meester, Kampioen, Legende en ONMOGELIJK). Hoe hoger, hoe sterker
+  en slimmer: hij slaat combo's, slaat terug als jij mist, doet een wervelslag, pakt een vuurzwaard, dasht naar je toe,
+  drinkt flesjes en laat zich niet meer wegduwen. Verliezen kost niks, winnen geeft munten (tot ● 5000).
+  Vijanden die Claude verslaat geven munten, maar tellen niet mee voor je level
 - **Samen spelen (online)** 🌐: druk op **O** (of *Samen spelen* op het startscherm). Eén speler maakt een kamer en krijgt
   een code (bijv. MUNT-7K3P), de ander typt die code in. Dan zie je elkaar lopen, springen, slaan en op de draak vliegen,
   en in de Arena kun je een **duel** doen (de winnaar krijgt munten). Vijanden, kisten en munten heeft ieder voor zich.
@@ -152,7 +155,16 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
 - 's Nachts is het donkerblauw maanlicht in plaats van pikzwart: de lantaarns verlichten de grond en een warm lichtje bij jou laat je de weg en de vijanden zien
 - **Mooiere graphics**: gladde randjes, licht uit de lucht (glanzende dingen weerspiegelen de lucht), schaduwen die niet kriebelen,
   zachte schaduw-vlekjes onder iedereen, nevel laag bij de grond en een zon die een beetje schittert.
-  Met **G** kies je *Laag* (snel, voor oudere laptops), *Normaal* of *Hoog* (met extra donkere hoekjes, "ambient occlusion")
+  Met **G** kies je *Laag* (snel, voor oudere laptops), *Normaal* of *Hoog* (met extra donkere hoekjes, "ambient occlusion").
+  Kies je zelf niks, dan kijkt het spel steeds of het soepel loopt; zo niet, dan gaan de graphics vanzelf een stand omlaag
+- **Soepel spelen**: alles wat ver weg in de mist staat (bomen, plantjes, huizen, vijanden) wordt niet getekend, en de
+  bomen en plantjes zijn verdeeld in vakken, zodat alleen die dichtbij getekend worden. Bij het begin staat er "Laden…" op
+  de knop tot alles binnen is; dan worden alle plaatjes en shaders alvast klaargezet, zodat het spel niet hapert als je
+  begint. De muziek wordt verder vooruit ingepland, zodat hij niet stopt als het spel even hapert
+- Je poppetje blijft altijd recht: landen midden in een salto of een dash midden in een koprol laat hem niet meer scheef
+  of ondersteboven staan, en na een slag staan de heupen en de nek weer goed (je loopt niet meer scheef)
+- **Kampioenen** beginnen op een vrij plekje, lopen rond, botsen net zo groot als ze eruitzien en springen over iets heen
+  als ze echt vastzitten
 - Vijanden (ook spoken) lopen niet meer door muren, bomen of stenen heen
 - **Levelen door te vechten**: elke verslagen vijand telt mee (een boss telt voor 10). Elk level geeft wat meer leven,
   stamina en schade, en op sommige levels speel je een kracht of bonus vrij (meer leven, sneller lopen, minder schade).
@@ -230,6 +242,7 @@ munt-jager-3d/
 └── src/
     ├── main.js       → start alles op, game loop, gevechten, winkel, doodgaan
     ├── graphics.js   → hoe het getekend wordt: gloed, kleuren, gladde randjes, de standen Laag/Normaal/Hoog (G)
+    ├── culling.js    → wat ver weg in de mist staat niet tekenen (dan loopt het spel soepel)
     ├── blobs.js      → zachte schaduw-vlekjes onder de speler, vijanden en mensen
     ├── grass.js      → dicht, wuivend gras rond de speler (alleen op Normaal en Hoog)
     ├── levels.js     → de 5 gebieden: pad, vijanden, kisten, NPC's, huizen (pas hier je gebieden aan!) en hoe ze samen de open wereld vormen
@@ -250,7 +263,7 @@ munt-jager-3d/
     ├── arena.js      → de Arena: golven, huisdiergevechten, wedden op monsters en het duel
     ├── islands.js    → de Hemeleilanden: zwevende eilanden, het Windaltaar en de bewakers
     ├── multiplayer.js→ samen spelen via internet (PeerJS): je vriend zien en het duel
-    ├── buddy.js      → Claude, je computer-maatje: meelopen, meevechten, kletsen en het oefenduel
+    ├── buddy.js      → Claude, je computer-maatje: NPC in Muntdorp, meelopen, meevechten, kletsen en het duel (8 niveaus)
     ├── invasions.js  → Omar-invasies: golven schaduwkrijgers bij een kamp
     ├── shadowDragon.js → de eindbaas: de Schaduwdraak
     ├── goals.js      → trofeeën, sterren, rangen en het Premiebord
@@ -285,7 +298,7 @@ munt-jager-3d/
 - **Draak, huisdier en invasies** → `DRAGON` in `src/dragon.js`, `PET`/`PETS` in `src/pet.js` en `INVASION` in `src/invasions.js`
 - **De Arena** → `ARENA`, `WAVES` en `FIGHTERS` in `src/arena.js` · **De Hemeleilanden** → `ISLAND_LAYOUT` in `src/levels.js` en `ALTAR` in `src/islands.js`
 - **Animaties van je held** → `CLIPS` bovenaan `src/player.js` (welke animatie bij welke actie, en welk stukje ervan)
-- **Claude, je maatje** → `BUDDY` (hoe sterk, hoe ver) en `BUDDY_DUEL` (moeilijkheid van het oefenduel) in `src/buddy.js`; wat hij zegt staat in `LINES`
+- **Claude, je maatje** → `BUDDY` (hoe sterk, hoe ver) en `BUDDY_DUEL` (de 8 duel-niveaus: leven, schade, combo's, wervelslag, ...) in `src/buddy.js`; wat hij zegt staat in `LINES`
 - **Samen spelen** → `src/multiplayer.js` (test met een eigen PeerJS-server: `index.html?peer=localhost:9000`)
 - **Trofeeën, premies en de sterrenwinkel** → `TROPHIES` in `src/goals.js` en `STAR_ITEMS` in `src/stats.js`
 - **Kampioenen en woedende bosses** → `CHAMPION` in `src/champions.js` en `RAGE` in `src/bosses.js`

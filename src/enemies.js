@@ -117,6 +117,8 @@ for (const type of Object.values(ENEMY_TYPES)) {
 const LEASH = 20;
 const ACTIVE_RANGE = 70; // vijanden verder weg dan dit staan stil (scheelt rekenwerk)
 const STUCK_TIME = 0.6; // zo lang vastzitten, en dan probeert een vijand iets anders
+const HOP = { after: 3, time: 0.5, height: 2.4 }; // na 3 keer kort na elkaar vastzitten springt hij over het ding heen (zo lang, zo hoog)
+const tmpHouse = new THREE.Vector3();
 
 /**
  * In welk blok staat een rondje (midden x,z, straal r, van hoogte y tot y+h)? Geeft het blok terug, of null.
@@ -573,6 +575,8 @@ class Enemy {
     this.returning = false; // opgegeven en op weg naar huis
     this.closeBy = false; // vlak bij de speler (dan staat hij stil)
     this.stuckT = 0; // hoe lang zit hij al vast?
+    this.stuckCount = 0; // hoe vaak kort na elkaar vast (3 keer: dan springt hij eroverheen)
+    this.hop = null; // een sprongetje over iets heen (zie tryHop)
     this.avoidT = 0; // zo lang blijft hij nog om iets heen lopen
     this.avoidSide = 0; // om iets heen: links (1) of rechts (-1)
     this.state = this.type.dormant ? 'dormant' : 'walk'; // golem: walk / windup / recover, andere soorten hebben hun eigen aanvallen
@@ -722,7 +726,7 @@ class Enemy {
     const flatToPlayer = toPlayer.clone().setY(0);
     const distToPlayer = flatToPlayer.length();
     const distFromHome = this.position.clone().setY(0).distanceTo(this.home);
-    const giveUp = this.summoned ? 40 : LEASH; // opgeroepen slijmpjes lopen door de hele boss-arena achter je aan
+    const giveUp = this.leash ?? (this.summoned ? 40 : LEASH); // opgeroepen slijmpjes lopen door de hele boss-arena achter je aan
     // Niet achter je aan als je hoog op een blok staat (maar wel als je alleen even springt)
     const reachable = type.flies || playerPos.y < this.position.y + 2.5 || (this.chasing && !ctx.player.onGround);
     if (this.returning && distFromHome < 3) this.returning = false; // weer thuis
@@ -733,6 +737,23 @@ class Enemy {
       this.chasing = !this.returning && ctx.player.alive && reachable && distToPlayer < type.sight && distFromHome < giveUp;
     }
     if (!this.chasing && distFromHome >= giveUp) this.returning = true; // te ver weg: opgeven en terug naar huis
+
+    // ---------- Over iets heen springen (als hij echt vastzat) ----------
+    if (this.hop) {
+      const hop = this.hop;
+      hop.t = Math.min(1, hop.t + dt / HOP.time);
+      this.position.lerpVectors(hop.from, hop.to, hop.t);
+      this.position.y = (this.floor ?? 0) + Math.sin(hop.t * Math.PI) * HOP.height;
+      const look = hop.to.clone().sub(hop.from);
+      this.mesh.rotation.y = Math.atan2(look.x, look.z);
+      if (hop.t >= 1) {
+        this.hop = null;
+        this.position.y = this.floor ?? 0;
+        this.pushOutOfBlocks(ctx.colliders);
+      }
+      this.animateMove(dt, ctx, type.chaseSpeed, true);
+      return;
+    }
 
     // ---------- Eigen aanvallen van de nieuwe vijanden ----------
     if (['zombie', 'spierbonk', 'mecha', 'ninja'].includes(this.type.ai ?? this.typeKey)) {
@@ -842,7 +863,12 @@ class Enemy {
     else this.stuckT = Math.max(0, this.stuckT - dt);
     if (this.stuckT > STUCK_TIME) {
       this.stuckT = 0;
-      if (this.chasing || this.returning) {
+      // Al een paar keer kort na elkaar vast? Dan springt hij eroverheen, een stukje richting jou (of naar huis)
+      this.stuckCount = ctx.time - (this.lastStuck ?? -99) < 3 ? (this.stuckCount ?? 0) + 1 : 1;
+      this.lastStuck = ctx.time;
+      if ((this.chasing || this.returning) && !type.flies && this.stuckCount >= HOP.after && this.tryHop(ctx, this.chasing ? playerPos : this.home)) {
+        this.stuckCount = 0;
+      } else if (this.chasing || this.returning) {
         this.avoidSide = -(this.avoidSide || 1);
         this.avoidT = 1.2;
       } else this.goingToB = !this.goingToB;
@@ -858,16 +884,55 @@ class Enemy {
       this.mesh.rotation.y += diff * Math.min(1, 8 * dt);
     }
 
-    // ---------- Animatie ----------
+    this.animateMove(dt, ctx, speed);
+  }
+
+  /** Loop-animatie (of stilstaan als speed 0 is). */
+  animateMove(dt, ctx, speed, run = this.chasing) {
+    const type = this.type;
     if (this.mixer) {
       this.anim -= dt;
-      if (this.anim <= 0) this.playAnim(speed === 0 ? 'Idle' : this.chasing ? 'Run' : 'Walk');
+      if (this.anim <= 0) this.playAnim(speed === 0 ? 'Idle' : run ? 'Run' : 'Walk');
       this.mixer.update(dt);
     } else if (type.model) this.animateModel(dt, speed);
     else if (this.typeKey === 'skelet') this.animateSkeleton(dt, speed);
     else if (this.typeKey === 'golem') this.animateGolem(dt, ctx.time);
     else if (type.flies) this.animateGhost(ctx.time);
     else this.animateSlime(dt, ctx.time);
+  }
+
+  /**
+   * Zit hij echt vast (achter een boom, in een hoekje tussen huizen)? Dan springt hij eroverheen:
+   * naar een vrij plekje een paar meter verder richting zijn doel. Geeft true als dat lukt.
+   */
+  tryHop(ctx, target) {
+    const p = this.position;
+    const to = target.clone().sub(p).setY(0);
+    const dist = to.length();
+    if (dist < 1.5) return false;
+    to.divideScalar(dist);
+    const r = this.type.radius + 0.15;
+    const y = this.floor ?? 0;
+    const B = ctx.bounds;
+    // (niet in een huis landen, behalve als jij daar zelf staat)
+    const house = ctx.insideHouse;
+    const targetInside = house?.(tmpHouse.set(target.x, 1, target.z));
+    const free = (x, z) => Math.abs(x) < B.x - r && Math.abs(z) < B.z - r && !blockAt(x, z, r, y, this.type.height, ctx.colliders)
+      && (!house || targetInside || !house(tmpHouse.set(x, 1, z)));
+    for (const step of [3, 4.5, 6, 8, 2]) {
+      const len = Math.min(step, dist - 0.5);
+      for (const a of [0, 0.5, -0.5, 1, -1, 1.5, -1.5]) {
+        const c = Math.cos(a);
+        const s = Math.sin(a);
+        const x = p.x + (to.x * c + to.z * s) * len;
+        const z = p.z + (-to.x * s + to.z * c) * len;
+        if (!free(x, z)) continue;
+        this.hop = { from: p.clone(), to: new THREE.Vector3(x, y, z), t: 0 };
+        this.knockback.set(0, 0, 0);
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Patrouille-punten niet in (of achter) bomen, stenen, muren, of buiten de wereld. Gebeurt één keer. */

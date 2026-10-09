@@ -337,6 +337,26 @@ export class Player {
     return true;
   }
 
+  /**
+   * Het lijf draait alleen tijdens een koprol, een salto of de wervelslag. We rekenen het elke frame opnieuw uit
+   * uit de timers: stopt zo'n beweging halverwege (je landt midden in een salto, of dasht midden in een koprol),
+   * dan staat je poppetje meteen weer recht. Zo kan hij nooit scheef of ondersteboven blijven staan.
+   */
+  bodyTurn() {
+    const rolling = this.rollTimer > 0;
+    const flipping = this.flipTimer > 0;
+    const spinning = this.spinTimer > 0;
+    if (!rolling && !flipping && !spinning && !this.bodyTurned) return;
+    let x = 0;
+    if (rolling) x = (1 - this.rollTimer / ROLL.time) * Math.PI * 2; // een hele koprol
+    else if (flipping) {
+      const k = 1 - this.flipTimer / FLIP_TIME;
+      x = k * k * (3 - 2 * k) * Math.PI * 2; // salto: rustig beginnen, snel draaien, rustig uitkomen
+    }
+    this.body.rotation.set(x, spinning ? (1 - this.spinTimer / SPIN_TIME) * Math.PI * 4 : 0, 0); // wervelslag: twee keer rond
+    this.bodyTurned = rolling || flipping || spinning;
+  }
+
   tryDash(direction) {
     if (!this.stats.hasPower('dash') || this.dashCooldown > 0 || this.pickupTimer > 0 || this.drinkTimer > 0) return false;
     if (!this.onGround && this.airDashes > 0) return false;
@@ -463,9 +483,7 @@ export class Player {
     if (this.rollTimer > 0) {
       this.rollTimer -= dt;
       const k = 1 - this.rollTimer / ROLL.time;
-      horizontal = this.rollDir.clone().multiplyScalar(ROLL.speed * (1 - k * 0.6));
-      this.body.rotation.x = k * Math.PI * 2; // een hele koprol
-      if (this.rollTimer <= 0) this.body.rotation.x = 0;
+      horizontal = this.rollDir.clone().multiplyScalar(ROLL.speed * (1 - k * 0.6)); // (de koprol zelf: zie bodyTurn)
     } else if (this.dashTimer > 0) {
       this.dashTimer -= dt;
       horizontal = this.dashDir.clone().multiplyScalar(DASH.speed);
@@ -488,10 +506,7 @@ export class Player {
     // Wervelslag: twee keer rondtollen
     if (this.spinTimer > 0) {
       this.spinTimer -= dt;
-      const k = 1 - this.spinTimer / SPIN_TIME;
-      this.body.rotation.y = k * Math.PI * 4;
       horizontal.multiplyScalar(0.5);
-      if (this.spinTimer <= 0) this.body.rotation.y = 0;
     }
 
     this.velocity.x = horizontal.x + this.knockback.x;
@@ -549,12 +564,8 @@ export class Player {
     }
 
     // Salto bij de dubbele sprong (het hele lijf draait één keer voorover)
-    if (this.flipTimer > 0) {
-      this.flipTimer = Math.max(0, this.flipTimer - dt);
-      const k = 1 - this.flipTimer / FLIP_TIME;
-      this.body.rotation.x = (k * k * (3 - 2 * k)) * Math.PI * 2;
-      if (this.flipTimer <= 0) this.body.rotation.x = 0;
-    }
+    if (this.flipTimer > 0) this.flipTimer = Math.max(0, this.flipTimer - dt);
+    this.bodyTurn();
 
     this.updateDrink(dt);
 

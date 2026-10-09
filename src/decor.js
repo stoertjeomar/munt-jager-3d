@@ -3,6 +3,7 @@ import { loadGLB } from './assets.js';
 import { isFree, seededRandom, BOUNDS, addWind, SKY_UNIFORMS, PONDS, regionAt } from './world.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { LEVEL, REGIONS } from './levels.js';
+import { culler } from './culling.js';
 
 // Extra aankleding van de wereld met modellen uit de KayKit- en Kenney-pakketten:
 // planten, stenen, grasplukjes, wolken en rondscharrelende dieren.
@@ -11,7 +12,7 @@ import { LEVEL, REGIONS } from './levels.js';
  * Zet heel veel kopieën van een model neer met InstancedMesh (één tekenopdracht per onderdeel = snel).
  * @param {Array<THREE.Matrix4>} transforms
  */
-function scatter(scene, gltf, transforms, { shadows = false, wind = 0, tint = null } = {}) {
+function scatter(scene, gltf, transforms, { shadows = false, wind = 0, tint = null, maxDist = Infinity } = {}) {
   gltf.scene.updateMatrixWorld(true);
   // Andere kleur (bijv. de grasplukjes: minder mintgroen, meer echt gras)
   if (tint) gltf.scene.traverse((c) => c.isMesh && c.material.color?.multiply(tint));
@@ -40,7 +41,9 @@ function scatter(scene, gltf, transforms, { shadows = false, wind = 0, tint = nu
       inst.computeBoundingSphere();
       inst.castShadow = shadows;
       inst.receiveShadow = true;
+      inst.userData.cell = true;
       scene.add(inst);
+      culler.add(inst, { maxDist }); // ver weg (in de mist, of kleine plantjes al eerder): niet tekenen
     }
   });
 }
@@ -236,11 +239,11 @@ export class Decor {
     const green = ['weide', 'woud'];
     // Grasplukjes en planten (het dichte gras zelf staat in grass.js)
     const grassTint = new THREE.Color(0.78, 0.95, 0.55);
-    if (grass) scatter(scene, grass, spots(rand, 550, { regions: green, scaleMin: 1.4, scaleMax: 2.4 }), { wind: 0.35, tint: grassTint });
-    if (grassSmall) scatter(scene, grassSmall, spots(rand, 550, { regions: green, scaleMin: 1.4, scaleMax: 2.2 }), { wind: 0.35, tint: grassTint });
-    if (plantA) scatter(scene, plantA, spots(rand, 120, { regions: green, scaleMin: 0.9, scaleMax: 1.6 }), { wind: 0.25 });
-    if (plantB) scatter(scene, plantB, spots(rand, 120, { regions: green, scaleMin: 0.8, scaleMax: 1.5 }), { wind: 0.25 });
-    if (detail) scatter(scene, detail, spots(rand, 70, { regions: green, scaleMin: 1, scaleMax: 1.6 }));
+    if (grass) scatter(scene, grass, spots(rand, 550, { regions: green, scaleMin: 1.4, scaleMax: 2.4 }), { wind: 0.35, tint: grassTint, maxDist: 45 });
+    if (grassSmall) scatter(scene, grassSmall, spots(rand, 550, { regions: green, scaleMin: 1.4, scaleMax: 2.2 }), { wind: 0.35, tint: grassTint, maxDist: 45 });
+    if (plantA) scatter(scene, plantA, spots(rand, 120, { regions: green, scaleMin: 0.9, scaleMax: 1.6 }), { wind: 0.25, maxDist: 60 });
+    if (plantB) scatter(scene, plantB, spots(rand, 120, { regions: green, scaleMin: 0.8, scaleMax: 1.5 }), { wind: 0.25, maxDist: 60 });
+    if (detail) scatter(scene, detail, spots(rand, 70, { regions: green, scaleMin: 1, scaleMax: 1.6 }), { maxDist: 60 });
     // Riet en planten langs de rand van de vijvers
     if (plantB && PONDS.length) {
       const reeds = [];

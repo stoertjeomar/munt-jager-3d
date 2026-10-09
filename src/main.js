@@ -35,9 +35,11 @@ import { Villagers } from './villagers.js';
 import { Arena } from './arena.js';
 import { Islands, ALTAR } from './islands.js';
 import { Multiplayer, DUEL } from './multiplayer.js';
-import { Buddy, BUDDY, BUDDY_DUEL } from './buddy.js';
+import { Buddy, BUDDY, BUDDY_DUEL, duelLevels } from './buddy.js';
 import { RamesFlow } from './rames.js';
 import { Admin } from './admin.js';
+import { culler } from './culling.js';
+import { modelsLoading } from './assets.js';
 
 // ---------- Basis: renderer, scene, camera ----------
 // Geen "antialias" hier: alles gaat eerst door de nabewerking, daar zitten de gladde randjes (zie graphics.js).
@@ -423,7 +425,8 @@ function showRegionComplete(region, rewards, leveledUp = false, { gateJustOpened
 function openArenaMenu() {
   document.exitPointerLock?.();
   play('gong');
-  ui.openArena(arena.menuInfo(), {
+  const info = () => ({ ...arena.menuInfo(), buddyLevels: buddy ? duelLevels(stats.data) : [] });
+  ui.openArena(info(), {
     waves: () => {
       closeMenuAndPlay();
       // Naar het midden van de arena, en dan: golf 1!
@@ -442,7 +445,7 @@ function openArenaMenu() {
     },
     reroll: () => {
       arena.newMatchup();
-      return arena.menuInfo();
+      return info();
     },
     buddy: (level) => startBuddyDuel(level),
     duel: () => {
@@ -1144,6 +1147,66 @@ startBtn.addEventListener('click', () => {
   gameStarted = true;
   cameraRig.lock();
 });
+
+// ---------- Soepel spelen: eerst alles laden en klaarzetten, daarna pas beginnen ----------
+// Zolang er nog modellen binnenkomen staat er "Laden…" op de knop. Daarna zetten we alle plaatjes en shaders
+// alvast klaar op de videokaart: anders hapert het spel elke keer dat je voor het eerst iets nieuws ziet.
+const boot = { start: performance.now(), idleSince: 0, warming: false, ready: false, scan: 8 };
+startBtn.disabled = true;
+startBtn.textContent = 'Laden…';
+
+async function warmUp() {
+  try {
+    const seen = new Set();
+    scene.traverse((o) => {
+      const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+      for (const m of mats) {
+        for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap', 'alphaMap', 'bumpMap']) {
+          const tex = m[key];
+          if (tex?.isTexture && !seen.has(tex)) {
+            seen.add(tex);
+            renderer.initTexture(tex);
+          }
+        }
+      }
+    });
+    // De shaders precies zo maken als ze straks getekend worden: in het beeld van de nabewerking (zie graphics.js)
+    const before = renderer.getRenderTarget();
+    renderer.setRenderTarget(composer.renderTarget1);
+    const done = renderer.compileAsync(scene, camera);
+    renderer.setRenderTarget(before);
+    await done;
+  } catch (e) {
+    console.warn('Klaarzetten lukte niet helemaal:', e);
+  }
+}
+
+/** Elke frame: laden klaar? En wat staat er te ver weg in de mist (dat tekenen we niet, zie culling.js)? */
+function updateCulling(dt) {
+  if (!boot.ready && !boot.warming) {
+    // Pas als er een halve seconde niks meer binnenkomt (sommige modellen laden pas na andere), of na 20 seconden
+    const now = performance.now();
+    if (modelsLoading() > 0) boot.idleSince = 0;
+    else boot.idleSince ||= now;
+    if ((boot.idleSince && now - boot.idleSince > 500) || now - boot.start > 20000) {
+      boot.warming = true;
+      culler.addScene(scene);
+      culler.refresh(); // nu alles geladen is, kloppen de maten
+      warmUp().finally(() => {
+        boot.ready = true;
+        startBtn.disabled = false;
+        if (!gameStarted) startBtn.textContent = 'Spelen';
+      });
+    }
+  }
+  // Af en toe kijken of er nieuwe dingen in de wereld staan (vijanden die erbij komen, enzovoort)
+  boot.scan -= dt;
+  if (boot.scan <= 0) {
+    boot.scan = 8;
+    culler.addScene(scene);
+  }
+  culler.update(camera, scene.fog);
+}
 // Samen spelen kun je ook meteen op het startscherm kiezen
 document.getElementById('mp-btn')?.addEventListener('click', () => {
   unlockAudio();
@@ -1156,7 +1219,7 @@ document.getElementById('mp-btn')?.addEventListener('click', () => {
 document.addEventListener('pointerlockchange', () => {
   lockHintEl.classList.toggle('hidden', cameraRig.locked || !!ui.menuOpen);
   // Na het begin is dit scherm ook het pauzescherm (dan kun je geen level meer kiezen)
-  startBtn.textContent = gameStarted ? 'Doorgaan' : 'Spelen';
+  startBtn.textContent = gameStarted ? 'Doorgaan' : boot.ready ? 'Spelen' : 'Laden…';
   levelSelectEl.classList.toggle('hidden', gameStarted || IN_SPECIAL);
   document.getElementById('level-title').classList.toggle('hidden', gameStarted || IN_SPECIAL);
   if (gameStarted && cameraRig.locked && !state.introShown) {
@@ -1173,7 +1236,7 @@ document.addEventListener('pointerlockchange', () => {
 window.addEventListener('keydown', (e) => {
   unlockAudio();
   if (e.code === 'KeyM') toggleMute();
-  if (e.code === 'KeyN' && !e.repeat) ui.toast(music.toggle() ? '🎵 Muziek <b>aan</b> (N)' : '🔇 Muziek <b>uit</b> (N)', 2);
+  if (e.code === 'KeyN' && !e.repeat && ui.menuOpen !== 'level') ui.toast(music.toggle() ? '🎵 Muziek <b>aan</b> (N)' : '🔇 Muziek <b>uit</b> (N)', 2);
   if (e.code === 'KeyG' && !e.repeat) gfx.cycle(); // G = mooier of sneller: kies wat je computer aankan
 });
 
@@ -1225,6 +1288,12 @@ function handleActions(move) {
   if (input.wasPressed('KeyQ')) toggleLock();
   if (input.wasPressed('KeyI') || input.wasPressed('Tab')) toggleInventory();
 
+  // Claude (als NPC in Muntdorp): praten = kiezen of hij met je meegaat
+  if (buddy && !player.isBusy && buddy.nearNpc(player.position)) {
+    ui.prompt(`<b>E</b> Praat met 🤖 ${BUDDY.name}`);
+    if (input.wasPressed('KeyE')) talkToBuddy();
+    return;
+  }
   // E: praten of een kist openen
   const npc = player.isBusy ? null : npcs.nearby(player.position);
   if (npc) {
@@ -1434,7 +1503,7 @@ const nightwalker = new NightWalker({ scene, player, effects });
 // Af en toe valt Omars schaduwleger een kamp aan (invasions.js)
 const invasions = new Invasions({ scene, ui, stats, effects, giveRunes, addEnemy: addSummon, removeEnemy, onWin: () => goals.onInvasion() });
 // Gouden Kampioenen in elk gebied waar je al bent geweest (champions.js)
-const champions = new Champions({ stats, effects, addEnemy: addSummon, removeEnemy, ui });
+const champions = new Champions({ stats, effects, addEnemy: addSummon, removeEnemy, ui, colliders: world.colliders, insideHouse: (p) => world.insideHouse(p) });
 // De Arena naast Muntdorp (arena.js)
 const arena = new Arena({ scene, stats, ui, effects, colliders: world.colliders, addEnemy: addSummon, removeEnemy, player, pets, goals, giveRunes, giveStars });
 // Online samen spelen (multiplayer.js): elkaar zien, en een duel in de Arena
@@ -1470,13 +1539,41 @@ const multiplayer = IN_SPECIAL ? null : new Multiplayer({
 // De Hemeleilanden: zwevende eilanden hoog in de lucht, alleen met de draak te bereiken (islands.js)
 const islands = IN_SPECIAL ? null : new Islands(scene, { colliders: world.colliders, addEnemy: addSummon, stats, effects, ui, giveStars });
 // Claude, je computer-maatje: loopt met je mee en vecht mee (buddy.js). H = iets aan hem vragen.
-const buddy = IN_SPECIAL ? null : new Buddy({ scene, player, stats, effects, ui, colliders: world.colliders, bounds: world.bounds });
+// Hij begint als NPC in Muntdorp, vlak vóór de plek waar je het spel begint (een stukje opzij, niet midden op het pad).
+const buddyHome = (() => {
+  if (IN_SPECIAL) return null;
+  const at = checkpointSpawn('l1-start');
+  const flip = REGIONS[regionOfCheckpoint('l1-start')].flip;
+  const ahead = new THREE.Vector3(0, 0, flip ? 1 : -1); // de kant waar je naar kijkt als je begint
+  return { pos: at.add(ahead.clone().multiplyScalar(5)).add(new THREE.Vector3(1.4, 0, 0)), yaw: Math.atan2(-ahead.x, -ahead.z) };
+})();
+const buddy = IN_SPECIAL ? null : new Buddy({ scene, player, stats, effects, ui, colliders: world.colliders, bounds: world.bounds, home: buddyHome.pos, homeYaw: buddyHome.yaw });
 if (buddy?.firstTime) {
   buddy.save();
   setTimeout(() => {
-    buddy.greet();
-    ui.toast(`🤖 <b>${BUDDY.name}</b> speelt nu met je mee! Hij loopt achter je aan en vecht mee.<br><small>Druk op <b>H</b> om hem iets te vragen (volgen, wachten, of een oefenduel in de Arena).</small>`, 7);
+    ui.toast(`🤖 <b>${BUDDY.name}</b> staat in Muntdorp, vlak bij het begin (🤖 op de kaart).<br><small>Praat met hem (<b>E</b>) als je wilt dat hij met je meegaat en meevecht. Tegen hem vechten kan in de <b>Arena</b>!</small>`, 8);
   }, 6000);
+}
+
+/** Praten met Claude (als NPC): kies of hij met je meegaat. J = ja, N = nee. */
+function talkToBuddy() {
+  document.exitPointerLock?.();
+  const done = (yes) => {
+    state.buddyChoice = null;
+    closeMenuAndPlay();
+    if (!yes) {
+      buddy.stayHere();
+      return;
+    }
+    buddy.recruit();
+    ui.toast(`🤖 <b>${BUDDY.name}</b> gaat met je mee! Hij loopt achter je aan en vecht mee tegen monsters.<br><small>Druk op <b>H</b> om hem iets te vragen (volgen, wachten of terug naar Muntdorp).</small>`, 6);
+  };
+  state.buddyChoice = { yes: () => done(true), no: () => done(false) };
+  ui.openLevelComplete(`🤖 ${BUDDY.name.toUpperCase()}`, `Hoi! Ik ben <b>${BUDDY.name}</b>, een held die door de computer wordt bestuurd.<br>Zal ik met je meegaan? Dan loop ik achter je aan en help ik je vechten tegen de monsters!
+    <br><small>Je kunt me later altijd terugsturen naar Muntdorp (<b>H</b>). En in de <b>Arena</b> kun je tegen mij vechten: 8 niveaus, van Makkelijk tot ONMOGELIJK!</small>`, [
+    ['✅ Ja, ga mee! (J)', state.buddyChoice.yes],
+    ['❌ Nee, blijf hier (N)', state.buddyChoice.no],
+  ]);
 }
 
 /** Claude raakt een vijand (net als bij je huisdier: het spel staat dan niet even stil). */
@@ -1503,13 +1600,12 @@ function updateBuddy(dt) {
 
 /** Oefenduel tegen Claude in de Arena (makkelijk, normaal of moeilijk). */
 function startBuddyDuel(level) {
-  if (!buddy || !arena.exists) return;
+  if (!buddy || !arena.exists || !duelLevels(stats.data).find((l) => l.key === level)?.open) return;
   if (state.activeBoss) {
     ui.toast('⚔ Eerst de boss verslaan! Daarna kun je een oefenduel doen.', 3);
     return;
   }
   closeMenuAndPlay();
-  if (buddy.mode === 'weg') buddy.setMode('volg');
   if (dragon.active) dragon.hide();
   if (arena.mode) arena.finish();
   arena.begin('maatje');
@@ -1518,7 +1614,7 @@ function startBuddyDuel(level) {
   cameraRig.snapTo(player.position);
   cameraRig.yaw = player.mesh.rotation.y + Math.PI;
   buddy.startDuel(level, arena.center.clone().add(new THREE.Vector3(6, 0, 0)));
-  ui.banner(`DUEL: JIJ vs ${BUDDY.name.toUpperCase()}`, `${BUDDY_DUEL[level].name} · winnen = ● ${BUDDY_DUEL[level].reward}`, 'gold', 3);
+  ui.banner(`DUEL: JIJ vs ${BUDDY.name.toUpperCase()}`, `${BUDDY_DUEL[level].icon} ${BUDDY_DUEL[level].name} · winnen = ● ${BUDDY_DUEL[level].reward}`, 'gold', 3);
   play('gong');
 }
 
@@ -1530,7 +1626,9 @@ function buddyDuelEnd(won) {
   player.respawnAt(arena.gate.clone());
   player.invulnerable = 2;
   cameraRig.snapTo(player.position);
-  buddy.teleportTo(player.position);
+  if (buddy.mode === 'npc') buddy.goHome(true); // (een NPC gaat terug naar zijn plekje in Muntdorp)
+  else buddy.teleportTo(player.position);
+  const before = duelLevels(stats.data).filter((l) => l.open).length;
   const d = stats.data;
   d.buddy = { ...(d.buddy ?? {}), wins: d.buddy?.wins ?? {}, losses: d.buddy?.losses ?? 0 };
   if (won) {
@@ -1539,7 +1637,9 @@ function buddyDuelEnd(won) {
     d.buddy.wins[level] = (d.buddy.wins[level] ?? 0) + 1;
     goals.onArena('duel');
     play('win');
-    ui.banner('JIJ WINT!', `Je hebt ${BUDDY.name} verslagen (${BUDDY_DUEL[level].name})! ● +${prize}`, 'gold', 4);
+    const now = duelLevels(d);
+    const unlocked = now.filter((l) => l.open).length > before ? now.filter((l) => l.open).at(-1) : null;
+    ui.banner('JIJ WINT!', `Je hebt ${BUDDY.name} verslagen (${BUDDY_DUEL[level].name})! ● +${prize}${unlocked ? ` · Nieuw niveau open: ${unlocked.icon} ${unlocked.name}!` : ''}`, 'gold', 4.5);
   } else {
     d.buddy.losses++;
     play('lose');
@@ -1556,6 +1656,10 @@ function openBuddyMenu() {
     return;
   }
   if (ui.menuOpen) return;
+  if (buddy.mode === 'npc') {
+    ui.toast(`🤖 <b>${BUDDY.name}</b> staat in Muntdorp (🤖 op de kaart).<br><small>Ga naar hem toe en praat met hem (<b>E</b>) om hem mee te nemen. Tegen hem vechten kan in de <b>Arena</b>.</small>`, 5);
+    return;
+  }
   document.exitPointerLock?.();
   ui.openBuddy(buddy, {
     mode: (m) => {
@@ -1564,7 +1668,7 @@ function openBuddyMenu() {
     },
     duel: (level) => startBuddyDuel(level),
     close: closeMenuAndPlay,
-  }, BUDDY_DUEL);
+  }, duelLevels(stats.data));
 }
 // Staat de Schaduwpoort al open? (bij een oude save waarin de vier bosses al verslagen zijn)
 if (gateOpen()) openGate();
@@ -1605,6 +1709,11 @@ function gameLoop() {
   if (closeInventory) toggleInventory();
   if (closeShopKey) closeShop();
   if (closeMap) closeMenuAndPlay();
+  // Claude vraagt of hij mee mag: J = ja, N of Esc = nee
+  if (menuAtStart === 'level' && state.buddyChoice) {
+    if (input.wasPressed('KeyJ')) state.buddyChoice.yes();
+    else if (input.wasPressed('KeyN') || input.wasPressed('Escape')) state.buddyChoice.no();
+  }
   const closeAdmin = menuAtStart === 'admin' && input.wasPressed('Escape');
   if (closeAdmin) admin.close();
   // Enter (niet in een gesprek, menu of filmpje): het vakje voor de admin-code
@@ -1656,7 +1765,7 @@ function gameLoop() {
   if (!player.alive && state.deathTimer <= 0) die();
 
   const enemyCtx = {
-    time: elapsed, player, colliders: world.colliders, bounds: world.bounds, camera, onSlam: onGolemSlam,
+    time: elapsed, player, colliders: world.colliders, bounds: world.bounds, camera, onSlam: onGolemSlam, insideHouse: (p) => world.insideHouse(p),
     hurtPlayer, projectiles, effects,
     night: world.night ?? 0, // 0 = dag, 1 = nacht (vijanden kunnen dan wat gloeien)
   };
@@ -1783,6 +1892,7 @@ function gameLoop() {
     stats.save();
   }
 
+  updateCulling(realDt);
   gfx.measure(frameTime, gameStarted && !paused);
   gfx.render();
   input.endFrame();
@@ -1829,7 +1939,7 @@ if (stats.level === 1 && stats.runes === 0 && stats.data.bosses.length === 0) {
 }
 
 // Handig voor debuggen in de browser-console (F12): typ bijvoorbeeld `game.player.position`
-window.game = { scene, player, enemies, bosses, sites, npcs, stats, ui, world, state, camera, cameraRig, renderer, composer, gfx, nightLight, grass, decor, effects, trail, onDefeated, loop: gameLoop };
+window.game = { scene, player, enemies, bosses, sites, npcs, stats, ui, world, state, camera, cameraRig, renderer, composer, gfx, nightLight, grass, decor, effects, trail, onDefeated, boot, culler, loop: gameLoop };
 window.game.omar = omar;
 window.game.sky = sky;
 window.game.nightwalker = nightwalker;

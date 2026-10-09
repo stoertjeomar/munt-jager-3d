@@ -5,9 +5,10 @@ import { play } from './audio.js';
 // ======================================================================
 // Claude, je computer-maatje
 // ======================================================================
-// Een held die door de computer wordt bestuurd en met je meespeelt: hij loopt achter je aan, vecht mee tegen
-// vijanden en kletst af en toe (in een tekstwolkje). Met H vraag je hem iets: volgen, wachten, even weggaan,
-// of een oefenduel in de Arena (makkelijk, normaal of moeilijk).
+// Een held die door de computer wordt bestuurd. Hij staat eerst als NPC in Muntdorp, vlak bij het begin.
+// Praat met hem (E) en kies of hij met je meegaat. Dan loopt hij achter je aan, vecht mee tegen vijanden
+// en kletst af en toe (in een tekstwolkje). Met H vraag je hem iets: volgen, wachten of teruggaan naar Muntdorp.
+// In de Arena kun je een oefenduel tegen hem doen: 8 niveaus, van Makkelijk tot ONMOGELIJK.
 // Hij is een echte Player (net als Omar), dus hij beweegt met dezelfde animaties als jij.
 // Vijanden letten niet op hem: alleen in een duel kan hij geraakt worden.
 // Vijanden die hij verslaat geven munten, maar tellen niet mee voor je level: sterker worden doe je zelf.
@@ -24,13 +25,30 @@ export const BUDDY = {
 };
 
 // Het oefenduel in de Arena. hp en damage hangen af van jouw leven (dan is het op elk level spannend).
+// Elk niveau gaat pas open als je het niveau ervoor één keer hebt gewonnen.
 //   hp = keer jouw leven · damage = deel van jouw leven per klap · think = hoe vaak hij nadenkt (seconden)
-//   aggro = kans dat hij slaat als hij dichtbij is · dodge = kans dat hij wegrolt als jij slaat · reward = munten
+//   aggro = kans dat hij slaat als hij dichtbij is · dodge = kans dat hij wegrolt als jij slaat · speed = hoe snel hij loopt
+//   combo = kans dat hij meteen nog een keer slaat (slag, slag, KLAP!) · punish = kans dat hij terugslaat als jij net mist
+//   spin = kans op een wervelslag als je dichtbij staat · fire = vuurzwaard (harder) · heal = zoveel keer een flesje drinken
+//   dashAttack = kans dat hij van ver naar je toe dasht en meteen slaat
+//   poise = kans dat hij niet wegvliegt als jij hem raakt (dan slaat hij gewoon terug) · reward = munten
 export const BUDDY_DUEL = {
-  makkelijk: { name: 'Makkelijk', hp: 0.8, damage: 0.05, think: 0.55, aggro: 0.45, dodge: 0.08, speed: 0.85, reward: 60 },
-  normaal: { name: 'Normaal', hp: 1.2, damage: 0.08, think: 0.35, aggro: 0.65, dodge: 0.25, speed: 1, reward: 150 },
-  moeilijk: { name: 'Moeilijk', hp: 1.8, damage: 0.11, think: 0.2, aggro: 0.85, dodge: 0.45, speed: 1.15, reward: 350 },
+  makkelijk: { name: 'Makkelijk', icon: '😊', hp: 0.8, damage: 0.05, think: 0.55, aggro: 0.45, dodge: 0.08, speed: 0.85, reward: 60 },
+  normaal: { name: 'Normaal', icon: '😤', hp: 1.2, damage: 0.08, think: 0.35, aggro: 0.65, dodge: 0.25, speed: 1, poise: 0.2, reward: 150, combo: 0.3 },
+  moeilijk: { name: 'Moeilijk', icon: '🔥', hp: 1.8, damage: 0.11, think: 0.2, aggro: 0.85, dodge: 0.45, speed: 1.15, poise: 0.35, reward: 350, combo: 0.55, punish: 0.3 },
+  expert: { name: 'Expert', icon: '💀', hp: 2.4, damage: 0.13, think: 0.16, aggro: 0.9, dodge: 0.55, speed: 1.2, poise: 0.5, reward: 600, combo: 0.7, punish: 0.5, spin: 0.25 },
+  meester: { name: 'Meester', icon: '⚔️', hp: 3, damage: 0.15, think: 0.13, aggro: 0.92, dodge: 0.62, speed: 1.25, poise: 0.6, reward: 1000, combo: 0.8, punish: 0.65, spin: 0.35, fire: true, heal: 1 },
+  kampioen: { name: 'Kampioen', icon: '👑', hp: 3.8, damage: 0.17, think: 0.11, aggro: 0.95, dodge: 0.7, speed: 1.3, poise: 0.7, reward: 1600, combo: 0.9, punish: 0.8, spin: 0.45, fire: true, heal: 1, dashAttack: 0.5 },
+  legende: { name: 'Legende', icon: '🌟', hp: 4.6, damage: 0.2, think: 0.09, aggro: 0.97, dodge: 0.78, speed: 1.35, poise: 0.8, reward: 2500, combo: 0.95, punish: 0.9, spin: 0.55, fire: true, heal: 2, dashAttack: 0.7 },
+  onmogelijk: { name: 'ONMOGELIJK', icon: '☠️', hp: 6, damage: 0.25, think: 0.07, aggro: 1, dodge: 0.85, speed: 1.45, poise: 0.9, reward: 5000, combo: 1, punish: 1, spin: 0.65, fire: true, heal: 3, dashAttack: 0.85 },
 };
+
+/** Alle duel-niveaus, met of ze al open zijn (het niveau ervoor gewonnen) en hoe vaak je ze won. */
+export function duelLevels(data) {
+  const wins = data.buddy?.wins ?? {};
+  const keys = Object.keys(BUDDY_DUEL);
+  return keys.map((key, i) => ({ key, ...BUDDY_DUEL[key], wins: wins[key] ?? 0, open: i === 0 || (wins[keys[i - 1]] ?? 0) > 0 }));
+}
 
 // Wat Claude zegt
 const LINES = {
@@ -54,6 +72,11 @@ const LINES = {
   duel: ['Oké! Maar ik ga niet zachtjes doen!', 'Kom maar op!'],
   duelWin: ['Hihi, ik won! Nog een keer?', 'Goed geprobeerd! Revanche?'],
   duelLose: ['Jij bent echt te sterk voor mij!', 'Oei, verloren! Jij wint!'],
+  npcHoi: ['Hoi! Ik ben Claude. Kom eens praten (E)!', 'Hé! Zal ik met je meegaan? Praat met mij (E)!'],
+  mee: ['Joepie! Ik ga met je mee!', 'Yes! Samen zijn we sterker!'],
+  blijf: ['Oké! Ik wacht hier. Kom maar terug als je me nodig hebt!', 'Prima! Ik sta hier als je me zoekt.'],
+  thuis: ['Ik ga terug naar Muntdorp. Kom me maar halen!'],
+  drink: ['Even een flesje drinken!', 'Gluk gluk... ik ben weer fit!'],
 };
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
@@ -73,7 +96,8 @@ class BuddyStats {
   get defenseBonus() { return 0; }
   get healBonus() { return 0; }
   get infiniteStamina() { return true; }
-  hasPower(key) { return key === 'dash' || key === 'doubleJump'; }
+  // In een zwaar duel kan hij ook een wervelslag en een vuurzwaard
+  hasPower(key) { return key === 'dash' || key === 'doubleJump' || (key === 'spin' && !!this.duelCfg?.spin) || (key === 'fire' && !!this.duelCfg?.fire); }
 }
 
 /** Een plaatje met tekst (voor zijn naambordje en zijn tekstwolkje). */
@@ -138,7 +162,8 @@ function makeLabel(text, { bubble = false } = {}) {
 
 export class Buddy {
   /**
-   * @param {object} game  { scene, player, stats, effects, ui, colliders, bounds }
+   * @param {object} game  { scene, player, stats, effects, ui, colliders, bounds, home, homeYaw }
+   *   home/homeYaw = zijn plekje in Muntdorp als NPC (vlak voor waar je begint)
    */
   constructor(game) {
     this.game = game;
@@ -150,7 +175,12 @@ export class Buddy {
     this.bubble = null;
     this.bubbleT = 0;
     const saved = game.stats.data.buddy ?? {};
-    this.mode = saved.mode ?? 'volg'; // volg | wacht | weg
+    // npc = staat in Muntdorp en wacht tot je met hem praat · volg = loopt met je mee · wacht = blijft even staan
+    // (Een oude save, van voordat hij een NPC was? Dan staat hij eerst ook in Muntdorp: dan kies je zelf.)
+    this.mode = saved.v >= 2 && ['volg', 'wacht'].includes(saved.mode) ? saved.mode : 'npc';
+    this.home = game.home?.clone() ?? game.player.position.clone();
+    this.homeYaw = game.homeYaw ?? 0;
+    this.greetT = 0;
     this.target = null; // de vijand waar hij nu tegen vecht
     this.talkT = 6;
     this.cool = {}; // wachttijden per soort praatje
@@ -160,9 +190,9 @@ export class Buddy {
     this.hitSwing = -1;
     this.lastId = null;
     this.move = new THREE.Vector3();
-    this.firstTime = !game.stats.data.buddy;
-    this.teleportTo(game.player.position, true);
-    if (this.mode === 'weg') this.setVisible(false);
+    this.firstTime = !(saved.v >= 2);
+    if (this.mode === 'npc') this.goHome(true);
+    else this.teleportTo(game.player.position, true);
     // Het doelwit voor jouw zwaard tijdens het oefenduel (net als een vijand)
     const self = this;
     this.duelTarget = {
@@ -179,29 +209,60 @@ export class Buddy {
     return this.p.position;
   }
 
+  /** Speelt hij met je mee (volgen of even wachten)? (Als NPC in Muntdorp niet.) */
   get active() {
-    return this.mode !== 'weg';
+    return this.mode === 'volg' || this.mode === 'wacht';
   }
 
   save() {
     const d = this.game.stats.data;
-    d.buddy = { ...(d.buddy ?? {}), mode: this.mode };
+    d.buddy = { ...(d.buddy ?? {}), mode: this.mode, v: 2 };
     this.game.stats.save();
   }
 
-  /** volg | wacht | weg */
+  /** volg | wacht | npc (terug naar zijn plekje in Muntdorp) */
   setMode(mode) {
     const was = this.mode;
     this.mode = mode;
-    if (mode === 'weg') {
+    this.target = null;
+    if (mode === 'npc') {
+      this.say(pick(LINES.thuis), 2.5);
       this.poof();
-      this.setVisible(false);
-    } else if (was === 'weg') {
-      this.teleportTo(this.game.player.position);
-      this.say(pick(LINES.hoi));
+      this.goHome();
+    } else if (was === 'npc') {
+      this.say(pick(LINES.mee));
     } else if (mode === 'wacht') this.say('Oké, ik wacht hier!');
     else this.say('Ik kom eraan!');
     this.save();
+  }
+
+  /** Terug naar zijn plekje in Muntdorp (als NPC). */
+  goHome(quiet = false) {
+    this.hidden = false;
+    this.setVisible(true);
+    this.p.position.copy(this.home);
+    this.p.velocity.set(0, 0, 0);
+    this.p.knockback.set(0, 0, 0);
+    this.p.mesh.rotation.y = this.homeYaw;
+    this.stuckT = 0;
+    if (!quiet) this.poof();
+  }
+
+  /** Sta je vlak bij hem terwijl hij een NPC is? (dan kun je met hem praten: E) */
+  nearNpc(pos) {
+    return this.mode === 'npc' && !this.duel && Math.hypot(pos.x - this.p.position.x, pos.z - this.p.position.z) < 2.8 && Math.abs(pos.y - this.p.position.y) < 1.5;
+  }
+
+  /** "Ja, ga mee!" */
+  recruit() {
+    this.setMode('volg');
+    this.game.effects.burst(this.p.position.clone().setY(this.p.position.y + 1.2), 0x9be7ff, { count: 30, speed: 4, size: 0.12, life: 0.8, up: 3 });
+    play('pickup');
+  }
+
+  /** "Nee, blijf hier." */
+  stayHere() {
+    this.say(pick(LINES.blijf), 3.5);
   }
 
   setVisible(on) {
@@ -270,7 +331,10 @@ export class Buddy {
         this.bubble = null;
       }
     }
-    if (!this.active) return;
+    if (!this.active && !this.duel) {
+      if (this.mode === 'npc') this.updateNpc(dt);
+      return;
+    }
     // Jij vliegt op de draak: Claude wacht even (en komt terug als je weer landt)
     if (ctx.riding && !this.duel) {
       if (!this.hidden) {
@@ -303,11 +367,33 @@ export class Buddy {
     else this.stuckT = Math.max(0, this.stuckT - dt);
     if (!this.duel && this.stuckT > 2.5) this.teleportTo(player.position);
 
-    // Zijn zwaard raakt iets?
+    // Zijn zwaard (of zijn wervelslag) raakt iets?
     if (this.p.sword.isHitting) this.swordHits(ctx);
+    if (this.duel && this.p.spinTimer > 0) this.spinHit(ctx);
 
     // Naambordje
     this.tag.visible = this.p.mesh.visible || this.p.invulnerable > 0;
+    this.tag.position.copy(this.p.position).setY(this.p.position.y + 2.25);
+  }
+
+  /** Als NPC in Muntdorp: op zijn plekje staan, naar je kijken, en hallo roepen als je in de buurt komt. */
+  updateNpc(dt) {
+    const player = this.game.player;
+    if (this.p.position.distanceTo(this.home) > 3) this.goHome(); // (na een duel, of weggeduwd)
+    const to = player.position.clone().sub(this.p.position).setY(0);
+    const d = to.length();
+    this.p.update(dt, { move: this.move.set(0, 0, 0), sprint: false, jumpPressed: false, faceTarget: null }, this.game.colliders, this.game.bounds);
+    this.p.events.length = 0;
+    // Kijkt naar jou als je in de buurt bent
+    const yaw = d < 10 && d > 0.1 ? Math.atan2(to.x, to.z) : this.homeYaw;
+    const diff = Math.atan2(Math.sin(yaw - this.p.mesh.rotation.y), Math.cos(yaw - this.p.mesh.rotation.y));
+    this.p.mesh.rotation.y += diff * Math.min(1, 5 * dt);
+    this.greetT -= dt;
+    if (d < 9 && this.greetT <= 0 && !this.bubble && player.alive) {
+      this.say(pick(LINES.npcHoi), 4);
+      this.greetT = 25;
+    }
+    this.tag.visible = this.p.mesh.visible;
     this.tag.position.copy(this.p.position).setY(this.p.position.y + 2.25);
   }
 
@@ -395,7 +481,8 @@ export class Buddy {
       const d = to.length();
       if (d > this.p.sword.range + 0.45 || (d > 1.4 && to.normalize().dot(facing) < 0)) return;
       this.hitSwing = this.p.sword.swingId;
-      ctx.hurtPlayer(me.clone(), Math.round(player.maxHealth * BUDDY_DUEL[this.duel.level].damage));
+      const fire = this.p.fireTimer > 0 ? 1.3 : 1; // vuurzwaard: harder
+      ctx.hurtPlayer(me.clone(), Math.round(player.maxHealth * BUDDY_DUEL[this.duel.level].damage * fire));
       return;
     }
     for (const t of ctx.targets) {
@@ -411,14 +498,26 @@ export class Buddy {
     }
   }
 
+  /** Zijn wervelslag raakt jou (één keer per wervelslag, alleen in het duel). */
+  spinHit(ctx) {
+    if (this.spinSeen === this.p.spinId) return;
+    const player = this.game.player;
+    const to = player.position.clone().sub(this.p.position);
+    if (Math.abs(to.y) > 1.6 || Math.hypot(to.x, to.z) > 3.2) return;
+    this.spinSeen = this.p.spinId;
+    ctx.hurtPlayer(this.p.position.clone(), Math.round(player.maxHealth * BUDDY_DUEL[this.duel.level].damage * 1.2));
+  }
+
   // ---------------- Het oefenduel ----------------
 
   /** Duel beginnen (de Arena zet jullie neer, zie main.js). */
   startDuel(level, at) {
     const cfg = BUDDY_DUEL[level];
     const maxHp = Math.round(this.game.player.maxHealth * cfg.hp);
-    this.duel = { level, hp: maxHp, maxHp, think: 0, dodgeT: 0 };
+    this.duel = { level, hp: maxHp, maxHp, think: 0, dodgeT: 0, heals: cfg.heal ?? 0, wasSwinging: false, comboChecked: false, dashHit: false };
     this.stats.boost = cfg.speed;
+    this.stats.duelCfg = cfg; // (dan kan hij ook een wervelslag en een vuurzwaard, als dit niveau dat heeft)
+    this.p.spinCooldown = this.p.fireCooldown = 0;
     this.hidden = false;
     this.setVisible(true);
     this.p.position.copy(at);
@@ -434,6 +533,8 @@ export class Buddy {
     if (!this.duel) return;
     this.duel = null;
     this.stats.boost = 1;
+    this.stats.duelCfg = null;
+    this.p.fireTimer = this.p.spinTimer = 0;
     this.p.health = this.p.maxHealth;
     this.cool.duelWin = this.cool.duelLose = 0;
     this.chat(iWon ? 'duelWin' : 'duelLose', 1);
@@ -446,41 +547,100 @@ export class Buddy {
     if (this.p.invincible) return null; // weggerold!
     this.lastId = id;
     duel.hp = Math.max(0, duel.hp - damage);
-    this.p.hurt(from, damage); // terugstoot en "au"
+    const poise = BUDDY_DUEL[duel.level].poise ?? 0;
+    if (duel.hp > 0 && Math.random() < poise) {
+      // Hij is taai: alleen een klein duwtje, en hij gaat gewoon door (op de zware niveaus vaak)
+      const away = this.p.position.clone().sub(from).setY(0);
+      if (away.lengthSq() > 1e-6) this.p.knockback.copy(away.normalize().multiplyScalar(2.5));
+      this.p.invulnerable = 0.25;
+    } else this.p.hurt(from, damage); // terugstoot en "au"
     return { damage, killed: duel.hp <= 0 };
   }
 
-  /** Het brein in het duel: naar je toe, slaan, en soms wegrollen als jij slaat. */
+  /**
+   * Het brein in het duel: naar je toe, slaan, en soms wegrollen als jij slaat.
+   * Op de zware niveaus ook: combo's, terugslaan als jij mist, wervelslag, vuurzwaard, dash-aanval en flesjes.
+   */
   thinkDuel(dt, controls, ctx) {
     const duel = this.duel;
     const cfg = BUDDY_DUEL[duel.level];
     const player = this.game.player;
-    const to = player.position.clone().sub(this.p.position).setY(0);
+    const P = this.p;
+    const to = player.position.clone().sub(P.position).setY(0);
     const d = to.length();
     to.normalize();
     controls.faceTarget = to;
     duel.think -= dt;
     duel.dodgeT -= dt;
+    const face = () => {
+      P.mesh.rotation.y = Math.atan2(to.x, to.z);
+    };
+    // Leven bijna op? Een flesje drinken (als hij er nog heeft)
+    if (duel.heals > 0 && duel.hp > 0 && duel.hp < duel.maxHp * 0.3) {
+      duel.heals--;
+      duel.hp = Math.min(duel.maxHp, duel.hp + Math.round(duel.maxHp * 0.3));
+      this.say(pick(LINES.drink), 2);
+      play('heal');
+      this.game.effects.burst(P.position.clone().setY(P.position.y + 1), 0x4dff8f, { count: 24, speed: 3, size: 0.1, life: 0.8, up: 2 });
+    }
+    // Vuurzwaard aan
+    if (cfg.fire && P.fireTimer <= 0 && P.fireCooldown <= 0 && d < 9 && Math.random() < dt * 0.5) P.tryFire();
     // Jij slaat en hij staat dichtbij: misschien wegrollen (één keer per slag)
     const swing = player.sword.attackProgress;
-    if (swing !== null && swing < 0.35 && d < player.sword.range + 0.8 && duel.dodgeT <= 0 && this.p.onGround) {
+    if (swing !== null && swing < 0.35 && d < player.sword.range + 0.8 && duel.dodgeT <= 0 && P.onGround) {
       duel.dodgeT = player.sword.swingTime + 0.2;
       if (Math.random() < cfg.dodge) {
         const side = new THREE.Vector3(-to.z, 0, to.x).multiplyScalar(Math.random() < 0.5 ? 1 : -1);
-        this.p.tryRoll(side.add(to.clone().multiplyScalar(-0.5)));
+        P.tryRoll(side.add(to.clone().multiplyScalar(-0.5)));
+        duel.wasSwinging = true;
         return;
       }
     }
-    const reach = this.p.sword.range - 0.2;
+    // Jij sloeg net (en hij staat er nog)? Dan meteen terugslaan, voordat jij weer kunt
+    const swinging = swing !== null;
+    if (duel.wasSwinging && !swinging && cfg.punish && d < P.sword.range + 0.6 && P.sword.attackProgress === null && Math.random() < cfg.punish) {
+      face();
+      P.tryAttack();
+      duel.think = cfg.think;
+    }
+    duel.wasSwinging = swinging;
+    // Combo: net klaar met een slag en je staat er nog? Meteen nog een (slag, slag, KLAP!)
+    if (P.sword.attackProgress !== null) duel.comboChecked = false;
+    else if (cfg.combo && !duel.comboChecked && P.clock - P.lastSwingEnd < 0.3 && P.combo < 2 && d < P.sword.range + 0.3) {
+      duel.comboChecked = true;
+      if (Math.random() < cfg.combo) {
+        face();
+        P.tryAttack();
+        return;
+      }
+    }
+    // Wervelslag als je vlak bij hem staat
+    if (cfg.spin && d < 2.8 && duel.think <= 0 && P.spinCooldown <= 0 && P.sword.attackProgress === null && Math.random() < cfg.spin) {
+      P.trySpin();
+      duel.think = cfg.think;
+      return;
+    }
+    // Dash-aanval: van een afstandje in één keer naar je toe, en meteen slaan
+    if (cfg.dashAttack && d > 4 && d < 10 && P.dashCooldown <= 0 && duel.think <= 0 && Math.random() < cfg.dashAttack * 0.5) {
+      P.tryDash(to);
+      duel.dashHit = true;
+      duel.think = cfg.think;
+    }
+    const reach = P.sword.range - 0.2;
     if (d > reach) {
       controls.move.copy(to);
       controls.sprint = d > 6;
-      if (d > 5 && d < 10 && this.p.dashCooldown <= 0 && Math.random() < cfg.aggro * 0.02) this.p.tryDash(to);
+      if (!cfg.dashAttack && d > 5 && d < 10 && P.dashCooldown <= 0 && Math.random() < cfg.aggro * 0.02) P.tryDash(to);
     } else {
-      this.p.mesh.rotation.y = Math.atan2(to.x, to.z);
+      face();
+      if (duel.dashHit && P.sword.attackProgress === null) {
+        duel.dashHit = false;
+        P.tryAttack();
+        return;
+      }
       if (duel.think <= 0) {
         duel.think = cfg.think;
-        if (this.p.sword.attackProgress === null && Math.random() < cfg.aggro) this.p.tryAttack();
+        if (P.sword.attackProgress === null && Math.random() < cfg.aggro) P.tryAttack();
         else if (Math.random() < 0.3) controls.move.copy(to).multiplyScalar(-1); // even een stapje terug
       }
     }
@@ -489,11 +649,13 @@ export class Buddy {
   /** De balk bovenin tijdens het duel. */
   get hud() {
     if (!this.duel) return null;
-    return { name: `🤖 ${BUDDY.name} (${BUDDY_DUEL[this.duel.level].name})`, hp: this.duel.hp, maxHp: this.duel.maxHp };
+    const cfg = BUDDY_DUEL[this.duel.level];
+    return { name: `🤖 ${BUDDY.name} ${cfg.icon} ${cfg.name}`, hp: this.duel.hp, maxHp: this.duel.maxHp };
   }
 
   /** Voor de minimap. */
   mapMarkers() {
+    if (this.mode === 'npc') return [{ x: this.p.position.x, z: this.p.position.z, icon: '🤖', color: '#9be7ff' }];
     if (!this.active || this.hidden) return [];
     return [{ x: this.p.position.x, z: this.p.position.z, icon: '●', color: '#9be7ff' }];
   }

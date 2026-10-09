@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { LEVEL, REGIONS, REGION_WIDTH, regionIndexAt, GATE_X } from './levels.js';
 import { createCastleWorld } from './castle.js';
 import { createSkyWorld } from './skyworld.js';
+import { culler, splitInstanced } from './culling.js';
 
 // De open wereld: grond, paden, huizen (waar je in kunt!), ruïnes, natuur,
 // de boss-arena's, de checkpoints en de kisten. Wat er in elk gebied staat, staat in levels.js.
@@ -1024,7 +1025,8 @@ function createNature(scene, colliders) {
   });
   leafMesh.count = cones;
   roundMesh.count = blobs;
-  scene.add(trunkMesh, leafMesh, roundMesh);
+  // In vakken verdelen: dan tekent de computer alleen de bomen dichtbij (en niet de hele wereld, ook niet voor de schaduw)
+  for (const mesh of [trunkMesh, leafMesh, roundMesh]) splitInstanced(mesh, scene, { culler });
 
   // Rotsblokken (in het hoogland veel, elders een paar) en een rotsrand langs de rand van de wereld
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x8f8a80, roughness: 0.95, flatShading: true });
@@ -1052,7 +1054,7 @@ function createNature(scene, colliders) {
   });
   boulderMesh.castShadow = true;
   boulderMesh.receiveShadow = true;
-  scene.add(boulderMesh);
+  splitInstanced(boulderMesh, scene, { culler });
 
   // Bloemetjes (in de weides) en paddenstoelen (in het woud)
   const weides = REGIONS.filter((r) => r.theme === 'weide');
@@ -1067,7 +1069,7 @@ function createNature(scene, colliders) {
       flowers.setMatrixAt(n, m);
       flowers.setColorAt(n, flowerColors[Math.floor(rand() * flowerColors.length)]);
     }
-    scene.add(flowers);
+    splitInstanced(flowers, scene, { culler, maxDist: 55 }); // bloemetjes zijn klein: die hoef je van ver niet te zien
   }
   if (wouden.length) {
     const count = 140 * wouden.length;
@@ -1085,7 +1087,7 @@ function createNature(scene, colliders) {
       n++;
     }
     caps.count = stems.count = n;
-    scene.add(caps, stems);
+    for (const mesh of [caps, stems]) splitInstanced(mesh, scene, { culler, maxDist: 65 });
   }
   // Gloeiende paarse kristallen (Schaduwrijk). De grote kun je niet doorheen lopen.
   const schaduw = REGIONS.filter((r) => r.theme === 'schaduw');
@@ -1107,7 +1109,7 @@ function createNature(scene, colliders) {
     }
     crystals.count = n;
     crystals.castShadow = true;
-    scene.add(crystals);
+    splitInstanced(crystals, scene, { culler });
   }
 }
 

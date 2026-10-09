@@ -50,6 +50,8 @@ export function createMixamoRig(model) {
     restLocal[name] = b.quaternion.clone();
     restPos[name] = b.getWorldPosition(new THREE.Vector3()).sub(model.getWorldPosition(new THREE.Vector3())).applyQuaternion(modelQInv0);
   }
+  // Alle botten met hun rust-draaiing (elke frame zetten we ze eerst terug, zie apply)
+  const resetList = Object.keys(restLocal).map((name) => [bone(name), restLocal[name]]);
   // T-pose → armen naar beneden laten hangen
   const down = {
     armL: Q().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2),
@@ -113,6 +115,9 @@ export function createMixamoRig(model) {
       },
     },
     apply() {
+      // Eerst alle botten terug naar hun rust-stand. Een echte animatie (retarget.js) draait ook de heupen, de nek,
+      // de handen en de voeten; zonder dit bleven die na een slag of sprong scheef staan (en liep je poppetje scheef).
+      for (const [b, q] of resetList) b.quaternion.copy(q);
       model.updateMatrixWorld(true);
       modelQInv = model.getWorldQuaternion(Q()).invert();
       // Op en neer veren: het hele model iets omhoog of omlaag

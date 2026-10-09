@@ -135,6 +135,7 @@ export class Islands {
       }
       // Bloemetjes in het gras
       const flowers = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.11, 0), new THREE.MeshStandardMaterial({ roughness: 0.6 }), Math.round(R * R * 0.5));
+      flowers.userData.cell = true; // (staat op één eiland: mag mee uit als het eiland ver weg is, zie culling.js)
       const mtx = new THREE.Matrix4();
       const colors = [0xffffff, 0xffb8e0, 0xfff07a, 0xb8d8ff];
       for (let i = 0; i < flowers.count; i++) {
