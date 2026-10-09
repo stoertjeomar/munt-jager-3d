@@ -399,7 +399,7 @@ export class Arena {
     const dx = pos.x - this.center.x;
     const dz = pos.z - this.center.z;
     const d = Math.hypot(dx, dz) || 0.001;
-    if (this.mode === 'waves' || this.mode === 'duel') {
+    if (this.mode === 'waves' || this.mode === 'duel' || this.mode === 'maatje') {
       const max = this.radius - 0.6;
       if (d > max) {
         pos.x = this.center.x + (dx / d) * max;

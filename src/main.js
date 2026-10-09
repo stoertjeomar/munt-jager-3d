@@ -35,6 +35,7 @@ import { Villagers } from './villagers.js';
 import { Arena } from './arena.js';
 import { Islands, ALTAR } from './islands.js';
 import { Multiplayer, DUEL } from './multiplayer.js';
+import { Buddy, BUDDY, BUDDY_DUEL } from './buddy.js';
 import { RamesFlow } from './rames.js';
 import { Admin } from './admin.js';
 
@@ -155,7 +156,7 @@ scene.add(lockMarker);
 /** Alles wat je kunt raken: gewone vijanden en wakkere bosses. */
 function targets() {
   // (monsters die in de arena tegen elkaar of tegen je huisdier vechten, kun je niet raken)
-  return [...enemies.filter((e) => e.alive && !e.arenaLocked), ...bosses.filter((b) => b.alive && b.awake)];
+  return [...enemies.filter((e) => e.alive && !e.arenaLocked), ...bosses.filter((b) => b.alive && b.awake), ...(buddy?.duel ? [buddy.duelTarget] : [])];
 }
 
 function hurtPlayer(from, damage) {
@@ -195,6 +196,7 @@ function giveKills(amount, announce = true) {
   player.stamina = player.maxStamina;
   play('levelUp');
   play('wow');
+  buddy?.onLevelUp();
   effects.burst(player.position.clone().setY(player.position.y + 1.2), 0xffd76a, { count: 40, speed: 5, size: 0.12, life: 1, up: 4 });
   if (announce) {
     ui.banner(`LEVEL ${stats.level}`, 'Je bent sterker geworden! Meer leven, stamina en schade.', 'gold', 3.5);
@@ -236,7 +238,7 @@ function respawnWorld() {
  */
 function onHit(target, result, color) {
   const at = target.center;
-  const helper = state.byDragon || state.byPet;
+  const helper = state.byDragon || state.byPet || state.byBuddy;
   if (result.blocked) {
     // Geblokt! (de Ninjapop hield zijn zwaard ervoor)
     effects.sparks(at, 0xffffff);
@@ -246,7 +248,7 @@ function onHit(target, result, color) {
   }
   effects.sparks(at, color);
   effects.burst(at, target.type.color, { count: 8, speed: 5, size: 0.12, life: 0.5 });
-  effects.floatText(at.clone().setY(at.y + target.type.height * 0.6), `${result.damage}`, state.byPet ? '#7dffe0' : state.byDragon || player.fireTimer > 0 ? '#ff9a3c' : '#ffffff');
+  effects.floatText(at.clone().setY(at.y + target.type.height * 0.6), `${result.damage}`, state.byPet ? '#7dffe0' : state.byBuddy ? '#9be7ff' : state.byDragon || player.fireTimer > 0 ? '#ff9a3c' : '#ffffff');
   play('hit');
   if (!helper) {
     state.hitstop = result.killed ? 0.09 : 0.05;
@@ -256,6 +258,7 @@ function onHit(target, result, color) {
 }
 
 function onDefeated(target) {
+  if (target.isBuddy) return; // Claude in het oefenduel: dat regelt de Arena (zie updateBuddy)
   if (bosses.includes(target)) {
     onBossDefeated(target);
     return;
@@ -268,7 +271,8 @@ function onDefeated(target) {
   sky.onEnemyDefeated(target); // een Wolkenwacht laat soms een Wolkenkelk vallen (sky.js)
   if (finished) questReady(finished);
   if (!target.summoned) {
-    if (!state.byDragon) giveKills(1); // de draak helpt, maar sterker worden doe je zelf
+    if (!state.byDragon && !state.byBuddy) giveKills(1); // de draak en Claude helpen, maar sterker worden doe je zelf
+    if (!state.byDragon && !state.byBuddy && !state.byPet) buddy?.onPlayerKill();
     goals.onKill({ typeKey: target.typeKey, champion: !!target.champion, byDragon: !!state.byDragon, byPet: !!state.byPet });
     if (target.champion) {
       // Een Kampioen! Veel meer munten en een ster
@@ -440,6 +444,7 @@ function openArenaMenu() {
       arena.newMatchup();
       return arena.menuInfo();
     },
+    buddy: (level) => startBuddyDuel(level),
     duel: () => {
       if (multiplayer?.connected && multiplayer.remote) multiplayer.startDuel(true);
       else openMultiplayerMenu(); // eerst samen spelen (kamer maken of meedoen)
@@ -521,6 +526,7 @@ function travelTo(id) {
   stats.save();
   player.respawnAt(checkpointSpawn(id));
   Object.assign(player, keep);
+  if (buddy?.mode === 'volg') buddy.teleportTo(player.position); // Claude reist mee
   state.lockTarget = null;
   trail.cut();
   lookAlongPath();
@@ -960,6 +966,10 @@ function onGolemSlam(enemy, radius, damage) {
 
 function die() {
   play('faaah');
+  if (buddy?.duel) {
+    buddyDuelEnd(false); // verslagen in het oefenduel: geen echte dood
+    return;
+  }
   if (multiplayer?.duel) {
     multiplayer.iLost(); // verslagen in een duel: geen echte dood
     return;
@@ -988,6 +998,7 @@ function die() {
 function respawnAfterDeath() {
   respawnWorld();
   player.respawnAt(checkpointSpawn(stats.data.checkpoint));
+  if (buddy?.mode === 'volg') buddy.teleportTo(player.position);
   player.invulnerable = 2; // even veilig na het terugkomen
   cameraRig.snapTo(player.position);
 }
@@ -1178,6 +1189,7 @@ function handleActions(move) {
   if (input.wasPressed('KeyT')) toggleWorldMap();
   if (input.wasPressed('KeyK')) openTrophies();
   if (input.wasPressed('KeyO')) openMultiplayerMenu();
+  if (input.wasPressed('KeyH')) openBuddyMenu();
   const attack = input.wasPressed('KeyF') || state.attackRequested;
   state.attackRequested = false;
 
@@ -1457,6 +1469,103 @@ const multiplayer = IN_SPECIAL ? null : new Multiplayer({
 });
 // De Hemeleilanden: zwevende eilanden hoog in de lucht, alleen met de draak te bereiken (islands.js)
 const islands = IN_SPECIAL ? null : new Islands(scene, { colliders: world.colliders, addEnemy: addSummon, stats, effects, ui, giveStars });
+// Claude, je computer-maatje: loopt met je mee en vecht mee (buddy.js). H = iets aan hem vragen.
+const buddy = IN_SPECIAL ? null : new Buddy({ scene, player, stats, effects, ui, colliders: world.colliders, bounds: world.bounds });
+if (buddy?.firstTime) {
+  buddy.save();
+  setTimeout(() => {
+    buddy.greet();
+    ui.toast(`🤖 <b>${BUDDY.name}</b> speelt nu met je mee! Hij loopt achter je aan en vecht mee.<br><small>Druk op <b>H</b> om hem iets te vragen (volgen, wachten, of een oefenduel in de Arena).</small>`, 7);
+  }, 6000);
+}
+
+/** Claude raakt een vijand (net als bij je huisdier: het spel staat dan niet even stil). */
+function buddyHit(target, damage, id) {
+  state.byBuddy = true;
+  const result = target.hit(buddy.position, id, damage);
+  if (result) onHit(target, result, 0x9be7ff);
+  state.byBuddy = false;
+  return result;
+}
+
+/** Elke frame: Claude laten lopen en vechten, en kijken of het oefenduel klaar is. */
+function updateBuddy(dt) {
+  if (!buddy) return;
+  buddy.update(dt, {
+    targets: targets(),
+    hit: buddyHit,
+    hurtPlayer,
+    riding: dragon.riding,
+    keepInside: (pos, r) => arena.keepInside(pos, r),
+  });
+  if (buddy.duel && buddy.duel.hp <= 0) buddyDuelEnd(true);
+}
+
+/** Oefenduel tegen Claude in de Arena (makkelijk, normaal of moeilijk). */
+function startBuddyDuel(level) {
+  if (!buddy || !arena.exists) return;
+  if (state.activeBoss) {
+    ui.toast('⚔ Eerst de boss verslaan! Daarna kun je een oefenduel doen.', 3);
+    return;
+  }
+  closeMenuAndPlay();
+  if (buddy.mode === 'weg') buddy.setMode('volg');
+  if (dragon.active) dragon.hide();
+  if (arena.mode) arena.finish();
+  arena.begin('maatje');
+  player.respawnAt(arena.center.clone().add(new THREE.Vector3(-6, 0, 0)));
+  player.mesh.rotation.y = Math.PI / 2;
+  cameraRig.snapTo(player.position);
+  cameraRig.yaw = player.mesh.rotation.y + Math.PI;
+  buddy.startDuel(level, arena.center.clone().add(new THREE.Vector3(6, 0, 0)));
+  ui.banner(`DUEL: JIJ vs ${BUDDY.name.toUpperCase()}`, `${BUDDY_DUEL[level].name} · winnen = ● ${BUDDY_DUEL[level].reward}`, 'gold', 3);
+  play('gong');
+}
+
+/** Klaar met het oefenduel. won = jij wint. */
+function buddyDuelEnd(won) {
+  const level = buddy.duel?.level;
+  buddy.endDuel(!won);
+  arena.finish();
+  player.respawnAt(arena.gate.clone());
+  player.invulnerable = 2;
+  cameraRig.snapTo(player.position);
+  buddy.teleportTo(player.position);
+  const d = stats.data;
+  d.buddy = { ...(d.buddy ?? {}), wins: d.buddy?.wins ?? {}, losses: d.buddy?.losses ?? 0 };
+  if (won) {
+    const prize = BUDDY_DUEL[level].reward;
+    giveRunes(prize);
+    d.buddy.wins[level] = (d.buddy.wins[level] ?? 0) + 1;
+    goals.onArena('duel');
+    play('win');
+    ui.banner('JIJ WINT!', `Je hebt ${BUDDY.name} verslagen (${BUDDY_DUEL[level].name})! ● +${prize}`, 'gold', 4);
+  } else {
+    d.buddy.losses++;
+    play('lose');
+    ui.banner(`${BUDDY.name.toUpperCase()} WINT`, 'Geen zorgen: in een oefenduel verlies je niks. Nog een keer?', 'death', 4);
+  }
+  stats.save();
+}
+
+/** H: iets aan Claude vragen. */
+function openBuddyMenu() {
+  if (!buddy) return;
+  if (ui.menuOpen === 'maatje') {
+    closeMenuAndPlay();
+    return;
+  }
+  if (ui.menuOpen) return;
+  document.exitPointerLock?.();
+  ui.openBuddy(buddy, {
+    mode: (m) => {
+      buddy.setMode(m);
+      closeMenuAndPlay();
+    },
+    duel: (level) => startBuddyDuel(level),
+    close: closeMenuAndPlay,
+  }, BUDDY_DUEL);
+}
 // Staat de Schaduwpoort al open? (bij een oude save waarin de vier bosses al verslagen zijn)
 if (gateOpen()) openGate();
 // Rames, de ondode boss op het Knekelhof in het Spookwoud: zijn filmpjes en zijn beloning (rames.js)
@@ -1491,7 +1600,8 @@ function gameLoop() {
     || (menuAtStart === 'trophies' && (input.wasPressed('KeyK') || input.wasPressed('Escape')))
     || (menuAtStart === 'bounties' && (input.wasPressed('Escape') || input.wasPressed('KeyE')))
     || (menuAtStart === 'arena' && input.wasPressed('Escape'))
-    || (menuAtStart === 'online' && (input.wasPressed('Escape') || input.wasPressed('KeyO')));
+    || (menuAtStart === 'online' && (input.wasPressed('Escape') || input.wasPressed('KeyO')))
+    || (menuAtStart === 'maatje' && (input.wasPressed('Escape') || input.wasPressed('KeyH')));
   if (closeInventory) toggleInventory();
   if (closeShopKey) closeShop();
   if (closeMap) closeMenuAndPlay();
@@ -1526,6 +1636,7 @@ function gameLoop() {
     swordHits();
     spinHits();
     updatePoisons(dt);
+    updateBuddy(dt);
     enemyContact();
     updateBossFights();
 
@@ -1605,7 +1716,7 @@ function gameLoop() {
     else ui.toast(`${picked.quest.goal.label[0].toUpperCase() + picked.quest.goal.label.slice(1)}: <b>${picked.count} / ${picked.quest.goal.count}</b>`, 2);
   }
   ui.setQuests([...invasions.tracker(), ...npcs.tracker()]);
-  ui.markers = [...npcs.mapMarkers(), ...invasions.mapMarkers(), ...champions.mapMarkers(), ...arena.mapMarkers(), ...sky.mapMarkers(), ...(islands?.mapMarkers() ?? []), ...(multiplayer?.mapMarkers() ?? [])];
+  ui.markers = [...npcs.mapMarkers(), ...invasions.mapMarkers(), ...champions.mapMarkers(), ...arena.mapMarkers(), ...sky.mapMarkers(), ...(islands?.mapMarkers() ?? []), ...(multiplayer?.mapMarkers() ?? []), ...(buddy?.mapMarkers() ?? [])];
   pickups.update(dt, elapsed, player, {
     onCoin: () => play('coin'),
     onHeart: (fraction) => {
@@ -1657,7 +1768,7 @@ function gameLoop() {
 
   ui.night = world.night ?? 0;
   multiplayer?.update(realDt);
-  ui.update(realDt, player, state.activeBoss ?? arena.hud ?? multiplayer?.hud, elapsed);
+  ui.update(realDt, player, state.activeBoss ?? arena.hud ?? multiplayer?.hud ?? buddy?.hud, elapsed);
   omar.update(realDt); // Omar: keuzes, reizen en tussenfilmpjes (mag de camera overnemen)
   sky.update(realDt); // Sky: de Donderpoort, de Wolkenkelken en het Wolkenrijk (sky.js)
   rames.update(realDt); // Rames: zijn filmpjes (mag de camera ook overnemen)
@@ -1722,5 +1833,5 @@ window.game = { scene, player, enemies, bosses, sites, npcs, stats, ui, world, s
 window.game.omar = omar;
 window.game.sky = sky;
 window.game.nightwalker = nightwalker;
-Object.assign(window.game, { arena, openArenaMenu, dragon, pets, invasions, rames, admin, travelTo, hatchPet, spawnEnemy: addSummon, goals, champions, villagers, gateOpen, openBounties, openTrophies, islands, multiplayer, openMultiplayerMenu });
+Object.assign(window.game, { arena, openArenaMenu, dragon, pets, invasions, rames, admin, travelTo, hatchPet, spawnEnemy: addSummon, goals, champions, villagers, gateOpen, openBounties, openTrophies, islands, multiplayer, openMultiplayerMenu, buddy, openBuddyMenu });
 window.game.music = music;

@@ -55,6 +55,7 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 | B | Vuurtand de draak roepen / afstappen (na de eerste boss) |
 | K | Trofeeënkast (je trofeeën, sterren en rang) |
 | O | Samen spelen (online): kamer maken, meedoen met een code, duel |
+| H | Claude, je computer-maatje: volgen, wachten, even weg, of een oefenduel |
 | M | Geluid aan/uit |
 | N | Muziek aan/uit (wordt onthouden) |
 | G | Graphics: Laag / Normaal / Hoog (wordt onthouden) |
@@ -90,6 +91,7 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
   - **Golven overleven**: jij tegen steeds meer en sterkere monsters (munten per golf, een ⭐ per 5 golven; doodgaan kost hier niks)
   - **Huisdiergevecht**: Knokkie of Pluis tegen een monster
   - **Monstergevecht**: twee monsters vechten tegen elkaar en jij **wedt** munten op de winnaar (goed gegokt = dubbel terug)
+  - **Oefenduel tegen Claude**: je computer-maatje (makkelijk, normaal of moeilijk)
   - **Duel**: online tegen een vriend (zie *Samen spelen*)
 - **De Hemeleilanden** ☁: vijf zwevende eilanden hoog boven de Ruïnevallei, waar je **alleen met Vuurtand** komt. Met
   roze wolkenbomen, een waterval die naar beneden valt, kristallen, een regenboog, stapstenen om over te springen,
@@ -99,6 +101,12 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
 - **Wapens met een speciale kracht**: de **Gifdolk** (vergiftigt), het **IJszwaard** (bevriest: vijanden lopen langzaam),
   het **Bliksemzwaard** (de bliksem springt over naar andere vijanden), het **Vampierzwaard** (je krijgt leven terug)
   en de **Wolkenspeer** (héél lang bereik, en een windstoot blaast vijanden weg)
+- **Claude, je computer-maatje** 🤖: een held die door de computer wordt bestuurd en met je meespeelt. Hij loopt
+  achter je aan, vecht mee tegen vijanden in de buurt (ook bij bosses, maar dan wat zachter), flitst naar je toe als hij
+  achterblijft en wacht even als jij op je draak vliegt. Hij kletst in tekstwolkjes ("Daar! Een slijmpje!", "Mooie klap!").
+  Met **H** zeg je dat hij moet volgen, wachten of even weg moet gaan, en in de **Arena** kun je een **oefenduel** tegen
+  hem doen: makkelijk, normaal of moeilijk (verliezen kost niks, winnen geeft munten). Vijanden die Claude verslaat geven
+  munten, maar tellen niet mee voor je level
 - **Samen spelen (online)** 🌐: druk op **O** (of *Samen spelen* op het startscherm). Eén speler maakt een kamer en krijgt
   een code (bijv. MUNT-7K3P), de ander typt die code in. Dan zie je elkaar lopen, springen, slaan en op de draak vliegen,
   en in de Arena kun je een **duel** doen (de winnaar krijgt munten). Vijanden, kisten en munten heeft ieder voor zich.
@@ -242,6 +250,7 @@ munt-jager-3d/
     ├── arena.js      → de Arena: golven, huisdiergevechten, wedden op monsters en het duel
     ├── islands.js    → de Hemeleilanden: zwevende eilanden, het Windaltaar en de bewakers
     ├── multiplayer.js→ samen spelen via internet (PeerJS): je vriend zien en het duel
+    ├── buddy.js      → Claude, je computer-maatje: meelopen, meevechten, kletsen en het oefenduel
     ├── invasions.js  → Omar-invasies: golven schaduwkrijgers bij een kamp
     ├── shadowDragon.js → de eindbaas: de Schaduwdraak
     ├── goals.js      → trofeeën, sterren, rangen en het Premiebord
@@ -276,6 +285,7 @@ munt-jager-3d/
 - **Draak, huisdier en invasies** → `DRAGON` in `src/dragon.js`, `PET`/`PETS` in `src/pet.js` en `INVASION` in `src/invasions.js`
 - **De Arena** → `ARENA`, `WAVES` en `FIGHTERS` in `src/arena.js` · **De Hemeleilanden** → `ISLAND_LAYOUT` in `src/levels.js` en `ALTAR` in `src/islands.js`
 - **Animaties van je held** → `CLIPS` bovenaan `src/player.js` (welke animatie bij welke actie, en welk stukje ervan)
+- **Claude, je maatje** → `BUDDY` (hoe sterk, hoe ver) en `BUDDY_DUEL` (moeilijkheid van het oefenduel) in `src/buddy.js`; wat hij zegt staat in `LINES`
 - **Samen spelen** → `src/multiplayer.js` (test met een eigen PeerJS-server: `index.html?peer=localhost:9000`)
 - **Trofeeën, premies en de sterrenwinkel** → `TROPHIES` in `src/goals.js` en `STAR_ITEMS` in `src/stats.js`
 - **Kampioenen en woedende bosses** → `CHAMPION` in `src/champions.js` en `RAGE` in `src/bosses.js`
