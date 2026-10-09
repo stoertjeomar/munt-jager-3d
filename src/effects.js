@@ -6,6 +6,7 @@ import * as THREE from 'three';
 const MAX_PARTICLES = 400;
 const MAX_PUFFS = 320; // zachte wolkjes (Sky, NightWalker, het Wolkenrijk)
 const GRAVITY = 14;
+const BOLT_GEO = new THREE.CylinderGeometry(1, 1, 1, 5, 1, true);
 
 // Een zacht rond wolkje: een stip die naar de rand toe doorzichtig wordt, met bovenaan een beetje licht.
 // Alle wolkjes samen zijn één "Points"-ding (dat is snel); elk wolkje heeft een eigen grootte, kleur en doorzichtigheid.
@@ -73,6 +74,7 @@ export class Effects {
     this.texts = []; // zwevende getallen
     this.rings = []; // schokgolven
     this.warnings = []; // rode waarschuwings-cirkels op de grond
+    this.bolts = []; // bliksemschichten (Bliksemzwaard)
     this.tmpMatrix = new THREE.Matrix4();
     this.tmpQuat = new THREE.Quaternion();
     this.tmpColor = new THREE.Color();
@@ -187,6 +189,31 @@ export class Effects {
     this.warnings.push({ group, fill, edge, age: 0, life: duration });
   }
 
+  /** Een bliksemschicht (zigzag) van a naar b, die snel weer verdwijnt. */
+  bolt(a, b, color = 0x9be7ff) {
+    const group = new THREE.Group();
+    const core = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    const glow = new THREE.MeshBasicMaterial({ color, toneMapped: false, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false });
+    const up = new THREE.Vector3(0, 1, 0);
+    const steps = Math.max(3, Math.round(a.distanceTo(b) / 0.8));
+    let prev = a.clone();
+    for (let i = 1; i <= steps; i++) {
+      const next = a.clone().lerp(b, i / steps);
+      if (i < steps) next.add(new THREE.Vector3((Math.random() - 0.5) * 0.7, (Math.random() - 0.5) * 0.7, (Math.random() - 0.5) * 0.7));
+      const len = prev.distanceTo(next);
+      for (const [mat, r] of [[core, 0.05], [glow, 0.2]]) {
+        const seg = new THREE.Mesh(BOLT_GEO, mat);
+        seg.position.copy(prev).lerp(next, 0.5);
+        seg.quaternion.setFromUnitVectors(up, next.clone().sub(prev).normalize());
+        seg.scale.set(r, len, r);
+        group.add(seg);
+      }
+      prev = next;
+    }
+    this.scene.add(group);
+    this.bolts.push({ group, core, glow, age: 0, life: 0.28 });
+  }
+
   /** Laat de camera schudden. */
   shake(amount) {
     this.shakeAmount = Math.max(this.shakeAmount, amount);
@@ -296,6 +323,22 @@ export class Effects {
       w.edge.material.opacity = k > 0.75 ? 0.5 + 0.5 * Math.sin(w.age * 40) : 0.9;
     }
 
+    // Bliksemschichten: flikkeren en verdwijnen
+    for (let i = this.bolts.length - 1; i >= 0; i--) {
+      const b = this.bolts[i];
+      b.age += dt;
+      if (b.age >= b.life) {
+        this.scene.remove(b.group);
+        b.core.dispose();
+        b.glow.dispose();
+        this.bolts.splice(i, 1);
+        continue;
+      }
+      const k = 1 - b.age / b.life;
+      b.core.opacity = k * (0.6 + 0.4 * Math.random());
+      b.glow.opacity = 0.45 * k;
+    }
+
     // Schokgolven
     for (let i = this.rings.length - 1; i >= 0; i--) {
       const r = this.rings[i];
@@ -321,6 +364,8 @@ export class Effects {
     this.warnings.length = 0;
     for (const t of this.texts) this.scene.remove(t.sprite);
     for (const r of this.rings) this.scene.remove(r.ring);
+    for (const b of this.bolts) this.scene.remove(b.group);
+    this.bolts.length = 0;
     this.texts.length = 0;
     this.rings.length = 0;
     this.shakeAmount = 0;

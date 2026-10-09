@@ -62,7 +62,18 @@ export const SHOP_ITEMS = {
   zaadje: { name: 'Gouden Zaadje', icon: '🧪', price: [200, 450, 800], info: 'Je flesjes helen 10% meer.' },
   hart: { name: 'Hartversterker', icon: '❤', price: [150, 300, 500, 800, 1200], info: '+10 levenspunten.' },
   slijpen: { name: 'Wapen slijpen', icon: '⚔', price: [150, 300, 500, 800, 1200], info: '+10% schade met al je wapens.' },
-  dino: { name: 'Dino-ei', icon: '🥚', price: [250], info: 'Er komt Knokkie uit: een Boks-Dinootje dat met je meeloopt en meevecht!' },
+  dino: { name: 'Dino-ei', icon: '🥚', price: [250], info: 'Er komt Knokkie uit: een Boks-Dinootje dat in Muntdorp woont en in de Arena vecht!' },
+};
+
+// De sterrenwinkel (ook bij Koopman Kobus): hier betaal je met ⭐ sterren (die verdien je met trofeeën en premies)
+export const STAR_ITEMS = {
+  sterrenzwaard: { name: 'Sterrenzwaard', icon: '⭐', price: [8], info: 'Het sterkste wapen van het hele spel!' },
+  pluis: { name: 'Pluis de kat', icon: '🐱', price: [4], info: 'Een eigen kat: ze woont in Muntdorp, je kunt haar aaien en ze vecht in de Arena.' },
+  draakIjs: { name: 'Vuurtand: IJsblauw', icon: '🐉', price: [3], info: 'Je draak wordt ijsblauw.' },
+  draakGoud: { name: 'Vuurtand: Goud', icon: '🐉', price: [5], info: 'Je draak wordt van goud!' },
+  draakSchaduw: { name: 'Vuurtand: Schaduw', icon: '🐉', price: [6], info: 'Je draak wordt zwart-paars, net als de Schaduwdraak.' },
+  appel: { name: 'Sterrenappel', icon: '🍎', price: [2, 3, 4], info: '+8 levenspunten.' },
+  snoepje: { name: 'Huisdiersnoepje', icon: '🍬', price: [2], repeat: true, info: 'Je huisdier gaat meteen een level omhoog.' },
 };
 
 // Het admin-menu (admin.js, Enter + de code): hoe sterk ben je?
@@ -187,9 +198,9 @@ export class Stats {
     return this.data.shop?.[key] ?? 0;
   }
 
-  /** Wat kost dit nu? null = uitverkocht. */
+  /** Wat kost dit nu? null = uitverkocht. (Voor de sterrenwinkel: in sterren) */
   shopPrice(key) {
-    const item = SHOP_ITEMS[key];
+    const item = SHOP_ITEMS[key] ?? STAR_ITEMS[key];
     if (item.repeat) return item.price[0];
     return item.price[this.bought(key)] ?? null;
   }
@@ -197,8 +208,11 @@ export class Stats {
   /** Iets kopen (als je genoeg munten hebt). Geeft true terug als het lukte. */
   buy(key) {
     const price = this.shopPrice(key);
-    if (price === null || this.runes < price) return false;
-    if (!this.data.admin.geld) this.data.runes -= price; // met oneindig geld kost niks iets
+    const stars = !!STAR_ITEMS[key];
+    const have = stars ? this.data.stars ?? 0 : this.runes;
+    if (price === null || have < price) return false;
+    if (stars) this.data.stars -= price;
+    else if (!this.data.admin.geld) this.data.runes -= price; // met oneindig geld kost niks iets
     this.data.shop = { ...this.data.shop, [key]: this.bought(key) + 1 };
     this.save();
     return true;

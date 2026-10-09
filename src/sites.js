@@ -177,7 +177,7 @@ export class Sites {
   reachCheckpoint(pos) {
     const d = this.stats.data;
     for (const c of this.checkpoints) {
-      if (c.id === d.checkpoint || Math.hypot(c.position.x - pos.x, c.position.z - pos.z) >= 4) continue;
+      if (c.id === d.checkpoint || Math.hypot(c.position.x - pos.x, c.position.z - pos.z) >= 4 || Math.abs(c.position.y - pos.y) > 3) continue;
       const first = !d.flags.includes(c.id);
       if (first) d.flags.push(c.id);
       d.checkpoint = c.id;

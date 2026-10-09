@@ -1,3 +1,23 @@
+/* ======================================================================
+   Munt Jager 3D — alles wat je op het scherm ziet (behalve de 3D-wereld)
+   ====================================================================== */
+
+:root {
+  --gold: #f3d27a;
+  --gold-hi: #fff1b8;
+  --gold-lo: #b8862e;
+  --line: rgba(243, 210, 122, 0.42);
+  --line-soft: rgba(243, 210, 122, 0.18);
+  --panel: rgba(16, 12, 8, 0.78);
+  --panel-solid: #15100a;
+  --text: #f6edd5;
+  --muted: #bdb092;
+  --red: #ff4d5a;
+  --green: #7dff9a;
+  --ui: 'Trebuchet MS', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --title: Georgia, 'Times New Roman', serif;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -10,8 +30,8 @@ body {
   height: 100%;
   overflow: hidden;
   background: #000;
-  color: #fff;
-  font-family: Georgia, 'Times New Roman', serif;
+  color: var(--text);
+  font-family: var(--ui);
   user-select: none;
 }
 
@@ -23,185 +43,450 @@ canvas {
   display: none !important;
 }
 
-/* ---------- Balken ---------- */
+/* ---------- Balken (linksboven) ---------- */
 #bars {
   position: fixed;
-  top: 18px;
-  left: 18px;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   pointer-events: none;
 }
 
-#level {
-  font-size: 14px;
-  color: #e8d9a8;
+/* Rond level-schildje */
+#level-badge {
+  position: relative;
+  flex: none;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 35%, #3a2a12, #120c05 70%);
+  border: 3px solid var(--gold);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.7), 0 0 16px rgba(243, 210, 122, 0.45), inset 0 0 10px rgba(0, 0, 0, 0.8);
+}
+
+#level-badge small {
+  font-size: 9px;
   letter-spacing: 2px;
-  text-shadow: 0 1px 3px #000;
+  color: var(--muted);
+  line-height: 1;
+}
+
+#level-num {
+  font-size: 24px;
+  font-weight: bold;
+  line-height: 1;
+  color: var(--gold-hi);
+  text-shadow: 0 0 8px rgba(243, 210, 122, 0.7), 0 2px 2px #000;
+}
+
+#level-badge.up {
+  animation: badge-up 1.2s ease-out;
+}
+
+@keyframes badge-up {
+  0% { transform: scale(1); }
+  20% { transform: scale(1.35); box-shadow: 0 0 40px #fff1b8; }
+  100% { transform: scale(1); }
+}
+
+#level {
+  font-size: 12px;
+  font-weight: bold;
+  color: #ecdcae;
+  letter-spacing: 1px;
+  text-shadow: 0 1px 3px #000, 0 0 6px #000;
   margin-bottom: 4px;
 }
 
-.bar {
+#level b {
+  color: var(--gold);
+}
+
+.hud-bar {
   position: relative;
-  height: 14px;
-  background: rgba(0, 0, 0, 0.6);
-  border: 1px solid rgba(232, 217, 168, 0.55);
-  margin-bottom: 5px;
+  height: 18px;
+  margin-bottom: 4px;
   overflow: hidden;
+  border-radius: 999px;
+  background: linear-gradient(rgba(0, 0, 0, 0.75), rgba(30, 22, 14, 0.75));
+  border: 1px solid rgba(0, 0, 0, 0.9);
+  box-shadow: 0 0 0 1px var(--line), 0 2px 6px rgba(0, 0, 0, 0.6);
   transition: width 0.4s;
 }
 
-.bar.thin {
-  height: 8px;
+/* Glimmend randje bovenop elke balk */
+.hud-bar::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: 2px;
+  height: 35%;
+  border-radius: 999px;
+  background: linear-gradient(rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0));
+  pointer-events: none;
 }
 
-.bar .fill,
-.bar .lag {
+.hud-bar.thin {
+  height: 10px;
+}
+
+.hud-bar.xp {
+  height: 6px;
+  width: 16vw;
+}
+
+.hud-bar.xp::after {
+  display: none;
+}
+
+.hud-bar .fill,
+.hud-bar .lag {
   position: absolute;
   left: 0;
   top: 0;
   bottom: 0;
+  border-radius: 999px;
 }
 
 #hp-fill {
-  background: linear-gradient(#d3363f, #8f1820);
+  background: linear-gradient(#ff7a7a, #e2283a 45%, #8f0f1c);
+  box-shadow: 0 0 10px rgba(255, 60, 70, 0.6);
+}
+
+#hp-bar.low #hp-fill {
+  animation: hp-low 0.8s ease-in-out infinite;
+}
+
+@keyframes hp-low {
+  50% { filter: brightness(1.6); }
 }
 
 #st-fill {
-  background: linear-gradient(#5fbf4a, #2f7a24);
+  background: linear-gradient(#b4ff8a, #4cc23a 45%, #237018);
 }
 
-/* Hoe ver je bent tot je volgende level (vult zich door vijanden te verslaan) */
-#xp-bar {
-  width: 16vw;
-  height: 5px;
+#st-bar.tired #st-fill {
+  background: linear-gradient(#ffd38a, #d08a2a 45%, #7a4a12);
 }
 
 #xp-fill {
-  background: linear-gradient(#ffe08a, #c9932e);
+  background: linear-gradient(90deg, #ffe08a, #ffb340);
+  box-shadow: 0 0 8px rgba(255, 200, 80, 0.8);
   transition: width 0.3s;
 }
 
-.bar .lag {
-  background: #e8c56a;
+.hud-bar .lag {
+  background: #ffe2a0;
 }
 
 #hp-text {
-  position: absolute;
-  right: 6px;
-  top: -1px;
-  font-size: 11px;
-  text-shadow: 0 1px 2px #000;
-}
-
-/* ---------- Minimap ---------- */
-#minimap {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  width: 170px;
-  height: 170px;
-  pointer-events: none;
-  opacity: 0.92;
-}
-
-/* ---------- Uitrusting en krachten ---------- */
-#equip {
-  position: fixed;
-  left: 18px;
-  bottom: 18px;
-  font-size: 15px;
-  text-shadow: 0 1px 3px #000;
-  pointer-events: none;
-}
-
-#equip > div {
-  margin-top: 4px;
-}
-
-#powers {
-  display: flex;
-  gap: 6px;
-  margin-top: 10px !important;
-}
-
-.power {
-  position: relative;
-  min-width: 64px;
-  padding: 6px 8px;
-  border: 1px solid rgba(232, 217, 168, 0.6);
-  background: rgba(0, 0, 0, 0.55);
-  text-align: center;
-  font-size: 11px;
-}
-
-.power b {
-  display: block;
-  font-size: 15px;
-  color: #ffd76a;
-}
-
-.power.cooling {
-  opacity: 0.45;
-}
-
-.power.active {
-  border-color: #ff8a2b;
-  box-shadow: 0 0 12px #ff8a2b;
-}
-
-.power i {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-style: normal;
-  font-size: 18px;
-  background: rgba(0, 0, 0, 0.4);
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  text-shadow: 0 1px 2px #000, 0 0 3px #000;
+  z-index: 1;
 }
 
-/* ---------- Munten ---------- */
+/* ---------- Minimap (rechtsboven) ---------- */
+#map-wrap {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  width: 180px;
+  pointer-events: none;
+}
+
+#minimap {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.7), 0 4px 18px rgba(0, 0, 0, 0.7);
+}
+
+#map-label {
+  margin: 6px auto 0;
+  width: max-content;
+  max-width: 200px;
+  padding: 3px 12px 4px;
+  text-align: center;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  line-height: 1.15;
+}
+
+#map-label b {
+  display: block;
+  font-size: 13px;
+  color: var(--gold);
+  letter-spacing: 1px;
+}
+
+#map-label small {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+body.omar-film #map-wrap {
+  visibility: hidden;
+}
+
+/* ---------- Krachtenbalk (linksonder) ---------- */
+#equip {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  pointer-events: none;
+}
+
+#equip-weapon {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: bold;
+  text-shadow: 0 1px 2px #000;
+}
+
+#equip-weapon.fire {
+  border-color: #ff8a2b;
+  box-shadow: 0 0 12px rgba(255, 120, 40, 0.8);
+}
+
+#equip-helmet {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--muted);
+  text-shadow: 0 1px 2px #000;
+}
+
+#hotbar {
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 14px;
+  background: linear-gradient(rgba(30, 22, 12, 0.72), rgba(10, 7, 4, 0.8));
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+}
+
+#powers {
+  display: flex;
+  gap: 6px;
+}
+
+.slot {
+  --cd: 0;
+  position: relative;
+  width: 54px;
+  height: 54px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 11px;
+  background: radial-gradient(circle at 50% 30%, #4a3a20, #1a130a 75%);
+  border: 2px solid #8a6d36;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(0, 0, 0, 0.7);
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+}
+
+.slot .ic {
+  font-size: 24px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.8));
+}
+
+.slot .nm {
+  margin-top: 2px;
+  max-width: 50px;
+  overflow: hidden;
+  font-size: 8.5px;
+  font-weight: bold;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #e9dcb8;
+  text-shadow: 0 1px 2px #000;
+}
+
+/* Toets in het hoekje */
+.slot .key {
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  min-width: 15px;
+  padding: 0 3px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.75);
+  border: 1px solid rgba(243, 210, 122, 0.6);
+  font-size: 9px;
+  font-weight: bold;
+  line-height: 13px;
+  text-align: center;
+  color: var(--gold);
+  z-index: 2;
+}
+
+/* Afkoelen: een donkere taartpunt die steeds kleiner wordt */
+.slot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(rgba(0, 0, 0, 0.72) calc(var(--cd) * 1turn), transparent 0);
+  z-index: 1;
+}
+
+.slot .cd {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: bold;
+  text-shadow: 0 1px 3px #000;
+  z-index: 2;
+}
+
+.slot.ready {
+  border-color: var(--gold);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.6), 0 0 10px rgba(243, 210, 122, 0.35);
+}
+
+.slot.flash {
+  animation: slot-flash 0.5s ease-out;
+}
+
+@keyframes slot-flash {
+  0% { transform: scale(1.18); box-shadow: 0 0 22px #fff1b8; }
+  100% { transform: scale(1); }
+}
+
+.slot.active {
+  border-color: #ff8a2b;
+  box-shadow: 0 0 16px #ff8a2b, inset 0 0 12px rgba(255, 120, 40, 0.6);
+  animation: slot-burn 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes slot-burn {
+  to { box-shadow: 0 0 24px #ffb340, inset 0 0 14px rgba(255, 160, 60, 0.8); }
+}
+
+.slot.nostamina .ic {
+  filter: grayscale(1) brightness(0.6);
+}
+
+.slot.empty .ic {
+  filter: grayscale(1) brightness(0.5);
+}
+
+/* Aantal flesjes */
+.slot .count {
+  position: absolute;
+  top: 1px;
+  right: 3px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 1px 2px #000, 0 0 4px #000;
+  z-index: 2;
+}
+
+#flasks {
+  border-color: #3a8a9a;
+}
+
+/* ---------- Munten en sterren (rechtsonder) ---------- */
 #runes-box {
   position: fixed;
-  right: 22px;
-  bottom: 20px;
-  font-size: 24px;
-  text-shadow: 0 1px 4px #000;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  font-size: 20px;
+  font-weight: bold;
+  text-shadow: 0 1px 3px #000;
   pointer-events: none;
 }
 
 #runes-box .coin {
-  color: #ffd700;
-  margin: 0 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff6b0, #ffd23a 40%, #b8860b);
+  box-shadow: 0 0 8px rgba(255, 210, 60, 0.7), inset 0 0 0 2px rgba(150, 100, 0, 0.6);
+}
+
+#runes-box .star {
+  margin-left: 8px;
+  font-size: 16px;
 }
 
 #runes-gain {
   color: #ffe9a0;
-  font-size: 18px;
+  font-size: 15px;
 }
 
 /* ---------- Boss ---------- */
 #boss {
   position: fixed;
   left: 50%;
-  bottom: 70px;
+  bottom: 74px;
   width: min(760px, 80vw);
   transform: translateX(-50%);
   pointer-events: none;
+  text-align: center;
 }
 
 #boss-name {
+  display: inline-block;
+  margin-bottom: 5px;
+  padding: 2px 18px;
+  font-family: var(--title);
   font-size: 20px;
-  margin-bottom: 4px;
-  text-shadow: 0 1px 4px #000;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
+  color: #ffe2d6;
+  text-shadow: 0 1px 4px #000, 0 0 12px rgba(255, 60, 60, 0.6);
+}
+
+#boss-name::before,
+#boss-name::after {
+  content: '☠';
+  margin: 0 10px;
+  color: #ff6a6a;
 }
 
 .boss-bar {
-  height: 12px;
+  height: 16px;
+  box-shadow: 0 0 0 1px rgba(255, 110, 110, 0.6), 0 0 18px rgba(255, 40, 40, 0.35);
 }
 
 #boss-fill {
-  background: linear-gradient(#b0202a, #6a0f15);
+  background: linear-gradient(#ff6a5a, #c01a28 45%, #5a0810);
 }
 
 /* Elden Ring-stijl (Sky): een brede, dunne balk helemaal onderin, met een grote naam in hoofdletters */
@@ -247,36 +532,51 @@ canvas {
   bottom: 150px;
   transform: translateX(-50%);
   padding: 8px 18px;
-  background: rgba(0, 0, 0, 0.65);
-  border: 1px solid rgba(232, 217, 168, 0.5);
-  font-size: 18px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  font-size: 17px;
   white-space: nowrap;
   pointer-events: none;
 }
 
 #prompt b {
-  color: #ffd76a;
+  display: inline-block;
+  min-width: 22px;
+  margin-right: 4px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--gold);
+  color: #2a1d05;
+  text-align: center;
 }
 
 /* Op de draak: klein en helemaal onderin, dan zie je jezelf en de draak goed */
 #prompt.ride {
   bottom: 12px;
   padding: 5px 12px;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 #toast {
   position: fixed;
-  top: 30%;
+  top: 28%;
   left: 50%;
   transform: translateX(-50%);
+  max-width: calc(100vw - 32px);
   padding: 12px 26px;
-  background: rgba(0, 0, 0, 0.7);
-  border-top: 1px solid #e8d9a8;
-  border-bottom: 1px solid #e8d9a8;
-  font-size: 20px;
+  border-radius: 14px;
+  background: linear-gradient(rgba(34, 26, 14, 0.92), rgba(14, 10, 6, 0.92));
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+  font-size: 18px;
   text-align: center;
   pointer-events: none;
+}
+
+#toast b {
+  color: var(--gold);
 }
 
 #region {
@@ -284,6 +584,7 @@ canvas {
   top: 18%;
   left: 50%;
   transform: translateX(-50%);
+  font-family: var(--title);
   font-size: 34px;
   letter-spacing: 6px;
   color: #f1e6c4;
@@ -304,7 +605,26 @@ canvas {
   pointer-events: none;
 }
 
+#banner::before,
+#banner::after {
+  content: '';
+  position: absolute;
+  left: 15%;
+  right: 15%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+}
+
+#banner::before {
+  top: 0;
+}
+
+#banner::after {
+  bottom: 0;
+}
+
 #banner-text {
+  font-family: var(--title);
   font-size: clamp(32px, 6vw, 64px);
   letter-spacing: 6px;
 }
@@ -322,8 +642,8 @@ canvas {
 }
 
 .banner-death #banner-text {
-  color: #b51a1a;
-  text-shadow: 0 0 20px rgba(181, 26, 26, 0.6);
+  color: #d22020;
+  text-shadow: 0 0 20px rgba(181, 26, 26, 0.7);
 }
 
 .banner-power #banner-text {
@@ -372,32 +692,68 @@ canvas {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
+  background: radial-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.8));
 }
 
 #menu-panel {
-  width: min(560px, calc(100vw - 32px));
+  position: relative;
+  width: min(580px, calc(100vw - 32px));
   max-height: calc(100vh - 40px);
   overflow-y: auto;
-  padding: 22px 26px;
-  background: rgba(15, 12, 8, 0.94);
-  border: 1px solid #a8925a;
-  box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+  padding: 22px 26px 18px;
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(243, 210, 122, 0.1), transparent 60%),
+    linear-gradient(rgba(34, 26, 16, 0.97), rgba(14, 10, 7, 0.97));
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.07), inset 0 0 0 4px rgba(0, 0, 0, 0.25);
+  animation: menu-in 0.18s ease-out;
+  scrollbar-width: thin;
+  scrollbar-color: #8a6d36 transparent;
+}
+
+#menu-panel.wide {
+  width: min(900px, calc(100vw - 32px));
+}
+
+@keyframes menu-in {
+  from { transform: translateY(10px) scale(0.98); opacity: 0; }
 }
 
 #menu-panel h2 {
-  text-align: center;
-  color: #f3d27a;
-  letter-spacing: 3px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
   margin-bottom: 14px;
+  font-family: var(--title);
   font-weight: normal;
+  font-size: 26px;
+  letter-spacing: 3px;
+  color: var(--gold);
+  text-shadow: 0 0 14px rgba(243, 210, 122, 0.35);
+}
+
+#menu-panel h2::before,
+#menu-panel h2::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold));
+}
+
+#menu-panel h2::after {
+  background: linear-gradient(90deg, var(--gold), transparent);
 }
 
 #menu-panel h3 {
-  color: #c9b98a;
+  margin: 16px 0 8px;
+  padding-bottom: 4px;
+  font-family: var(--title);
   font-weight: normal;
-  margin: 14px 0 6px;
-  border-bottom: 1px solid rgba(201, 185, 138, 0.3);
+  font-size: 17px;
+  letter-spacing: 1px;
+  color: #e5cf92;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 #menu-body button {
@@ -405,45 +761,79 @@ canvas {
   width: 100%;
   margin: 6px 0;
   padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(201, 185, 138, 0.35);
-  color: #f1e6c4;
+  border-radius: 10px;
+  background: linear-gradient(rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(201, 185, 138, 0.3);
+  color: var(--text);
   font: inherit;
-  font-size: 16px;
+  font-size: 15px;
   text-align: left;
   cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
 }
 
 #menu-body button:hover:not(:disabled) {
-  background: rgba(243, 210, 122, 0.15);
-  border-color: #f3d27a;
+  background: linear-gradient(rgba(243, 210, 122, 0.2), rgba(243, 210, 122, 0.08));
+  border-color: var(--gold);
+  box-shadow: 0 0 14px rgba(243, 210, 122, 0.2);
+  transform: translateY(-1px);
+}
+
+#menu-body button:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 #menu-body button:disabled {
-  opacity: 0.4;
+  opacity: 0.42;
   cursor: default;
 }
 
 #menu-body button small {
   display: block;
-  color: #b8ad90;
-  font-size: 13px;
   margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--muted);
 }
 
 #menu-body button.equipped {
-  border-color: #f3d27a;
+  border-color: var(--gold);
+  background: linear-gradient(rgba(243, 210, 122, 0.16), rgba(243, 210, 122, 0.05));
 }
 
-#menu-body button em.bad {
-  color: #e36a5a;
+/* Een rij met een prijs of label rechts */
+#menu-body button.item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 10px;
+  align-items: center;
+}
+
+#menu-body button.item > span,
+#menu-body button.item > small {
+  grid-column: 1;
 }
 
 #menu-body button em {
   float: right;
-  margin-top: -32px;
-  color: #f3d27a;
+  font-style: normal;
   font-size: 13px;
+  color: var(--gold);
+}
+
+#menu-body button.item > em {
+  float: none;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+#menu-body button em.bad {
+  color: #ff8a7a;
+  border-color: rgba(255, 138, 122, 0.4);
 }
 
 #menu-body button.danger {
@@ -452,17 +842,102 @@ canvas {
   margin-top: 18px;
 }
 
+/* Kaartjes in een raster (wapens en helmen) */
+#menu-body .grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+#menu-body .grid button.card {
+  --rar: #d8d8d8;
+  position: relative;
+  margin: 0;
+  padding: 10px 10px 9px;
+  text-align: center;
+  border-color: color-mix(in srgb, var(--rar) 55%, transparent);
+  background: radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--rar) 22%, transparent), rgba(0, 0, 0, 0.25) 70%);
+}
+
+#menu-body .grid button.card:hover:not(:disabled) {
+  border-color: var(--rar);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--rar) 45%, transparent);
+}
+
+#menu-body .grid button.card.equipped {
+  border-width: 2px;
+  border-color: var(--rar);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--rar) 50%, transparent);
+}
+
+.card .ic {
+  display: block;
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.card b {
+  display: block;
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--rar);
+}
+
+#menu-body .card small {
+  font-size: 11.5px;
+}
+
+#menu-body .card em {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  float: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--rar);
+  color: #1a1206;
+  font-size: 10px;
+  font-weight: bold;
+}
+
 .menu-info {
   margin: 6px 0;
-  color: #c9b98a;
+  color: #d3c498;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.menu-info b {
+  color: var(--gold-hi);
 }
 
 .menu-info .ok {
-  color: #8dff9a;
+  color: var(--green);
 }
 
 .menu-info .bad {
   color: #ff7a7a;
+}
+
+/* Kleine statistiek-tegeltjes (bovenin uitrusting) */
+.stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+
+.stat-row span {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--line-soft);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.stat-row span b {
+  color: var(--gold-hi);
 }
 
 /* Het vakje voor de admin-code (Enter) */
@@ -485,7 +960,8 @@ canvas {
   display: grid;
   grid-template-columns: 110px 130px 1fr;
   gap: 8px;
-  padding: 6px 0;
+  align-items: center;
+  padding: 7px 4px;
   font-size: 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
@@ -495,7 +971,7 @@ canvas {
 }
 
 .power-row small {
-  color: #b8ad90;
+  color: var(--muted);
 }
 
 .power-row.locked {
@@ -514,7 +990,9 @@ canvas {
   gap: 12px;
   padding: 16px;
   overflow-y: auto;
-  background: radial-gradient(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.85));
+  background:
+    radial-gradient(70% 50% at 50% 20%, rgba(243, 180, 60, 0.18), transparent 70%),
+    radial-gradient(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.88));
   text-align: center;
 }
 
@@ -522,30 +1000,31 @@ canvas {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   max-width: 980px;
 }
 
 .char-card {
-  width: 140px;
-  padding: 8px 8px 10px;
-  background: rgba(20, 16, 10, 0.75);
+  width: 150px;
+  padding: 8px 8px 12px;
+  border-radius: 16px;
+  background: linear-gradient(rgba(40, 30, 16, 0.85), rgba(14, 10, 6, 0.85));
   border: 1px solid rgba(201, 185, 138, 0.35);
-  color: #f1e6c4;
+  color: var(--text);
   font: inherit;
   cursor: pointer;
   transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
 .char-card:hover {
-  transform: translateY(-3px);
-  border-color: #f3d27a;
+  transform: translateY(-4px);
+  border-color: var(--gold);
 }
 
 .char-card.selected {
-  border-color: #f3d27a;
-  box-shadow: 0 0 18px rgba(243, 210, 122, 0.55);
-  background: rgba(60, 45, 15, 0.8);
+  border: 2px solid var(--gold);
+  box-shadow: 0 0 22px rgba(243, 210, 122, 0.55);
+  background: linear-gradient(rgba(80, 58, 20, 0.9), rgba(30, 20, 8, 0.9));
 }
 
 .char-card img {
@@ -558,8 +1037,9 @@ canvas {
 
 .char-card b {
   display: block;
-  font-size: 17px;
-  color: #f3d27a;
+  font-family: var(--title);
+  font-size: 18px;
+  color: var(--gold);
 }
 
 .char-card small {
@@ -572,44 +1052,93 @@ canvas {
 
 #start-btn {
   margin-top: 6px;
-  padding: 12px 54px;
-  background: linear-gradient(#e9c86a, #b8902f);
-  border: 1px solid #fff2c4;
+  padding: 13px 60px;
+  border-radius: 999px;
+  background: linear-gradient(#ffe9a0, #e9c86a 40%, #b8902f);
+  border: 2px solid #fff2c4;
   color: #2a1d05;
-  font: inherit;
+  font-family: var(--title);
   font-size: 22px;
+  font-weight: bold;
   letter-spacing: 4px;
   cursor: pointer;
-  box-shadow: 0 0 20px rgba(243, 210, 122, 0.4);
+  box-shadow: 0 0 24px rgba(243, 210, 122, 0.5), 0 6px 0 #6a4f14;
+  transition: transform 0.1s, filter 0.15s;
+  animation: start-glow 2s ease-in-out infinite;
+}
+
+@keyframes start-glow {
+  50% { box-shadow: 0 0 40px rgba(255, 220, 130, 0.8), 0 6px 0 #6a4f14; }
 }
 
 #start-btn:hover {
   filter: brightness(1.1);
+  transform: translateY(-2px);
+}
+
+#start-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 0 24px rgba(243, 210, 122, 0.5), 0 2px 0 #6a4f14;
 }
 
 #lock-hint h1 {
-  font-size: clamp(40px, 8vw, 84px);
-  font-weight: normal;
+  font-family: var(--title);
+  font-size: clamp(40px, 8vw, 88px);
+  font-weight: bold;
   letter-spacing: 12px;
-  color: #f3d27a;
-  text-shadow: 0 0 24px rgba(243, 210, 122, 0.5);
+  line-height: 1;
+  background: linear-gradient(#fff6c8, #f3d27a 45%, #b8862e 55%, #ffe08a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 4px 0 #3a2508) drop-shadow(0 0 24px rgba(243, 210, 122, 0.45));
+}
+
+#lock-hint h1::after {
+  content: '3D';
+  margin-left: 14px;
+  font-size: 0.45em;
+  letter-spacing: 4px;
+  vertical-align: super;
 }
 
 #lock-hint p {
-  font-size: 22px;
+  font-family: var(--title);
+  font-size: 20px;
   letter-spacing: 3px;
+  color: #ecdcae;
 }
 
 #lock-hint .controls {
-  max-width: calc(100vw - 32px);
-  margin-top: 16px;
-  font-size: 14px;
-  line-height: 1.9;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 8px;
+  max-width: min(900px, calc(100vw - 32px));
+  margin-top: 14px;
+  font-size: 13px;
   color: #ddd;
 }
 
+#lock-hint .controls span {
+  padding: 3px 9px 3px 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--line-soft);
+}
+
 #lock-hint .controls b {
-  color: #ffd76a;
+  display: inline-block;
+  margin-right: 5px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #2a1d05;
+}
+
+#lock-hint .controls i {
+  font-style: normal;
+  color: var(--gold);
 }
 
 /* ---------- Level kiezen ---------- */
@@ -624,17 +1153,24 @@ canvas {
 .level-card {
   min-width: 150px;
   padding: 8px 14px;
-  background: rgba(20, 16, 10, 0.75);
+  border-radius: 12px;
+  background: linear-gradient(rgba(40, 30, 16, 0.85), rgba(14, 10, 6, 0.85));
   border: 1px solid rgba(201, 185, 138, 0.35);
-  color: #f1e6c4;
+  color: var(--text);
   font: inherit;
   cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.level-card:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: var(--gold);
 }
 
 .level-card b {
   display: block;
-  font-size: 16px;
-  color: #f3d27a;
+  font-size: 15px;
+  color: var(--gold);
 }
 
 .level-card small {
@@ -643,9 +1179,9 @@ canvas {
 }
 
 .level-card.selected {
-  border-color: #f3d27a;
+  border: 2px solid var(--gold);
   box-shadow: 0 0 14px rgba(243, 210, 122, 0.5);
-  background: rgba(60, 45, 15, 0.8);
+  background: linear-gradient(rgba(80, 58, 20, 0.9), rgba(30, 20, 8, 0.9));
 }
 
 .level-card:disabled {
@@ -659,27 +1195,28 @@ canvas {
   color: #f1e6c4;
 }
 
-/* ---------- Quests ---------- */
+/* ---------- Quests (onder de minimap) ---------- */
 #quests {
   position: fixed;
-  top: 200px;
-  right: 16px;
+  top: 252px;
+  right: 14px;
   width: 220px;
   pointer-events: none;
   text-shadow: 0 1px 3px #000;
 }
 
 .quest {
-  margin-bottom: 8px;
-  padding: 6px 10px;
-  background: rgba(0, 0, 0, 0.35);
-  border-left: 3px solid #f3d27a;
+  margin-bottom: 7px;
+  padding: 6px 10px 7px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.2));
+  border-left: 3px solid var(--gold);
 }
 
 .quest b {
   display: block;
-  font-size: 14px;
-  color: #f3d27a;
+  font-size: 13px;
+  color: var(--gold);
 }
 
 .quest small {
@@ -688,7 +1225,7 @@ canvas {
 }
 
 .quest.done {
-  border-left-color: #7dff9a;
+  border-left-color: var(--green);
 }
 
 .quest.done small {
@@ -701,23 +1238,32 @@ canvas {
   position: fixed;
   left: 50%;
   bottom: 90px;
-  width: min(640px, calc(100vw - 32px));
+  width: min(660px, calc(100vw - 32px));
   transform: translateX(-50%);
   padding: 14px 20px 12px;
-  background: linear-gradient(rgba(20, 16, 10, 0.92), rgba(10, 8, 5, 0.92));
+  border-radius: 16px;
+  background: linear-gradient(rgba(30, 22, 12, 0.94), rgba(10, 8, 5, 0.94));
   border: 1px solid rgba(243, 210, 122, 0.6);
-  box-shadow: 0 0 30px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
 }
 
 #dialog-name {
-  margin-bottom: 6px;
-  font-size: 15px;
+  position: absolute;
+  top: -14px;
+  left: 18px;
+  padding: 2px 14px;
+  border-radius: 999px;
+  background: linear-gradient(#ffe9a0, #c99a3a);
+  color: #2a1d05;
+  font-size: 13px;
+  font-weight: bold;
   letter-spacing: 2px;
-  color: #f3d27a;
   text-transform: uppercase;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
 
 #dialog-text {
+  margin-top: 4px;
   font-size: 18px;
   line-height: 1.5;
   color: #f4ecd6;
@@ -742,7 +1288,219 @@ canvas {
 .world-map {
   display: block;
   width: 100%;
-  border: 1px solid rgba(201, 185, 138, 0.5);
-  border-radius: 4px;
+  border-radius: 12px;
+  border: 2px solid #8a6d36;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.5), inset 0 0 30px rgba(0, 0, 0, 0.5);
   background: #2b3326;
+}
+
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 8px 2px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.map-flags {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0 10px;
+}
+
+/* ---------- Premies en trofeeën: voortgangsbalkje ---------- */
+.prog {
+  display: inline-block;
+  width: 110px;
+  height: 7px;
+  margin-left: 6px;
+  vertical-align: middle;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.prog i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #f3d27a, #ffb340);
+}
+
+.power-row.trophy {
+  grid-template-columns: 40px 170px 1fr;
+}
+
+/* ---------- Arena ---------- */
+.bet-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+#menu-body .bet-row button {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  padding: 8px 6px;
+}
+
+/* ---------- Kleine schermen ---------- */
+@media (max-width: 700px) {
+  #map-wrap,
+  #minimap {
+    width: 130px;
+  }
+
+  #minimap {
+    height: 130px;
+  }
+
+  #quests {
+    top: 196px;
+    width: 170px;
+  }
+
+  .slot {
+    width: 46px;
+    height: 46px;
+  }
+
+  .power-row {
+    grid-template-columns: 70px 1fr;
+  }
+
+  .power-row small {
+    grid-column: 1 / -1;
+  }
+}
+
+/* In Omars kasteel heeft het startscherm een eigen titel (zie omar.js) */
+body.omar-kasteel #lock-hint h1 {
+  background: none;
+  filter: none;
+}
+
+body.omar-kasteel #lock-hint h1::after {
+  content: none;
+}
+
+/* ---------- Samen spelen (online) ---------- */
+#menu-body .field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+#menu-body input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  outline: none;
+  user-select: text;
+}
+
+#menu-body input:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 12px rgba(243, 210, 122, 0.3);
+}
+
+#menu-body #mp-code {
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  font-weight: bold;
+}
+
+.join-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+#menu-body .join-row button {
+  width: auto;
+  margin: 0;
+  padding: 9px 18px;
+  text-align: center;
+}
+
+.mp-status {
+  margin: 10px 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--line-soft);
+}
+
+.mp-status.ok {
+  border-color: rgba(125, 255, 154, 0.5);
+  color: #c8ffd4;
+}
+
+.mp-status.bad {
+  border-color: rgba(255, 122, 122, 0.5);
+  color: #ffc8c8;
+}
+
+.mp-code {
+  margin: 12px 0;
+  padding: 14px;
+  border-radius: 14px;
+  text-align: center;
+  background: radial-gradient(circle at 50% 0%, rgba(90, 216, 255, 0.18), rgba(0, 0, 0, 0.35) 70%);
+  border: 1px solid rgba(90, 216, 255, 0.5);
+}
+
+.mp-code b {
+  display: block;
+  margin: 4px 0;
+  font-size: 38px;
+  letter-spacing: 6px;
+  color: #9be7ff;
+  text-shadow: 0 0 16px rgba(90, 216, 255, 0.6);
+  user-select: text;
+}
+
+.mp-code small {
+  display: block;
+  color: var(--muted);
+}
+
+#mp-btn {
+  padding: 9px 26px;
+  border-radius: 999px;
+  background: linear-gradient(rgba(40, 70, 100, 0.9), rgba(14, 26, 40, 0.9));
+  border: 1px solid rgba(90, 216, 255, 0.6);
+  color: #d8f4ff;
+  font: inherit;
+  font-size: 16px;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+#mp-btn:hover {
+  border-color: #9be7ff;
+  box-shadow: 0 0 16px rgba(90, 216, 255, 0.4);
+}
+
+/* Het admin-vakje in een menu: grote letters in het midden */
+#menu-body .admin-code {
+  font-size: 22px;
+  letter-spacing: 6px;
+  text-align: center;
+}
+
+/* Elden Ring-balk (Sky): zonder doodshoofdjes */
+#boss.elden #boss-name::before,
+#boss.elden #boss-name::after {
+  content: none;
 }

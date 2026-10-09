@@ -31,20 +31,28 @@ const UP = new THREE.Vector3(0, 1, 0);
 const tmp = new THREE.Vector3();
 const tmp2 = new THREE.Vector3();
 
-/** Het draken-model, helemaal van simpele vormen. De voorkant is +z. */
-function buildDragon() {
+// Kleuren van de draak. Met sterren koop je een andere kleur in de sterrenwinkel; de Schaduwdraak (de eindbaas) is paars.
+export const DRAGON_SKINS = {
+  vuur: { name: 'Vuurrood', body: 0xb8261c, dark: 0x6e1410, belly: 0xf0b860, wing: 0x9a2318, bone: 0xf3ead2, eye: 0xffe14a, eyeGlow: 0xffb000 },
+  ijs: { name: 'IJsblauw', body: 0x2a7ac8, dark: 0x123a6a, belly: 0xd8f4ff, wing: 0x3a90d8, bone: 0xffffff, eye: 0x9ffcff, eyeGlow: 0x30e8ff },
+  goud: { name: 'Goud', body: 0xd8a01c, dark: 0x7a5410, belly: 0xfff0b0, wing: 0xe8b830, bone: 0xffffff, eye: 0xff6a20, eyeGlow: 0xff3a00 },
+  schaduw: { name: 'Schaduw', body: 0x2a1238, dark: 0x120818, belly: 0x6a3a8a, wing: 0x4a1a6a, bone: 0xc8a8e8, eye: 0xd060ff, eyeGlow: 0xa020ff },
+};
+
+/** Het draken-model, helemaal van simpele vormen. De voorkant is +z. `withSaddle` = met een zadel (alleen Vuurtand). */
+export function buildDragon(skin = DRAGON_SKINS.vuur, withSaddle = true) {
   const root = new THREE.Group(); // plek en richting
   const body = new THREE.Group(); // kantelt bij het vliegen (neus omhoog/omlaag, schuin in de bocht)
   root.add(body);
   const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.6, flatShading: true, ...extra });
-  const red = mat(0xb8261c, { metalness: 0.1 });
-  const dark = mat(0x6e1410);
-  const belly = mat(0xf0b860, { roughness: 0.7 });
-  const bone = mat(0xf3ead2, { roughness: 0.5 });
-  const wingMat = mat(0x9a2318, { side: THREE.DoubleSide, roughness: 0.75 });
+  const red = mat(skin.body, { metalness: 0.1 });
+  const dark = mat(skin.dark);
+  const belly = mat(skin.belly, { roughness: 0.7 });
+  const bone = mat(skin.bone, { roughness: 0.5 });
+  const wingMat = mat(skin.wing, { side: THREE.DoubleSide, roughness: 0.75 });
   const leather = mat(0x5a3a22, { roughness: 0.85 });
   const gold = mat(0xe0b040, { metalness: 0.6, roughness: 0.35 });
-  const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffe14a, emissive: 0xffb000, emissiveIntensity: 2.2 });
+  const eyeMat = new THREE.MeshStandardMaterial({ color: skin.eye, emissive: skin.eyeGlow, emissiveIntensity: 2.2 });
   const ball = new THREE.IcosahedronGeometry(1, 1);
   const add = (parent, geo, material, [x, y, z], [sx, sy, sz] = [1, 1, 1], [rx, ry, rz] = [0, 0, 0]) => {
     const m = new THREE.Mesh(geo, material);
@@ -150,9 +158,11 @@ function buildDragon() {
   }
 
   // Zadel met gouden knop (de speler zit erop)
-  add(body, new THREE.BoxGeometry(1.05, 0.22, 1.15), leather, [0, 3.22, 0.3]);
-  add(body, new THREE.BoxGeometry(1.3, 0.06, 0.18), leather, [0, 3.05, 0.3], [1, 1, 1], [0, 0, 0]);
-  add(body, new THREE.SphereGeometry(0.11, 8, 6), gold, [0, 3.42, 0.85]);
+  if (withSaddle) {
+    add(body, new THREE.BoxGeometry(1.05, 0.22, 1.15), leather, [0, 3.22, 0.3]);
+    add(body, new THREE.BoxGeometry(1.3, 0.06, 0.18), leather, [0, 3.05, 0.3], [1, 1, 1], [0, 0, 0]);
+    add(body, new THREE.SphereGeometry(0.11, 8, 6), gold, [0, 3.42, 0.85]);
+  }
   const saddle = new THREE.Object3D();
   saddle.position.set(0, 3.33, 0.25);
   body.add(saddle);
@@ -160,12 +170,69 @@ function buildDragon() {
   root.traverse((c) => {
     if (c.isMesh) c.userData.noAO = true;
   });
-  return { root, body, head, jaw, mouth, tail, legs, wings, saddle };
+  return { root, body, head, jaw, mouth, tail, legs, wings, saddle, materials: { body: red, dark, belly, bone, wing: wingMat, eye: eyeMat } };
+}
+
+/** Andere kleuren voor een draak (zie DRAGON_SKINS). */
+export function paintDragon(parts, skin) {
+  const m = parts.materials;
+  m.body.color.set(skin.body);
+  m.dark.color.set(skin.dark);
+  m.belly.color.set(skin.belly);
+  m.bone.color.set(skin.bone);
+  m.wing.color.set(skin.wing);
+  m.eye.color.set(skin.eye);
+  m.eye.emissive.set(skin.eyeGlow);
+}
+
+/**
+ * Vleugels flappen, staart golven, poten lopen of intrekken, bek open bij vuur.
+ * `self` heeft: parts, time, flapPhase, velocity, breathing (de rijdraak én de Schaduwdraak gebruiken dit).
+ */
+export function animateDragon(self, dt, flying, speed, sounds = true) {
+  const { wings, tail, legs, jaw, head } = self.parts;
+  if (flying) {
+    // Sneller flappen bij omhoog gaan, rustig zweven als hij snel vliegt
+    const rate = self.velocity.y > 2 ? 9 : speed > 20 ? 4.5 : 6.5;
+    const before = Math.sin(self.flapPhase);
+    self.flapPhase += dt * rate;
+    const flap = Math.sin(self.flapPhase);
+    for (const w of wings) {
+      w.group.rotation.z = w.side * (0.25 + flap * 0.75);
+      w.group.rotation.y = w.side * 0.1;
+    }
+    if (sounds && before > 0 && flap <= 0) play('flap'); // bij elke neerwaartse slag
+    // Op en neer deinen met de vleugelslag
+    self.parts.body.position.y = -flap * 0.18;
+  } else {
+    // Op de grond: vleugels ingeklapt
+    for (const w of wings) {
+      w.group.rotation.z += (w.side * -0.55 - w.group.rotation.z) * Math.min(1, 6 * dt);
+      w.group.rotation.y += (w.side * 0.9 - w.group.rotation.y) * Math.min(1, 6 * dt); // naar achteren gevouwen
+    }
+    self.parts.body.position.y = 0;
+  }
+  // Staart golft
+  tail.forEach((seg, i) => {
+    seg.rotation.y = Math.sin(self.time * 2.4 - i * 0.6) * 0.16;
+    seg.rotation.x = (flying ? 0.05 : -0.08) + Math.sin(self.time * 1.7 - i * 0.5) * 0.05;
+  });
+  // Poten: lopen op de grond, ingetrokken in de lucht
+  const walk = !flying && speed > 0.5;
+  legs.forEach((leg, i) => {
+    const pair = i === 0 || i === 3 ? 0 : Math.PI; // schuin tegenover elkaar stappen samen (zoals een hond)
+    const goal = flying ? -0.9 : walk ? Math.sin(self.time * 9 + pair) * 0.5 : 0;
+    leg.rotation.x += (goal - leg.rotation.x) * Math.min(1, 10 * dt);
+  });
+  // Bek open bij vuur spuwen, kop een beetje omlaag
+  const open = self.breathing > 0 ? 0.55 : 0;
+  jaw.rotation.x += (open - jaw.rotation.x) * Math.min(1, 14 * dt);
+  head.rotation.x += ((self.breathing > 0 ? 0.25 : 0) + Math.sin(self.time * 1.3) * 0.04 - head.rotation.x) * Math.min(1, 8 * dt);
 }
 
 export class Dragon {
-  constructor(scene) {
-    this.parts = buildDragon();
+  constructor(scene, skin = 'vuur') {
+    this.parts = buildDragon(DRAGON_SKINS[skin] ?? DRAGON_SKINS.vuur);
     this.mesh = this.parts.root;
     this.mesh.visible = false;
     scene.add(this.mesh);
@@ -222,13 +289,13 @@ export class Dragon {
     return DRAGON.fireRange + this.position.y * 1.2;
   }
 
-  /** Roep de draak: hij vliegt van achter de speler aan en landt naast hem. */
-  summon(playerPos, facingYaw) {
+  /** Roep de draak: hij vliegt van achter de speler aan en landt naast hem (groundY = hoe hoog de grond daar is, bijv. op een luchteiland). */
+  summon(playerPos, facingYaw, groundY = 0) {
     if (this.active) return false;
     const back = new THREE.Vector3(-Math.sin(facingYaw), 0, -Math.cos(facingYaw));
     const side = new THREE.Vector3(Math.cos(facingYaw), 0, -Math.sin(facingYaw));
-    this.landAt = playerPos.clone().addScaledVector(side, 3.2).setY(0);
-    this.from = this.landAt.clone().addScaledVector(back, 45).setY(28);
+    this.landAt = playerPos.clone().addScaledVector(side, groundY > 0 ? 1.5 : 3.2).setY(groundY);
+    this.from = this.landAt.clone().addScaledVector(back, 45).setY(groundY + 28);
     this.position.copy(this.from);
     this.yaw = facingYaw;
     this.velocity.set(0, 0, 0);
@@ -257,6 +324,11 @@ export class Dragon {
     this.velocity.set(Math.sin(this.yaw) * 10, 9, Math.cos(this.yaw) * 10);
     this.breathing = 0;
     play('flap');
+  }
+
+  /** Een andere kleur (uit de sterrenwinkel). */
+  setSkin(key) {
+    paintDragon(this.parts, DRAGON_SKINS[key] ?? DRAGON_SKINS.vuur);
   }
 
   /** Meteen weg (bijvoorbeeld bij snelreizen). */
@@ -293,7 +365,7 @@ export class Dragon {
       const e = 1 - (1 - k) ** 3; // eerst snel, dan rustig landen
       const prev = this.position.clone();
       this.position.lerpVectors(this.from, this.landAt, e);
-      this.position.y = THREE.MathUtils.lerp(this.from.y, 0, 1 - (1 - k) ** 2);
+      this.position.y = THREE.MathUtils.lerp(this.from.y, this.landAt.y, 1 - (1 - k) ** 2);
       this.velocity.copy(this.position).sub(prev).divideScalar(Math.max(dt, 1e-3));
       flying = k < 0.97;
     } else if (this.state === 'vertrekt') {
@@ -349,7 +421,9 @@ export class Dragon {
   ride(dt, ctrl, world) {
     const pos = this.position;
     const moving = ctrl.move.lengthSq() > 0.01;
-    const onGround = pos.y <= 0.02;
+    // De grond: meestal 0, maar bovenop een luchteiland (islands.js) hoger
+    const ground = world.groundAt ? world.groundAt(pos.x, pos.z, pos.y) : 0;
+    const onGround = pos.y <= ground + 0.02;
     const flying = !onGround || ctrl.up;
     // Horizontaal: rustig optrekken en afremmen
     const speed = !moving ? 0 : flying ? (ctrl.boost ? DRAGON.boost : DRAGON.speed) : DRAGON.walk;
@@ -366,8 +440,8 @@ export class Dragon {
     vy = THREE.MathUtils.clamp(vy, -15, DRAGON.climb + 2);
     this.velocity.y += (vy - this.velocity.y) * Math.min(1, 3 * dt);
     pos.addScaledVector(this.velocity, dt);
-    if (pos.y <= 0) {
-      pos.y = 0;
+    if (pos.y <= ground) {
+      pos.y = ground;
       this.velocity.y = Math.max(0, this.velocity.y);
     }
     if (pos.y > DRAGON.maxHeight) {
@@ -408,49 +482,11 @@ export class Dragon {
         this.blocked = 3;
       }
     }
-    return pos.y > 0.02;
+    return pos.y > ground + 0.02;
   }
 
-  /** Vleugels flappen, staart golven, poten lopen of intrekken, bek open bij vuur. */
   animate(dt, flying, speed) {
-    const { wings, tail, legs, jaw, head } = this.parts;
-    if (flying) {
-      // Sneller flappen bij omhoog gaan, rustig zweven als hij snel vliegt
-      const rate = this.velocity.y > 2 ? 9 : speed > 20 ? 4.5 : 6.5;
-      const before = Math.sin(this.flapPhase);
-      this.flapPhase += dt * rate;
-      const flap = Math.sin(this.flapPhase);
-      for (const w of wings) {
-        w.group.rotation.z = w.side * (0.25 + flap * 0.75);
-        w.group.rotation.y = w.side * 0.1;
-      }
-      if (before > 0 && flap <= 0) play('flap'); // bij elke neerwaartse slag
-      // Op en neer deinen met de vleugelslag
-      this.parts.body.position.y = -flap * 0.18;
-    } else {
-      // Op de grond: vleugels ingeklapt
-      for (const w of wings) {
-        w.group.rotation.z += (w.side * -0.55 - w.group.rotation.z) * Math.min(1, 6 * dt);
-        w.group.rotation.y += (w.side * 0.9 - w.group.rotation.y) * Math.min(1, 6 * dt); // naar achteren gevouwen
-      }
-      this.parts.body.position.y = 0;
-    }
-    // Staart golft
-    tail.forEach((seg, i) => {
-      seg.rotation.y = Math.sin(this.time * 2.4 - i * 0.6) * 0.16;
-      seg.rotation.x = (flying ? 0.05 : -0.08) + Math.sin(this.time * 1.7 - i * 0.5) * 0.05;
-    });
-    // Poten: lopen op de grond, ingetrokken in de lucht
-    const walk = !flying && speed > 0.5;
-    legs.forEach((leg, i) => {
-      const pair = i === 0 || i === 3 ? 0 : Math.PI; // schuin tegenover elkaar stappen samen (zoals een hond)
-      const goal = flying ? -0.9 : walk ? Math.sin(this.time * 9 + pair) * 0.5 : 0;
-      leg.rotation.x += (goal - leg.rotation.x) * Math.min(1, 10 * dt);
-    });
-    // Bek open bij vuur spuwen, kop een beetje omlaag
-    const open = this.breathing > 0 ? 0.55 : 0;
-    jaw.rotation.x += (open - jaw.rotation.x) * Math.min(1, 14 * dt);
-    head.rotation.x += ((this.breathing > 0 ? 0.25 : 0) + Math.sin(this.time * 1.3) * 0.04 - head.rotation.x) * Math.min(1, 8 * dt);
+    animateDragon(this, dt, flying, speed);
   }
 
   /** Raakt het vuur dit punt? (binnen bereik en in de vuurkegel) */

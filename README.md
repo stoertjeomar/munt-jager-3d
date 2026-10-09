@@ -1,9 +1,11 @@
 # Munt Jager 3D
 
 Een **open-wereld actie-RPG** in de browser, gemaakt met **JavaScript** en **[Three.js](https://threejs.org/)**.
-Kies je held en trek door één grote wereld met 4 gebieden: versla vijanden voor munten en XP, help de dorpelingen
-met zij-quests, koop spullen bij de koopman, vlieg op je **draak**, vecht samen met je **Boks-Dinootje** en versla de
-boss van elk gebied. Pas op: Omar stuurt soms zijn **schaduwleger** op je af!
+Kies je held en trek door één grote wereld met 5 gebieden: versla vijanden voor munten en XP, help de dorpelingen
+met zij-quests, koop spullen bij de koopman, vlieg op je **draak** naar de **Hemeleilanden** hoog in de lucht, train je
+**huisdieren** in de **Arena** en versla de boss van elk gebied. Pas op: Omar stuurt soms zijn **schaduwleger** op je af!
+En als alle bosses verslagen zijn, gaat de **Schaduwpoort** open... en daarna jaag je op **trofeeën**, **premies**,
+**Kampioenen** en **woedende bosses**. Of speel **samen online** met een vriend en daag hem uit voor een **duel**!
 
 > 👑 **Ikzelf, Omar, zit ook in de game!** Ik heb dit spel gemaakt en ik woon in Muntdorp.
 > Daag me uit en ik neem je mee naar mijn Gekke Kasteel. Niemand heeft mij ooit verslagen...
@@ -44,13 +46,15 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 | Klik / F | Slaan (F in de lucht = grondslag) |
 | Q | Vastzetten op een vijand (lock-on) |
 | R | Flesje drinken (leven terug) |
-| E | Praten met een NPC / winkelen bij de koopman / kist openen |
+| E | Praten met een NPC / winkelen bij de koopman / kist openen / huisdier aaien / de Arena / het Windaltaar |
 | C | Dash |
 | V | Wervelslag |
 | X | Vuurzwaard |
 | I of Tab | Uitrusting (wapens, helmen, krachten) |
 | T | Wereldkaart + snelreizen naar een vlag waar je al was |
 | B | Vuurtand de draak roepen / afstappen (na de eerste boss) |
+| K | Trofeeënkast (je trofeeën, sterren en rang) |
+| O | Samen spelen (online): kamer maken, meedoen met een code, duel |
 | M | Geluid aan/uit |
 | N | Muziek aan/uit (wordt onthouden) |
 | G | Graphics: Laag / Normaal / Hoog (wordt onthouden) |
@@ -63,12 +67,14 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
 
 ## Wat zit erin
 
-- **Eén grote open wereld** met 4 gebieden naast elkaar (geen losse levels meer: je kunt overal heen lopen).
+- **Eén grote open wereld** met 5 gebieden naast elkaar (geen losse levels meer: je kunt overal heen lopen).
   Elk gebied heeft een pad naar zijn boss-arena, met een vlag aan het begin en halverwege, en paden die de gebieden verbinden:
   1. **Groene Weide** met het dorp Muntdorp → boss **Budget Mario**
   2. **Ruïnevallei** met een parkour-ruïne → boss **Koning Slijm**
   3. **Spookwoud** (donker en mistig) → boss **De Gevallen Ridder**
-  4. **Rotshoogland** (de finale) → boss **Steenreus Gorath**
+  4. **Rotshoogland** → boss **Steenreus Gorath**
+  5. **Schaduwrijk** (geheim!) → eindbaas **De Schaduwdraak**. De **Schaduwpoort** gaat pas open als de vier andere
+     bosses verslagen zijn. Paarse mist, gloeiende kristallen, paarse dennen en enge muziek
 
   Loop je een ander gebied in, dan zie je de naam en veranderen de muziek, de mist, het gras en de geluiden.
   Te vroeg in een moeilijk gebied? Dan krijg je een waarschuwing. Versla een boss → *GEBIED VEILIG* → het volgende gebied gaat open.
@@ -77,10 +83,55 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
 - **Vuurtand de draak (B)**: versla Budget Mario en je krijgt een eigen draak! Hij komt aanvliegen, jij springt op zijn rug
   en je vliegt over de hele wereld. Hij spuwt vuur, maar durft niet in een boss-arena, en vijanden die hij verbrandt
   geven wel munten maar tellen niet mee voor je level (sterker worden doe je zelf)
-- **Knokkie het Boks-Dinootje**: koop een **Dino-ei** bij de koopman. Knokkie loopt overal met je mee, stoot vijanden
-  met zijn bokshandschoenen en wordt sterker (en groter) van elke 5 vijanden die hij verslaat, tot level 10
+- **Knokkie het Boks-Dinootje**: koop een **Dino-ei** bij de koopman. Knokkie woont in **Muntdorp** en loopt daar los
+  rond (net als Pluis de kat). Ze komen naar je toe als je in de buurt bent, je kunt ze **aaien (E)**, en in de **Arena**
+  vechten ze tegen monsters. Winnen maakt ze sterker (en groter), tot level 10
+- **De Arena** naast Muntdorp (E bij de poort): een rond colosseum met tribunes, vlaggen, fakkels en een gong.
+  - **Golven overleven**: jij tegen steeds meer en sterkere monsters (munten per golf, een ⭐ per 5 golven; doodgaan kost hier niks)
+  - **Huisdiergevecht**: Knokkie of Pluis tegen een monster
+  - **Monstergevecht**: twee monsters vechten tegen elkaar en jij **wedt** munten op de winnaar (goed gegokt = dubbel terug)
+  - **Duel**: online tegen een vriend (zie *Samen spelen*)
+- **De Hemeleilanden** ☁: vijf zwevende eilanden hoog boven de Ruïnevallei, waar je **alleen met Vuurtand** komt. Met
+  roze wolkenbomen, een waterval die naar beneden valt, kristallen, een regenboog, stapstenen om over te springen,
+  Wolkengeesten en een Stormgolem. Op elk eiland staat een kist met een **speciaal wapen**, er liggen 3 diamanten, er staat
+  een vlag (dan kun je erheen snelreizen) en het **Windaltaar** geeft je de *Zegen van de Wind*: 90 seconden lang meer
+  schade en sneller lopen
+- **Wapens met een speciale kracht**: de **Gifdolk** (vergiftigt), het **IJszwaard** (bevriest: vijanden lopen langzaam),
+  het **Bliksemzwaard** (de bliksem springt over naar andere vijanden), het **Vampierzwaard** (je krijgt leven terug)
+  en de **Wolkenspeer** (héél lang bereik, en een windstoot blaast vijanden weg)
+- **Samen spelen (online)** 🌐: druk op **O** (of *Samen spelen* op het startscherm). Eén speler maakt een kamer en krijgt
+  een code (bijv. MUNT-7K3P), de ander typt die code in. Dan zie je elkaar lopen, springen, slaan en op de draak vliegen,
+  en in de Arena kun je een **duel** doen (de winnaar krijgt munten). Vijanden, kisten en munten heeft ieder voor zich.
+  Dit werkt met [PeerJS](https://peerjs.com): de computers vinden elkaar via de gratis PeerJS-server en praten daarna direct
+- **Echte animaties voor je held**: slaan (een combo van verschillende slagen, en met zware wapens een grote hamerslag),
+  dashen, afzetten bij het springen, een **salto** bij de dubbele sprong, een **superheldenlanding** na de grondslag,
+  geraakt worden, drinken, bukken en omvallen als je doodgaat. Ze komen uit de *Universal Animation Library 2* en worden
+  in de code "vertaald" naar het skelet van Eve en de Soldaat (`src/retarget.js`). Lopen en rennen doet onze eigen animator,
+  en als je slaat terwijl je loopt, lopen je benen gewoon door
+- **Een nieuwe look**: een levelrondje met je rang, glimmende levensbalken, een krachtenbalk met plaatjes en
+  afkoel-taartpuntjes, een minimap met kompas en de naam van het gebied, een wereldkaart met lintjes en mist over gebieden
+  waar je nog niet was, en menu's met kaartjes (wapens in de kleur van hoe zeldzaam ze zijn)
 - **Omar-invasies**: af en toe valt Omars schaduwleger Muntdorp of een ander kamp aan (volg de paarse lichtstraal!).
   Versla drie golven schaduwkrijgers op tijd en je krijgt een flinke beloning
+- **De Schaduwdraak**: een enorme paarse draak in het Schaduwrijk. Hij vliegt rondjes en schiet paarse vuurballen,
+  duikt naar beneden (dan kun je hem raken!), spuwt vuur en zwiept met zijn staart, en in fase 2 roept hij Zombiepoppen op.
+  Versla hem voor het **Drakenzwaard** en schaduwkleuren voor je eigen draak
+- **Na alle bosses is er nog genoeg te doen** (het einddoel: word een 🌟 **LEGENDE**):
+  - **Trofeeën (K)**: 30 prestaties (alle diamanten vinden, Omar verslaan, 1000 vijanden, Knokkie level 10...).
+    Elke trofee geeft ⭐ **sterren**, en je rang groeit van Avonturier tot Legende
+  - **Premiebord** in Muntdorp (en bij elke koopman): steeds drie nieuwe opdrachten voor munten en sterren
+  - **Kampioenen** 👑: gouden vijanden met een kroon, veel sterker, en ze geven een ster
+  - **Woedende bosses** 😡: een boss die je versloeg komt na een paar minuten terug, met meer leven en harder.
+    Versla hem voor 2 sterren
+  - **Sterrenwinkel** bij de koopman: het **Sterrenzwaard** (het sterkste wapen), **Pluis de kat**, nieuwe kleuren
+    voor Vuurtand, Sterrenappels en snoepjes voor je huisdier
+- **Pluis de kat**: een tweede huisdier (zelfgebouwd in code). Snel en ze krabt vijanden
+- **Nieuwe vijanden met echte animaties** (uit de *Universal Animation Library* van Quaternius): de **Zombiepop** ligt
+  op de grond en kruipt overeind als je dichtbij komt, en de **Ninjapop** springt met een ninjasprong op je af,
+  hakt drie keer met zijn katana en blokt soms je klappen (GEBLOKT!)
+- **Muntdorp leeft**: dorpelingen die oogsten, zaaien, water geven, hout hakken, met een lantaarn rondstaan of bellen,
+  en **dragers** die met een krat, groente, hout, een pompoen of een zak door het dorp lopen (sta je in de weg, dan wachten
+  ze en knikken ze gedag)
 - **Kies je held**: Eve of Soldaat (Mixamo-personages met een echt skelet: knieën, ellebogen, rennen, uitvalspas bij het slaan)
 - **NPC's met zij-quests**: Mila, Strohoed, Robot B-0P en Sir Roestbout wonen in de wereld. Praat met ze (E) als er een **!** boven
   hun hoofd staat, doe de quest (vijanden verslaan of sterren/batterijen zoeken) en haal je beloning op bij het **?**
@@ -162,7 +213,7 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
 munt-jager-3d/
 ├── index.html        → pagina, HUD en startscherm
 ├── style.css         → opmaak
-├── lib/              → Three.js (r170) + loaders + licentie
+├── lib/              → Three.js (r170) + loaders, PeerJS (samen spelen) + licenties
 ├── models/           → 3D-modellen (personages, wapens, helmen, bosses, KayKit, Kenney; extra/ = de nieuwe modellen)
 ├── textures/         → Kenney Retro Textures (grond, muren, daken, ramen)
 ├── sounds/           → geluiden uit het Kenney Starter Kit
@@ -173,21 +224,29 @@ munt-jager-3d/
     ├── graphics.js   → hoe het getekend wordt: gloed, kleuren, gladde randjes, de standen Laag/Normaal/Hoog (G)
     ├── blobs.js      → zachte schaduw-vlekjes onder de speler, vijanden en mensen
     ├── grass.js      → dicht, wuivend gras rond de speler (alleen op Normaal en Hoog)
-    ├── levels.js     → de 4 gebieden: pad, vijanden, kisten, NPC's, huizen (pas hier je gebieden aan!) en hoe ze samen de open wereld vormen
+    ├── levels.js     → de 5 gebieden: pad, vijanden, kisten, NPC's, huizen (pas hier je gebieden aan!) en hoe ze samen de open wereld vormen
     ├── world.js      → bouwt de wereld: grond, paden, huizen, ruïnes, natuur, arena's, het Knekelhof, mist, dag en nacht
     ├── npcs.js       → NPC's en hun zij-quests
     ├── decor.js      → planten, stenen, bolle wolken, riet bij de vijvers en dieren
     ├── player.js     → speler: bewegen, rollen, krachten, flesjes, personages
     ├── animator.js   → laat het poppetje bewegen (lopen, slaan, richten, drinken...)
     ├── mixamo.js     → vertaalt die bewegingen naar een Mixamo-skelet
+    ├── retarget.js   → echte animaties (slaan, springen, landen...) van de etalagepop overzetten op je held
     ├── character.js  → het Strohoed-poppetje uit simpele vormen
     ├── weapons.js    → alle wapens · gear.js → helmen
     ├── sword.js      → het wapen in de hand · trail.js → het zwaard-windje
     ├── projectiles.js→ energie- en vuurballen van vijanden
     ├── enemies.js    → vijanden en hun aanvallen · bosses.js → de vier bosses
     ├── dragon.js     → Vuurtand de draak: gebouwd van simpele vormen, vliegen en vuur spuwen
-    ├── pet.js        → Knokkie het Boks-Dinootje dat met je meevecht
+    ├── pet.js        → Knokkie en Pluis: lopen los rond in Muntdorp
+    ├── arena.js      → de Arena: golven, huisdiergevechten, wedden op monsters en het duel
+    ├── islands.js    → de Hemeleilanden: zwevende eilanden, het Windaltaar en de bewakers
+    ├── multiplayer.js→ samen spelen via internet (PeerJS): je vriend zien en het duel
     ├── invasions.js  → Omar-invasies: golven schaduwkrijgers bij een kamp
+    ├── shadowDragon.js → de eindbaas: de Schaduwdraak
+    ├── goals.js      → trofeeën, sterren, rangen en het Premiebord
+    ├── champions.js  → gouden Kampioenen met een kroon
+    ├── villagers.js  → dorpelingen met animaties en het Premiebord in Muntdorp
     ├── sites.js      → checkpoint-vlaggen en kisten
     ├── pickups.js    → munten, hartjes, diamanten
     ├── stats.js      → level (door vijanden te verslaan), bonussen, krachten, opslaan
@@ -214,7 +273,12 @@ munt-jager-3d/
 ## Zelf aanpassen
 
 - **Gebieden** → `LEVELS` in `src/levels.js` (welke vijanden, kisten, NPC's, huizen en welke boss). Begin in een gebied met `?level=3` achter de link
-- **Draak, huisdier en invasies** → `DRAGON` in `src/dragon.js`, `PET` in `src/pet.js` en `INVASION` in `src/invasions.js`
+- **Draak, huisdier en invasies** → `DRAGON` in `src/dragon.js`, `PET`/`PETS` in `src/pet.js` en `INVASION` in `src/invasions.js`
+- **De Arena** → `ARENA`, `WAVES` en `FIGHTERS` in `src/arena.js` · **De Hemeleilanden** → `ISLAND_LAYOUT` in `src/levels.js` en `ALTAR` in `src/islands.js`
+- **Animaties van je held** → `CLIPS` bovenaan `src/player.js` (welke animatie bij welke actie, en welk stukje ervan)
+- **Samen spelen** → `src/multiplayer.js` (test met een eigen PeerJS-server: `index.html?peer=localhost:9000`)
+- **Trofeeën, premies en de sterrenwinkel** → `TROPHIES` in `src/goals.js` en `STAR_ITEMS` in `src/stats.js`
+- **Kampioenen en woedende bosses** → `CHAMPION` in `src/champions.js` en `RAGE` in `src/bosses.js`
 - **Quests** → `QUESTS` bovenaan `src/npcs.js`
 - **Vijanden** → `ENEMY_TYPES` bovenaan `src/enemies.js`. Alle vijanden sterker of zwakker: `ENEMY_POWER` (en voor de
   bosses `BOSS_POWER` in `src/bosses.js`)
@@ -250,6 +314,9 @@ munt-jager-3d/
 - Extra 3D-modellen (Pixabay): magic ritual, glowing green reaper weapon, fantasy weapon en cosmic peace alien door
   pixellabs, samurai en bigfoot door nickpanek, male door promptplay, dinosaurs door tiny_planet_friends_3d en male door dezyne_3d
 - Personages Eve, Soldaat en Mila: via Mixamo
+- Etalagepoppen en hun animaties (Zombiepop, Ninjapop, dorpelingen, en de animaties van je held): *Universal Animation Library 2* door
+  [Quaternius](https://quaternius.com) — CC0
+- Samen spelen: [PeerJS](https://peerjs.com) door Michelle Bu, Eric Zhang en anderen — MIT ([lib/peerjs-LICENSE.txt](lib/peerjs-LICENSE.txt))
 - Budget Mario door Teh_LaughingMan, Buff man door joney_lol, MS Gundam RX-78-2 door Tipatat Chennavasin
   (fan-modellen; Mario en Gundam zijn van Nintendo en Bandai — alleen voor eigen plezier)
 

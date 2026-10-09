@@ -21,6 +21,7 @@ export const BOSS_INFO = {
   reus: { name: 'Steenreus Gorath', title: 'Hart van het Hoogland', hp: 1800, runes: 2000 },
   mario: { name: 'Budget Mario', title: 'De Vliegende Loodgieter', hp: 650, runes: 300 },
   omar: { name: 'Omar', title: 'De maker van dit spel', hp: 1600, runes: 3000 }, // hp hangt af van jouw level (omarFighter.js)
+  schaduwdraak: { name: 'De Schaduwdraak', title: 'Omars allerlaatste geheim', hp: 2200, runes: 5000 }, // (shadowDragon.js)
   sky: { name: 'Sky', title: 'Heer van de Storm', hp: 1700, runes: 1500 }, // vecht zoals Omar (skyFighter.js)
   // fog = kleur van zijn mistmuur. Als zijn leven op is staat hij nog één keer op (hij is ondood): zie RAMES in ramesFighter.js
   rames: { name: 'Rames', title: 'Heer van de Ondoden', hp: 1800, runes: 2500, fog: 0x9b4dff },
@@ -29,21 +30,23 @@ export const BOSS_INFO = {
 // Hoe sterk de gewone bosses zijn (Omar en Sky niet: die hebben hun eigen instellingen in omarFighter.js en skyFighter.js)
 //   hp = keer zoveel leven · damage = keer zoveel schade · speed = keer zo snel (lopen, aanvallen én wachten)
 export const BOSS_POWER = { hp: 1.6, damage: 1.4, speed: 1.15 };
+// Een boss die je al eens versloeg, komt WOEDEND terug: nog meer leven, schade en snelheid (en hij geeft sterren)
+export const RAGE = { hp: 1.5, damage: 1.3, speed: 1.15 };
 for (const [key, info] of Object.entries(BOSS_INFO)) if (key !== 'omar' && key !== 'sky') info.hp = Math.round(info.hp * BOSS_POWER.hp);
 
 const tmp = new THREE.Vector3();
 
-function angleTo(from, to) {
+export function angleTo(from, to) {
   return Math.atan2(to.x - from.x, to.z - from.z);
 }
 
-function turnTowards(object, angle, speed, dt) {
+export function turnTowards(object, angle, speed, dt) {
   let diff = angle - object.rotation.y;
   diff = Math.atan2(Math.sin(diff), Math.cos(diff));
   object.rotation.y += diff * Math.min(1, speed * dt);
 }
 
-function flatDist(a, b) {
+export function flatDist(a, b) {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
 
@@ -94,6 +97,18 @@ export class Boss {
     return !this.dead && this.hp > 0;
   }
 
+  /** Hoeveel leven hij heeft als hij vol is (woedend: meer). */
+  get maxHp() {
+    return Math.round(this.info.hp * (this.rage ? RAGE.hp : 1));
+  }
+
+  /** Woedend maken (of weer gewoon). Dat gebeurt als het gevecht begint. */
+  setRage(on) {
+    this.rage = on;
+    this.name = (on ? 'WOEDEND: ' : '') + this.info.name;
+    this.hp = this.maxHp;
+  }
+
   get center() {
     return this.position.clone().setY(this.position.y + this.type.height * 0.5);
   }
@@ -104,7 +119,7 @@ export class Boss {
   }
 
   resetFight() {
-    this.hp = this.info.hp;
+    this.hp = this.maxHp;
     this.awake = false;
     this.phase2 = false;
     this.state = 'idle';
@@ -189,7 +204,7 @@ export class Boss {
     }
 
     // Fase 2 bij de helft van het leven (of een ander deel: phase2At, zie Sky in skyFighter.js)
-    if (!this.phase2 && this.hp <= this.info.hp * (this.phase2At ?? 0.5)) {
+    if (!this.phase2 && this.hp <= this.maxHp * (this.phase2At ?? 0.5)) {
       this.phase2 = true;
       play('charge');
       ctx.effects.shake(0.4);
@@ -292,7 +307,7 @@ class KingSlime extends Boss {
         this.cooldown -= dt;
         // Slijmpjes oproepen bij 66% en 33% leven
         const thresholds = [0.66, 0.33];
-        if (this.summonsDone < 2 && this.hp / this.info.hp < thresholds[this.summonsDone]) {
+        if (this.summonsDone < 2 && this.hp / this.maxHp < thresholds[this.summonsDone]) {
           this.summonsDone++;
           this.state = 'summon';
           this.timer = 1;

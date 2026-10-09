@@ -42,6 +42,7 @@ export const LEVELS = [
     dummies: [[-2, 88]], // een oefenpop bij het begin: sla erop om je schade te zien
     questItems: { 'strohoed-sterren': [[-26, 40], [24, -6], [-24, -52], [30, 34]] },
     village: { center: [-14, 62] },
+    colosseum: { center: [24, 66], radius: 11 }, // de Arena (arena.js), naast Muntdorp
     houses: [
       // [x, z, breedte, diepte, hoogte, muur-textuur, dak-textuur] — je kunt door de deur naar binnen lopen
       [-24, 55, 8, 7, 3.4, 'wall_timber_structure', 'roof_clay_red_center'],
@@ -122,7 +123,7 @@ export const LEVELS = [
       ['l4-fles', 30, 0, 50, { kind: 'flask' }],
       ['l4-fles2', -30, 0, -44, { kind: 'weapon', key: 'demonenzwaard' }],
     ],
-    diamonds: [['l4-d1', 32, 0, 88], ['l4-d2', -32, 0, 44], ['l4-d3', 32, 0, -30]],
+    diamonds: [['l4-d1', 32, 0, 88], ['l4-d2', -29, 0, 44], ['l4-d3', 32, 0, -30]], // (niet te ver naar links: daar is de Schaduwpoort)
     // Opa Donder stuurt je naar het Wolkenrijk van Sky (zie sky.js). Zijn Donderpoort staat ernaast.
     npcs: [['mila', -20, 80, 'mila-mecha'], ['omar', -0.5, 80], ['donder', 18, 80, 'donder-sky']],
     portal: [24, 75],
@@ -130,6 +131,32 @@ export const LEVELS = [
     blocks: [[28, 1.5, 20, 1, 3, 7], [22, 1, 28, 6, 2, 1]],
     animals: [],
     trees: 25,
+  },
+  {
+    // Het geheime vijfde gebied: de Schaduwpoort gaat pas open als je de andere vier bosses hebt verslagen.
+    // Hier wonen Omars ergste vijanden (de etalagepoppen) en zijn allerlaatste geheim: de Schaduwdraak.
+    name: 'Schaduwrijk',
+    subtitle: 'Gebied 5 · Het allerlaatste',
+    theme: 'schaduw',
+    music: 'schaduw',
+    half: { x: 36, z: 100 },
+    boss: 'schaduwdraak',
+    locked: true,
+    path: [[0, 92], [12, 66], [-6, 40], [-16, 14], [2, -14], [12, -40], [0, -62]],
+    checkpoints: [['l5-start', 'Schaduwpoort', 0, 88], ['l5-mid', 'Kristalveld', -17, 0]],
+    spawns: [['zombiepop', 9], ['ninjapop', 6], ['schaduw', 4], ['spook', 3], ['bigfoot', 2]],
+    chests: [
+      ['l5-appel', 28, 0, 34, { kind: 'flask' }],
+      ['l5-appel2', -28, 0, -34, { kind: 'flask' }],
+      ['l5-hamer', -28, 0, 64, { kind: 'weapon', key: 'hamer' }],
+    ],
+    diamonds: [['l5-d1', 30, 0, 86], ['l5-d2', -31, 0, 24], ['l5-d3', 30, 0, -24]],
+    npcs: [],
+    questItems: {},
+    // Zwarte ruïnes van obsidiaan
+    blocks: [[-24, 1.6, 50, 6, 3.2, 1], [-27, 1.6, 54, 1, 3.2, 7], [22, 2, -8, 1, 4, 8], [26, 1.2, -12, 7, 2.4, 1], [-10, 0.8, -40, 3, 1.6, 3]],
+    animals: [],
+    trees: 55,
   },
 ];
 
@@ -162,7 +189,7 @@ function buildOpenWorld() {
     name: 'De wereld van Munt Jager', subtitle: 'Open wereld', open: true, theme: 'weide', music: 'weide', boss: null,
     half: { x: (REGION_WIDTH * LEVELS.length) / 2, z: 100 },
     regions, paths: [], arenas: [], checkpoints: [], chests: [], diamonds: [], npcs: [], dummies: [],
-    questItems: {}, houses: [], blocks: [], animals: [], village: null, portal: null, trees: 0, path: [],
+    questItems: {}, houses: [], blocks: [], animals: [], village: null, colosseum: null, portal: null, trees: 0, path: [],
   };
   for (const r of regions) {
     const L = r.level;
@@ -181,7 +208,15 @@ function buildOpenWorld() {
     world.blocks.push(...(L.blocks ?? []).map(([x, y, z, ...rest]) => { const [X, Z] = t(x, z); return [X, y, Z, ...rest]; }));
     world.animals.push(...(L.animals ?? []).map(([kind, homes, n]) => [kind, homes.map(([x, z]) => t(x, z)), n]));
     if (L.village) world.village = { center: t(...L.village.center) };
+    if (L.colosseum) world.colosseum = { center: t(...L.colosseum.center), radius: L.colosseum.radius, flip: r.flip };
     if (L.portal) world.portal = t(...L.portal);
+  }
+  // De Hemeleilanden (hoog in de lucht, zie ISLANDS hieronder): een vlag, kisten en diamanten
+  const isl = buildIslands(regions);
+  if (isl) {
+    world.checkpoints.push(...isl.checkpoints);
+    world.chests.push(...isl.chests);
+    world.diamonds.push(...isl.diamonds);
   }
   // Verbindingspaden: van vlak voor de boss-arena van het ene gebied naar het begin van het volgende
   for (let i = 0; i < regions.length - 1; i++) {
@@ -203,7 +238,55 @@ function buildOpenWorld() {
   return world;
 }
 
+// ======================================================================
+// De Hemeleilanden: zwevende eilanden hoog boven de Ruïnevallei
+// ======================================================================
+// Je komt er alleen met Vuurtand de draak (springen is veel te laag!). Alles staat hier in wereld-coördinaten,
+// rond het midden van gebied 2. De eilanden zelf worden gebouwd in islands.js.
+// (Niet te verwarren met het Wolkenrijk van Sky: dat is een geheim level, zie SKY_REALM.)
+//   islands: [id, naam, x, z, hoogte van de grond bovenop, straal]   (x en z: vanaf het midden van het gebied)
+//   stones:  stapstenen van het ene eiland naar het andere (springen!)
+const ISLAND_REGION = 1;
+const ISLAND_LAYOUT = {
+  islands: [
+    ['poort', 'Hemelpoort', 0, -10, 31, 13],
+    ['storm', 'Stormeiland', 26, -30, 34, 9],
+    ['tuin', 'Wolkentuin', -26, 8, 28, 9],
+    ['top', 'Zonnetop', 4, -46, 40, 5.5],
+    ['kei', 'Wolkenkei', -16, -30, 36, 2.6],
+  ],
+  // [x, z, hoogte, straal]: van de Hemelpoort omhoog naar het Stormeiland
+  stones: [[11.85, -19.1, 31.5, 1], [14.6, -21.2, 32.4, 1], [17.35, -23.3, 33.3, 1]],
+  checkpoint: ['eiland-start', 'Hemelpoort', 6, -6],
+  chests: [
+    ['eiland-gif', -5, -16, 'poort', { kind: 'weapon', key: 'gifdolk' }],
+    ['eiland-bliksem', 28, -32, 'storm', { kind: 'weapon', key: 'bliksemzwaard' }],
+    ['eiland-vampier', -28, 11, 'tuin', { kind: 'weapon', key: 'vampierzwaard' }],
+    ['eiland-speer', 4, -47, 'top', { kind: 'weapon', key: 'wolkenspeer' }],
+  ],
+  diamonds: [['eiland-d1', -16, -30, 'kei'], ['eiland-d2', -21, 3, 'tuin'], ['eiland-d3', 14.6, -21.2, 'stone']],
+};
+
+function buildIslands(regions) {
+  const r = regions[ISLAND_REGION];
+  if (!r) return null;
+  const X = (x) => r.ox + x;
+  const islands = ISLAND_LAYOUT.islands.map(([id, name, x, z, top, radius]) => ({ id, name, x: X(x), z, top, radius }));
+  const stones = ISLAND_LAYOUT.stones.map(([x, z, top, radius]) => ({ id: 'stone', name: 'Stapsteen', x: X(x), z, top, radius, stone: true }));
+  const topOf = (id, x) => (id === 'stone' ? stones.find((st) => Math.abs(st.x - X(x)) < 0.01)?.top : islands.find((i) => i.id === id).top);
+  const [cid, cname, cx, cz] = ISLAND_LAYOUT.checkpoint;
+  return {
+    region: ISLAND_REGION,
+    islands,
+    stones,
+    checkpoints: [[cid, cname, X(cx), cz, islands[0].top]],
+    chests: ISLAND_LAYOUT.chests.map(([id, x, z, on, item]) => [id, X(x), topOf(on, x), z, item]),
+    diamonds: ISLAND_LAYOUT.diamonds.map(([id, x, z, on]) => [id, X(x), topOf(on, x), z]),
+  };
+}
+
 export const WORLD = buildOpenWorld();
+export const ISLANDS = buildIslands(WORLD.regions);
 export const REGIONS = WORLD.regions;
 
 /** In welk gebied (0, 1, 2, 3) ligt dit punt? (de grens is een beetje golvend, dat ziet er natuurlijker uit) */
@@ -213,8 +296,14 @@ export function regionIndexAt(x, z) {
   return Math.min(REGIONS.length - 1, Math.max(0, i));
 }
 
+/** Het gebied dat op slot zit tot de andere bosses verslagen zijn (het Schaduwrijk), of null. */
+export const LOCKED_REGION = REGIONS.find((r) => r.level.locked) ?? null;
+/** Zover kun je lopen zolang de Schaduwpoort dicht is (een stukje vóór de golvende grens). */
+export const GATE_X = LOCKED_REGION ? LOCKED_REGION.x0 - 6.5 : Infinity;
+
 /** In welk gebied ligt deze vlag? */
 export function regionOfCheckpoint(id) {
+  if (id.startsWith('eiland')) return ISLAND_REGION; // de Hemeleilanden hangen boven de Ruïnevallei
   const i = LEVELS.findIndex((l) => l.checkpoints.some((c) => c[0] === id));
   return i < 0 ? 0 : i;
 }

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LEVEL, REGIONS, REGION_WIDTH, regionIndexAt } from './levels.js';
+import { LEVEL, REGIONS, REGION_WIDTH, regionIndexAt, GATE_X } from './levels.js';
 import { createCastleWorld } from './castle.js';
 import { createSkyWorld } from './skyworld.js';
 
@@ -12,7 +12,7 @@ export const WALKABLE = { x: BOUNDS.x - 1.5, z: BOUNDS.z - 1.5 }; // verder kun 
 const v3 = (x, z, y = 0) => new THREE.Vector3(x, y, z);
 
 // Checkpoints: per gebied één aan het begin en een vlag halverwege
-export const CHECKPOINTS = LEVEL.checkpoints.map(([id, name, x, z]) => ({ id, name, position: v3(x, z) }));
+export const CHECKPOINTS = LEVEL.checkpoints.map(([id, name, x, z, y = 0]) => ({ id, name, position: v3(x, z, y) }));
 
 // De boss-arena's: aan het eind van het pad van elk gebied één. `open` = aan welke kant de ingang is (+z of -z).
 // In Omars kasteel en in het Wolkenrijk staat er één arena in het midden.
@@ -24,6 +24,8 @@ export const ARENAS = LEVEL.arenas
 export const CHESTS = LEVEL.chests.map(([id, x, y, z, item]) => ({ id, position: v3(x, z, y), item }));
 
 export const VILLAGE_CENTER = LEVEL.village ? v3(LEVEL.village.center[0], LEVEL.village.center[1]) : null;
+// De Arena (een rond colosseum naast Muntdorp, zie arena.js): daar komen geen bomen, stenen of gras
+export const COLOSSEUM = LEVEL.colosseum ? { center: v3(LEVEL.colosseum.center[0], LEVEL.colosseum.center[1]), radius: LEVEL.colosseum.radius } : null;
 
 // Het Knekelhof: zoveel dingen (grafstenen, kruizen, kapotte pilaren, vuurschalen) staan er in de kring eromheen
 const GRAVE_RING = 24;
@@ -231,6 +233,7 @@ export function isFree(x, z, margin = 0) {
   for (const [px, pz, pr] of PONDS) if (Math.hypot(x - px, z - pz) < pr + 1 + margin) return false;
   if (distToPath(x, z) < 4 + margin) return false;
   if (VILLAGE_CENTER && Math.hypot(x - VILLAGE_CENTER.x, z - VILLAGE_CENTER.z) < 18) return false;
+  if (COLOSSEUM && Math.hypot(x - COLOSSEUM.center.x, z - COLOSSEUM.center.z) < COLOSSEUM.radius + 7) return false;
   if (inHouse(x, z, margin)) return false;
   for (const a of ARENAS) if (Math.hypot(x - a.center.x, z - a.center.z) < a.radius + 5) return false;
   for (const c of CHECKPOINTS) if (Math.hypot(x - c.position.x, z - c.position.z) < 8) return false;
@@ -260,6 +263,7 @@ export function grassMask() {
       const z = min[1] + (j + 0.5) / RES;
       let k = THREE.MathUtils.smoothstep(distToPath(x, z), 2.4, 3.4); // het pad
       if (VILLAGE_CENTER && Math.hypot(x - VILLAGE_CENTER.x, z - VILLAGE_CENTER.z) < 8) k = 0;
+      if (COLOSSEUM && Math.hypot(x - COLOSSEUM.center.x, z - COLOSSEUM.center.z) < COLOSSEUM.radius + 2.5) k = 0;
       for (const a of ARENAS) k *= THREE.MathUtils.smoothstep(Math.hypot(x - a.center.x, z - a.center.z), a.radius + 1, a.radius + 2.5);
       if (inHouse(x, z, -1.4)) k = 0;
       for (const b of LEVEL.blocks ?? []) if (b[1] - b[4] / 2 < 0.3 && Math.abs(x - b[0]) < b[3] / 2 + 0.2 && Math.abs(z - b[2]) < b[5] / 2 + 0.2) k = 0;
@@ -479,10 +483,11 @@ function createGround(scene) {
   const blends = [];
   const rand = seededRandom(7);
   // Kleur en textuur-mengsel van elk gebied (wat warmer: geen blauwgroen gras)
-  const BASE = { weide: [1.76, 1.63, 1.05], woud: [0.88, 0.99, 0.64], hoogland: [1.18, 1.06, 0.78] };
+  const BASE = { weide: [1.76, 1.63, 1.05], woud: [0.88, 0.99, 0.64], hoogland: [1.18, 1.06, 0.78], schaduw: [0.95, 0.62, 1.25] };
   const looks = REGIONS.map((r) => ({
     tint: BASE[r.theme].map((v, i) => v * (r.tint?.[i] ?? 1)),
-    wgt: r.theme === 'hoogland' ? [0.35, 0, 0.65, 0] : [1, 0, 0, 0], // gewicht per textuur: [gras, aarde, rots, stenen vloer]
+    // gewicht per textuur: [gras, aarde, rots, stenen vloer]
+    wgt: r.theme === 'hoogland' ? [0.35, 0, 0.65, 0] : r.theme === 'schaduw' ? [0.55, 0.15, 0.3, 0] : [1, 0, 0, 0],
   }));
   // Bij de grens tussen twee gebieden lopen de kleuren zacht in elkaar over (we middelen een paar punten links en rechts)
   const SAMPLES = [-9, -4.5, 0, 4.5, 9];
@@ -658,6 +663,8 @@ function createPonds(scene, colliders, groundGeo) {
   });
   const darkWater = water.clone(); // in het Spookwoud is het water donker
   darkWater.color.set(0x1e4a4a);
+  const purpleWater = water.clone(); // en in het Schaduwrijk paars
+  purpleWater.color.set(0x3a1460);
   for (const [x, z, r] of PONDS) {
     // Een ronde vijver met een hobbelige rand
     const geo = new THREE.CircleGeometry(r, 28);
@@ -667,7 +674,8 @@ function createPonds(scene, colliders, groundGeo) {
       pos.setXY(i, pos.getX(i) * k, pos.getY(i) * k);
     }
     geo.rotateX(-Math.PI / 2);
-    const mesh = new THREE.Mesh(geo, regionAt(x, z) === 'woud' ? darkWater : water);
+    const theme = regionAt(x, z);
+    const mesh = new THREE.Mesh(geo, theme === 'woud' ? darkWater : theme === 'schaduw' ? purpleWater : water);
     mesh.position.set(x, 0.025, z);
     mesh.receiveShadow = true;
     mesh.userData.noAO = true;
@@ -889,7 +897,7 @@ function createLanterns(scene, colliders) {
 /** Bomen (met InstancedMesh), rotsblokken, een bosrand rondom de wereld, bloemen en paddenstoelen. */
 function createNature(scene, colliders) {
   const rand = seededRandom(42);
-  const KIND = { weide: 'green', woud: 'dark', hoogland: 'pine' }; // welke bomen in welk soort gebied
+  const KIND = { weide: 'green', woud: 'dark', hoogland: 'pine', schaduw: 'shadow' }; // welke bomen in welk soort gebied
   const trees = []; // [x, z, size, kind, collide]
   // Een willekeurige plek in een gebied (en echt in dat gebied: de grens golft een beetje)
   const inRegion = (region, edge = 0) => {
@@ -904,7 +912,7 @@ function createNature(scene, colliders) {
       const [x, z] = inRegion(region);
       if (!isFree(x, z)) continue;
       if (trees.some((t) => Math.hypot(t[0] - x, t[1] - z) < 3.2)) continue;
-      trees.push([x, z, (region.theme === 'woud' ? 1.1 : 0.8) + rand() * 0.6, KIND[region.theme], true]);
+      trees.push([x, z, (region.theme === 'woud' || region.theme === 'schaduw' ? 1.1 : 0.8) + rand() * 0.6, KIND[region.theme], true]);
       i++;
     }
   }
@@ -931,7 +939,7 @@ function createNature(scene, colliders) {
   const look = seededRandom(777);
   // Stam met een bredere voet (wortels)
   const trunkMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.2, 0.34, 1.6, 7), addLeafShading(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 })), trees.length);
-  const leafColors = { dark: [0x24502c, 0x2d5e33, 0x1f4527], green: [0x3f9b4a, 0x4fae52, 0x2f8a45], pine: [0x3a6b48, 0x46775a] };
+  const leafColors = { dark: [0x24502c, 0x2d5e33, 0x1f4527], green: [0x3f9b4a, 0x4fae52, 0x2f8a45], pine: [0x3a6b48, 0x46775a], shadow: [0x3b2450, 0x2e1b40, 0x4a2a5e] };
   const roundColors = [0x5aa845, 0x6fb84a, 0x4c9a3e, 0x86c24f];
   const layersOf = (k) => (k === 'green' ? 3 : 4); // dennen in het bos en het hoogland krijgen 4 lagen
   // Dennenlaag met een gekartelde onderrand (om en om een punt naar buiten en omlaag)
@@ -1022,7 +1030,7 @@ function createNature(scene, colliders) {
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x8f8a80, roughness: 0.95, flatShading: true });
   const boulders = [];
   for (const region of REGIONS) {
-    const wanted = region.theme === 'hoogland' ? 40 : 10;
+    const wanted = region.theme === 'hoogland' ? 40 : region.theme === 'schaduw' ? 22 : 10;
     for (let n = 0, tries = 0; n < wanted && tries < 2000; tries++) {
       const [x, z] = inRegion(region, 2);
       if (!isFree(x, z, 1)) continue;
@@ -1079,6 +1087,96 @@ function createNature(scene, colliders) {
     caps.count = stems.count = n;
     scene.add(caps, stems);
   }
+  // Gloeiende paarse kristallen (Schaduwrijk). De grote kun je niet doorheen lopen.
+  const schaduw = REGIONS.filter((r) => r.theme === 'schaduw');
+  if (schaduw.length) {
+    const count = 80 * schaduw.length;
+    const crystalMat = new THREE.MeshStandardMaterial({ color: 0xb070ff, emissive: 0x7a20e0, emissiveIntensity: 1.4, roughness: 0.2, metalness: 0.1, flatShading: true });
+    const crystals = new THREE.InstancedMesh(new THREE.OctahedronGeometry(1, 0), crystalMat, count);
+    let n = 0;
+    for (let tries = 0; n < count && tries < count * 20; tries++) {
+      const [x, z] = inRegion(schaduw[n % schaduw.length], 2);
+      if (!isFree(x, z, 0.5)) continue;
+      // Een groepje van 1 tot 3 kristallen die schuin uit de grond steken
+      const big = rand() < 0.3;
+      const s = big ? 0.9 + rand() * 0.8 : 0.3 + rand() * 0.35;
+      q.setFromEuler(new THREE.Euler((rand() - 0.5) * 0.5, rand() * 3, (rand() - 0.5) * 0.5));
+      m.compose(new THREE.Vector3(x, s * 1.2, z), q, new THREE.Vector3(s * 0.45, s * 1.6, s * 0.45));
+      crystals.setMatrixAt(n++, m);
+      if (big) colliders.push(new THREE.Box3(new THREE.Vector3(x - s * 0.4, 0, z - s * 0.4), new THREE.Vector3(x + s * 0.4, s * 2.6, z + s * 0.4)));
+    }
+    crystals.count = n;
+    crystals.castShadow = true;
+    scene.add(crystals);
+  }
+}
+
+/**
+ * De Schaduwpoort: een muur van paars licht tussen het Rotshoogland en het Schaduwrijk.
+ * Hij gaat pas open als je de andere vier bosses hebt verslagen (main.js houdt je tegen zolang hij dicht is).
+ */
+function createGate(scene, colliders) {
+  if (!Number.isFinite(GATE_X)) return null;
+  const depth = BOUNDS.z * 2 + 4;
+  const material = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false,
+    uniforms: { time: { value: 0 }, opacity: { value: 1 } },
+    vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform float time; uniform float opacity; varying vec2 vUv;
+      void main() {
+        float wave = sin(vUv.x * 160.0 + time * 2.0) * 0.5 + sin(vUv.x * 57.0 - time * 1.3 + vUv.y * 6.0) * 0.5;
+        float fade = (1.0 - vUv.y) * (0.55 + 0.25 * wave);
+        vec3 col = mix(vec3(0.45, 0.1, 0.9), vec3(0.9, 0.5, 1.0), smoothstep(0.3, 1.0, wave));
+        gl_FragColor = vec4(col * fade, 1.0) * opacity;
+      }`,
+  });
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(depth, 14), material);
+  wall.rotation.y = Math.PI / 2;
+  wall.position.set(GATE_X + 0.3, 7, 0);
+  wall.userData.noAO = true;
+  scene.add(wall);
+  // Twee zwarte pilaren met paarse vlammen waar het pad door de poort gaat
+  const crossing = [];
+  for (const path of LEVEL.paths ?? []) {
+    for (let i = 1; i < path.length; i++) {
+      const [ax, az] = path[i - 1];
+      const [bx, bz] = path[i];
+      if ((ax - GATE_X) * (bx - GATE_X) < 0) crossing.push(az + ((GATE_X - ax) / (bx - ax)) * (bz - az));
+    }
+  }
+  const stone = texMat('wall_stone', { color: 0x3a2a48 });
+  const flameMat = new THREE.MeshBasicMaterial({ color: 0xc070ff, toneMapped: false });
+  for (const z of crossing) {
+    for (const side of [-1, 1]) {
+      const pillar = texturedBox(1.4, 7, 1.4, stone, 1.4);
+      pillar.position.set(GATE_X, 3.5, z + side * 4.2);
+      scene.add(pillar);
+      colliders.push(new THREE.Box3().setFromObject(pillar));
+      const flame = new THREE.Mesh(new THREE.OctahedronGeometry(0.45, 0), flameMat);
+      flame.position.set(GATE_X, 7.6, z + side * 4.2);
+      scene.add(flame);
+    }
+    const top = texturedBox(1.6, 1.2, 9.8, stone, 1.4);
+    top.position.set(GATE_X, 7.4, z);
+    scene.add(top);
+  }
+  let open = false;
+  return {
+    get open() {
+      return open;
+    },
+    /** Poort open (of weer dicht). */
+    setOpen(value) {
+      open = value;
+      if (open) material.uniforms.opacity.value = Math.min(material.uniforms.opacity.value, 1);
+    },
+    update(dt) {
+      material.uniforms.time.value += dt;
+      const goal = open ? 0 : 1;
+      material.uniforms.opacity.value += (goal - material.uniforms.opacity.value) * Math.min(1, dt * 0.8);
+      wall.visible = material.uniforms.opacity.value > 0.01;
+    },
+  };
 }
 
 /**
@@ -1343,12 +1441,17 @@ export function createWorld(scene) {
   if (VILLAGE_CENTER) createWell(scene, colliders);
   createLanterns(scene, colliders);
   for (const arena of ARENAS) createArena(scene, colliders, arena);
+  const gate = createGate(scene, colliders);
   bakeGroundAO(groundGeo, colliders); // pas nu: alles wat op de grond staat is er
   const pondWater = createPonds(scene, colliders, groundGeo); // ook pas nu: vijvers alleen waar niks staat
 
+  const fogPurple = new THREE.Color(0x4a2a6a);
+  const skyPurple = new THREE.Color(0x1a0a2a);
+  let purple = 0; // 0 = gewone mist, 1 = paarse mist (Schaduwrijk)
   return {
     colliders,
     bounds: WALKABLE,
+    gate,
     /** Staat dit punt binnen in een huis? (dan komt de camera dichterbij) */
     insideHouse(pos) {
       return houseRoofs.some((h) => h.inner.containsPoint(pos));
@@ -1364,10 +1467,19 @@ export function createWorld(scene) {
     lightTuning: LIGHT_TUNING,
 
     /** Mist van het gebied waar je bent: in het Spookwoud dikker. Schuift langzaam mee (geen sprong). */
-    updateFog(theme, dt) {
-      const near = theme === 'woud' ? 25 : 50;
+    updateFog(theme, dt, altitude = 0) {
+      let near = theme === 'woud' ? 25 : theme === 'schaduw' ? 30 : 50;
+      if (altitude > 14) near = Math.max(near, 80); // hoog in de lucht (bij de Hemeleilanden) is het helder
       scene.fog.near += (near - scene.fog.near) * Math.min(1, dt * 0.6);
       scene.fog.far = scene.fog.near + 90;
+      // In het Schaduwrijk zijn de mist en de lucht paars
+      purple += ((theme === 'schaduw' ? 1 : 0) - purple) * Math.min(1, dt * 0.6);
+      if (purple > 0.001) {
+        scene.fog.color.lerp(fogPurple, purple * 0.7);
+        sky.material.uniforms.horizon.value.lerp(fogPurple, purple * 0.6);
+        sky.material.uniforms.top.value.lerp(skyPurple, purple * 0.5);
+      }
+      gate?.update(dt);
     },
 
     /** Licht uit de lucht klaarzetten (heeft de renderer nodig om het "fotootje" van de lucht te maken). */
