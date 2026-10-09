@@ -67,7 +67,7 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
 
 ## Wat zit erin
 
-- **Eén grote open wereld** met 4 gebieden naast elkaar (geen losse levels meer: je kunt overal heen lopen).
+- **Eén grote open wereld** met 5 gebieden naast elkaar (geen losse levels meer: je kunt overal heen lopen).
   Elk gebied heeft een pad naar zijn boss-arena, met een vlag aan het begin en halverwege, en paden die de gebieden verbinden:
   1. **Groene Weide** met het dorp Muntdorp → boss **Budget Mario**
   2. **Ruïnevallei** met een parkour-ruïne → boss **Koning Slijm**
@@ -224,7 +224,7 @@ munt-jager-3d/
     ├── graphics.js   → hoe het getekend wordt: gloed, kleuren, gladde randjes, de standen Laag/Normaal/Hoog (G)
     ├── blobs.js      → zachte schaduw-vlekjes onder de speler, vijanden en mensen
     ├── grass.js      → dicht, wuivend gras rond de speler (alleen op Normaal en Hoog)
-    ├── levels.js     → de 4 gebieden: pad, vijanden, kisten, NPC's, huizen (pas hier je gebieden aan!) en hoe ze samen de open wereld vormen
+    ├── levels.js     → de 5 gebieden: pad, vijanden, kisten, NPC's, huizen (pas hier je gebieden aan!) en hoe ze samen de open wereld vormen
     ├── world.js      → bouwt de wereld: grond, paden, huizen, ruïnes, natuur, arena's, het Knekelhof, mist, dag en nacht
     ├── npcs.js       → NPC's en hun zij-quests
     ├── decor.js      → planten, stenen, bolle wolken, riet bij de vijvers en dieren
