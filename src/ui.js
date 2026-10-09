@@ -408,6 +408,9 @@ export class UI {
         <div class="bet-row">` +
         [a, b].map((m) => info.bets.map((n) => `<button data-bet="${m.key}" data-amount="${n}" ${info.runes < n ? 'disabled' : ''}>● ${n} op ${m.name}</button>`).join('')).join('') +
         `</div><button data-act="reroll">🔄 Andere monsters</button>
+        <h3>🤖 Oefenduel tegen Claude</h3>
+        <p class="menu-info"><small>Je computer-maatje vecht tegen jou. Verliezen kost niks, winnen geeft munten!</small></p>
+        <div class="bet-row"><button data-buddy="makkelijk">😊 Makkelijk</button><button data-buddy="normaal">😤 Normaal</button><button data-buddy="moeilijk">🔥 Moeilijk</button></div>
         <h3>🌐 Online</h3>
         <button class="item" data-act="duel"><span>🌐 Duel tegen een vriend</span><small>Speel samen online en vecht tegen elkaar in de arena (zie "Samen spelen" op het startscherm).</small></button>
         <button data-act="close">Sluiten (Esc)</button>`;
@@ -421,6 +424,7 @@ export class UI {
       else if (btn.dataset.act === 'duel') actions.duel();
       else if (btn.dataset.act === 'reroll') render(actions.reroll());
       else if (btn.dataset.pet) actions.pet(btn.dataset.pet);
+      else if (btn.dataset.buddy) actions.buddy?.(btn.dataset.buddy);
       else if (btn.dataset.bet) actions.bet(btn.dataset.bet, Number(btn.dataset.amount));
     };
   }
@@ -476,6 +480,36 @@ export class UI {
       const act = b.dataset.act;
       if (act === 'join') actions.join(this.el.menuBody.querySelector('#mp-code')?.value ?? '');
       else if (act && actions[act]) actions[act]();
+    };
+  }
+
+  /**
+   * Claude, je computer-maatje (H): volgen, wachten, even weg, of een oefenduel.
+   * actions = { mode(m), duel(level), close() }
+   */
+  openBuddy(buddy, actions, levels) {
+    this.showMenu('maatje', '🤖 Claude, je maatje');
+    const d = this.stats.data.buddy ?? {};
+    const wins = d.wins ?? {};
+    const mode = buddy.mode;
+    const modeBtn = (m, icon, title, info) => `<button class="item ${mode === m ? 'equipped' : ''}" data-mode="${m}"><span>${icon} ${title}</span><small>${info}</small>${mode === m ? '<em>nu</em>' : ''}</button>`;
+    this.el.menuBody.innerHTML = `<p class="menu-info">Claude speelt met je mee: hij loopt achter je aan en vecht tegen vijanden in de buurt.
+      Vijanden die hij verslaat geven munten (maar sterker worden doe je zelf).</p>
+      <h3>Wat moet Claude doen?</h3>` +
+      modeBtn('volg', '👣', 'Volg mij', 'Hij loopt achter je aan, vecht mee en flitst naar je toe als hij achterblijft') +
+      modeBtn('wacht', '✋', 'Wacht hier', 'Hij blijft staan (en vecht alleen tegen vijanden die heel dichtbij komen)') +
+      modeBtn('weg', '👋', mode === 'weg' ? 'Is even weg' : 'Ga even weg', 'Even alleen spelen? Kies later weer "Volg mij"') +
+      `<h3>⚔ Oefenduel in de Arena</h3>
+      <p class="menu-info"><small>Gewonnen: 😊 ${wins.makkelijk ?? 0} · 😤 ${wins.normaal ?? 0} · 🔥 ${wins.moeilijk ?? 0} · verloren: ${d.losses ?? 0}</small></p>
+      <div class="bet-row">` +
+      Object.entries(levels).map(([key, l]) => `<button data-duel="${key}">${{ makkelijk: '😊', normaal: '😤', moeilijk: '🔥' }[key] ?? '⚔'} ${l.name}<br><small>● ${l.reward}</small></button>`).join('') +
+      `</div><button data-act="close">Sluiten (H)</button>`;
+    this.el.menuBody.onclick = (e) => {
+      const b = e.target.closest('button');
+      if (!b || b.disabled) return;
+      if (b.dataset.act === 'close') actions.close();
+      else if (b.dataset.mode) actions.mode(b.dataset.mode);
+      else if (b.dataset.duel) actions.duel(b.dataset.duel);
     };
   }
 
