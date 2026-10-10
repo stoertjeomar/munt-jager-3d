@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { collidersNear } from './spatial.js';
 import { play } from './audio.js';
 
 // ======================================================================
@@ -453,7 +454,7 @@ export class Dragon {
     pos.z = THREE.MathUtils.clamp(pos.z, -world.bounds.z, world.bounds.z);
     // Niet door bomen, huizen en muren (als een bol rond zijn lijf)
     const center = tmp.set(pos.x, pos.y + 2.2, pos.z);
-    for (const box of world.colliders) {
+    for (const box of collidersNear(world.colliders, pos.x, pos.z, DRAGON.radius + 1, (this.nearList ??= []))) {
       if (box.max.y < pos.y + 0.6) continue; // eronder: daar vliegt hij overheen
       const near = box.clampPoint(center, tmp2);
       const d = near.distanceTo(center);

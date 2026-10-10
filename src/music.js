@@ -134,7 +134,7 @@ const SONGS = {
     bpm: 66, gain: 0.62,
     chords: ['Dm', 'Bb', 'Gm', 'A', 'Dm', 'F', 'Gm', 'A7'],
     tracks: [
-      { inst: 'organ', vol: 0.06, div: 1, pattern: 'c' },
+      { inst: 'organ', vol: 0.08, div: 1, pattern: '1' }, // (alleen de grondtoon: het koor zingt het hele akkoord al)
       { inst: 'choirLow', vol: 0.08, div: 1, oct: 3, pattern: 'c', fx: true },
       { inst: 'choir', vol: 0.06, div: 2, fx: true, notes: `
         D5 - | F5 E5 | D5 - | C#5 - | D5 - | A4 C5 | Bb4 G4 | A4 -` },
@@ -433,10 +433,11 @@ const VOWELS = {
   o: [[450, 1], [800, 0.55], [2830, 0.12]],
 };
 
-/** Een koor: vier stemmen die net niet gelijk zingen (met een beetje trilling), door een "mond". */
+/** Een koor: twee stemmen die net niet gelijk zingen (met een beetje trilling), door een "mond".
+ *  (Vroeger vier: dat waren zoveel geluidjes tegelijk dat het geluid op tragere computers ging haperen, vooral in het Schaduwrijk.) */
 function voices(a, f, t, d, v, out, vowel, vibratoHz = 5) {
   const attack = Math.min(0.35, d * 0.3);
-  const g = envelope(a, t, d, v * 3.2, attack, Math.min(0.6, d * 0.4));
+  const g = envelope(a, t, d, v * 4.4, attack, Math.min(0.6, d * 0.4)); // (wat harder: nu met twee stemmen in plaats van vier)
   const mouth = a.ctx.createGain();
   for (const [freq, level] of vowel) {
     const bp = filter(a, 'bandpass', freq, freq < 1000 ? 5 : 8);
@@ -451,7 +452,7 @@ function voices(a, f, t, d, v, out, vowel, vibratoHz = 5) {
   lfo.start(t);
   lfo.stop(t + d + 0.7);
   lfo.connect(depth);
-  for (const det of [-16, -6, 6, 16]) {
+  for (const det of [-11, 11]) {
     const o = a.ctx.createOscillator();
     o.type = 'sawtooth';
     o.frequency.value = f;

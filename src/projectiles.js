@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { collidersNear } from './spatial.js';
+
+const nearList = []; // (hergebruikt: de blokken vlak bij een kogel)
 
 // Alles wat vijanden door de lucht laten vliegen: energieballen van de Mecha, vuurballen van Mario
 // en de duistere magie van Rames. Ze raken alleen de speler.
@@ -106,7 +109,7 @@ export class Projectiles {
 
       // Muren, bomen, rotsen
       if (!dead) {
-        for (const box of ctx.colliders) {
+        for (const box of collidersNear(ctx.colliders, p.pos.x, p.pos.z, 0.5, nearList)) {
           if (box.containsPoint(p.pos)) {
             dead = true;
             break;

@@ -1573,7 +1573,8 @@ export function createWorld(scene) {
       pondWater.normalMap.offset.y += dt * 0.013;
       mountains.light.value = 0.25 + look.ambient * 0.75 * (1 - look.stars * 0.55); // 's nachts donkere silhouetten
       // Het fotootje van de lucht verversen als de dag een stukje verder is (ongeveer elke 1,5 seconde)
-      if (env.on && (env.time < 0 || Math.abs(this.timeOfDay - env.time) > 0.004)) refreshEnv(this.timeOfDay, look);
+      // (niet te vaak: elke ~4 seconden is genoeg, de lucht verandert langzaam, en het kost de videokaart even werk)
+      if (env.on && (env.time < 0 || Math.abs(this.timeOfDay - env.time) > 0.012)) refreshEnv(this.timeOfDay, look);
 
       for (const m of glowingWindows) m.emissiveIntensity = 0.4 + look.stars * 1.6; // ramen gloeien 's nachts
       for (const m of glowingLamps) m.emissiveIntensity = 0.3 + look.stars * 2.5;

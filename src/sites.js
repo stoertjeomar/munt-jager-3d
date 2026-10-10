@@ -42,7 +42,12 @@ class Checkpoint {
     this.group.add(this.flag);
   }
 
-  update(time, reached) {
+  update(time, reached, near = true) {
+    this.flagMat.color.lerp(reached ? FLAG_GOLD : FLAG_GREY, 0.1);
+    this.flagMat.emissive.setHex(reached ? 0x3a2a00 : 0x000000);
+    this.knob.material.emissive.setHex(reached ? 0x8a6a00 : 0x000000);
+    // Alleen wapperen als je in de buurt bent (ver weg zie je het toch niet, en het kost veel rekenwerk)
+    if (!near) return;
     // Wapperen: hoe verder van de paal, hoe meer het doek golft
     const pos = this.flag.geometry.attributes.position;
     for (let i = 0; i < pos.count; i++) {
@@ -52,9 +57,6 @@ class Checkpoint {
     }
     pos.needsUpdate = true;
     this.flag.geometry.computeVertexNormals();
-    this.flagMat.color.lerp(reached ? FLAG_GOLD : FLAG_GREY, 0.1);
-    this.flagMat.emissive.setHex(reached ? 0x3a2a00 : 0x000000);
-    this.knob.material.emissive.setHex(reached ? 0x8a6a00 : 0x000000);
   }
 }
 
@@ -187,9 +189,10 @@ export class Sites {
     return null;
   }
 
-  update(dt, time) {
+  update(dt, time, viewer = null) {
     const flags = this.stats.data.flags;
-    this.checkpoints.forEach((c) => c.update(time, flags.includes(c.id) || c.id === this.stats.data.checkpoint));
+    const near = (c) => !viewer || (Math.abs(c.position.x - viewer.x) < 60 && Math.abs(c.position.z - viewer.z) < 60);
+    this.checkpoints.forEach((c) => c.update(time, flags.includes(c.id) || c.id === this.stats.data.checkpoint, near(c)));
     for (const c of this.chests) c.update(dt, time);
   }
 }

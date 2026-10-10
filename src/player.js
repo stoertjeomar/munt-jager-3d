@@ -8,6 +8,7 @@ import { HELMETS, createHelmetMesh } from './gear.js';
 import { POWERS } from './stats.js';
 import { createMixamoRig } from './mixamo.js';
 import { ClipPlayer } from './retarget.js';
+import { collidersNear } from './spatial.js';
 
 // Personages waaruit je kunt kiezen (aan het begin van het spel, of later in het startscherm met Esc)
 // Alle personages. Alleen Eve en Soldaat kun je zelf spelen; de rest woont in de wereld als NPC (zie npcs.js).
@@ -535,6 +536,9 @@ export class Player {
 
     // ---------- Bewegen + botsingen (per as apart, dat is het simpelst) ----------
     const pos = this.position;
+    // Alleen de blokken vlak bij je bekijken (niet alle duizenden van de hele wereld, zie spatial.js)
+    const reach = RADIUS + 1 + (Math.abs(this.velocity.x) + Math.abs(this.velocity.z)) * dt;
+    colliders = collidersNear(colliders, pos.x, pos.z, reach, (this.nearColliders ??= []));
     pos.x += this.velocity.x * dt;
     this.resolveHorizontal('x', colliders);
     pos.z += this.velocity.z * dt;
@@ -733,19 +737,18 @@ export class Player {
     this.mixer.update(dt);
   }
 
-  /** Bounding box van de speler op zijn huidige positie. */
-  getBox() {
+  /** Bounding box van de speler op zijn huidige positie (in `target`, dan hoeft er niet steeds een nieuwe gemaakt te worden). */
+  getBox(target = new THREE.Box3()) {
     const p = this.position;
-    return new THREE.Box3(
-      new THREE.Vector3(p.x - RADIUS, p.y, p.z - RADIUS),
-      new THREE.Vector3(p.x + RADIUS, p.y + HEIGHT, p.z + RADIUS)
-    );
+    target.min.set(p.x - RADIUS, p.y, p.z - RADIUS);
+    target.max.set(p.x + RADIUS, p.y + HEIGHT, p.z + RADIUS);
+    return target;
   }
 
   resolveHorizontal(axis, colliders) {
     const STEP = 0.05; // kleine marge zodat je niet "blijft haken" als je op een blok staat
     for (const box of colliders) {
-      const me = this.getBox();
+      const me = this.getBox((this.tmpBox ??= new THREE.Box3()));
       me.min.y += STEP;
       if (!overlaps(me, box)) continue;
 
@@ -764,7 +767,7 @@ export class Player {
 
     // Blokken
     for (const box of colliders) {
-      if (!overlaps(this.getBox(), box)) continue;
+      if (!overlaps(this.getBox((this.tmpBox ??= new THREE.Box3())), box)) continue;
 
       if (this.velocity.y <= 0 && prevY >= box.max.y - EPS) {
         // Landen bovenop een blok

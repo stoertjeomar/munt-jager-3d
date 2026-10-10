@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { collidersNear } from './spatial.js';
 import { play } from './audio.js';
 import { loadGLB } from './assets.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
@@ -124,8 +125,11 @@ const tmpHouse = new THREE.Vector3();
  * In welk blok staat een rondje (midden x,z, straal r, van hoogte y tot y+h)? Geeft het blok terug, of null.
  * Hoeken van blokken tellen als rond: dan glij je er makkelijk langs.
  */
+const blockList = [];
+const nearList = [];
+const pushList = [];
 function blockAt(x, z, r, y, h, colliders) {
-  for (const b of colliders) {
+  for (const b of collidersNear(colliders, x, z, r + 0.1, blockList)) {
     if (b.min.y > y + h || b.max.y < y + 0.05) continue; // boven of onder ons
     const cx = THREE.MathUtils.clamp(x, b.min.x, b.max.x); // dichtstbijzijnde punt van het blok
     const cz = THREE.MathUtils.clamp(z, b.min.z, b.max.z);
@@ -999,7 +1003,7 @@ class Enemy {
     const R = r + look + 0.5;
     const near = this.nearBlocks;
     near.length = 0;
-    for (const b of ctx.colliders) {
+    for (const b of collidersNear(ctx.colliders, p.x, p.z, R, nearList)) {
       if (b.min.y > p.y + h || b.max.y < p.y + 0.05) continue;
       if (b.max.x < p.x - R || b.min.x > p.x + R || b.max.z < p.z - R || b.min.z > p.z + R) continue;
       near.push(b);
@@ -1428,6 +1432,7 @@ class Enemy {
     const p = this.position;
     const r = this.type.radius;
     const top = p.y + this.type.height;
+    colliders = collidersNear(colliders, p.x, p.z, r + 1.5, pushList); // (alleen de blokken vlakbij, zie spatial.js)
     for (let pass = 0; pass < 3; pass++) {
       let moved = false;
       for (const box of colliders) {
