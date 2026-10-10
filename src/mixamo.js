@@ -7,6 +7,9 @@ import * as THREE from 'three';
 const Q = () => new THREE.Quaternion();
 const tmpQ = Q();
 const tmpE = new THREE.Euler();
+// Hulp-draaiingen die we steeds opnieuw gebruiken (elke frame nieuwe maken geeft veel opruimwerk voor de browser)
+const tq = [Q(), Q(), Q(), Q()];
+const tmpWorldQ = Q();
 
 /**
  * @param {THREE.Object3D} model  het geladen model (al geschaald en in de scene)
@@ -51,7 +54,8 @@ export function createMixamoRig(model) {
     restPos[name] = b.getWorldPosition(new THREE.Vector3()).sub(model.getWorldPosition(new THREE.Vector3())).applyQuaternion(modelQInv0);
   }
   // Alle botten met hun rust-draaiing (elke frame zetten we ze eerst terug, zie apply)
-  const resetList = Object.keys(restLocal).map((name) => [bone(name), restLocal[name]]);
+  const resetBones = Object.keys(restLocal).map((name) => bone(name));
+  const resetQs = Object.keys(restLocal).map((name) => restLocal[name]);
   // T-pose → armen naar beneden laten hangen
   const down = {
     armL: Q().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2),
@@ -86,9 +90,12 @@ export function createMixamoRig(model) {
   headSlot.scale.setScalar(0.155 / headScale);
   bones.head.add(headSlot);
 
+  /** Draaiing van een bot ten opzichte van het model, in `out` (zonder nieuwe aan te maken). */
+  const charQInto = (obj, out) => out.copy(modelQInv).multiply(obj.getWorldQuaternion(tmpWorldQ));
+
   /** Zet een bot zó dat het in personage-ruimte de draaiing `target` heeft. */
   function setCharRotation(b, target) {
-    const parentQ = b.parent ? charQ(b.parent) : Q();
+    const parentQ = b.parent ? charQInto(b.parent, tq[0]) : tq[0].identity();
     b.quaternion.copy(parentQ.invert().multiply(target));
     b.updateMatrixWorld(true);
   }
@@ -117,9 +124,9 @@ export function createMixamoRig(model) {
     apply() {
       // Eerst alle botten terug naar hun rust-stand. Een echte animatie (retarget.js) draait ook de heupen, de nek,
       // de handen en de voeten; zonder dit bleven die na een slag of sprong scheef staan (en liep je poppetje scheef).
-      for (const [b, q] of resetList) b.quaternion.copy(q);
+      for (let i = 0; i < resetBones.length; i++) resetBones[i].quaternion.copy(resetQs[i]);
       model.updateMatrixWorld(true);
-      modelQInv = model.getWorldQuaternion(Q()).invert();
+      modelQInv.copy(model.getWorldQuaternion(tmpWorldQ)).invert();
       // Op en neer veren: het hele model iets omhoog of omlaag
       baseY ??= model.position.y;
       model.position.y = baseY + proxy.hips.position.y / this.unit;
@@ -129,15 +136,14 @@ export function createMixamoRig(model) {
         const p = key === 'spine' ? proxy.hips : proxy[key];
         tmpQ.setFromEuler(tmpE.copy(p.rotation));
         // Een onderbeen/onderarm draait mee met het bovenbeen/de bovenarm, plus zijn eigen buiging
-        if (parentOf[key]) tmpQ.premultiply(Q().setFromEuler(tmpE.copy(proxy[parentOf[key]].rotation)));
-        setCharRotation(bones[key], tmpQ.clone().multiply(down[key]).multiply(rest[key]));
+        if (parentOf[key]) tmpQ.premultiply(tq[1].setFromEuler(tmpE.copy(proxy[parentOf[key]].rotation)));
+        setCharRotation(bones[key], tq[2].copy(tmpQ).multiply(down[key]).multiply(rest[key]));
       }
       // Hand-frame: draait mee met de arm (zoals bij de ridder) plus elleboog en pols
-      const armQ = Q().setFromEuler(tmpE.copy(proxy.armR.rotation));
-      if (bones.elbowR) armQ.multiply(Q().setFromEuler(tmpE.set(proxy.elbowR.rotation.x, 0, 0)));
-      const wristQ = Q().setFromEuler(tmpE.set(proxy.handR.rotation.x, 0, 0));
-      const want = armQ.multiply(wristQ);
-      handFrame.quaternion.copy(charQ(bones.hand).invert().multiply(want));
+      const armQ = tq[1].setFromEuler(tmpE.copy(proxy.armR.rotation));
+      if (bones.elbowR) armQ.multiply(tq[2].setFromEuler(tmpE.set(proxy.elbowR.rotation.x, 0, 0)));
+      const want = armQ.multiply(tq[2].setFromEuler(tmpE.set(proxy.handR.rotation.x, 0, 0)));
+      handFrame.quaternion.copy(charQInto(bones.hand, tq[3]).invert().multiply(want));
     },
   };
 }

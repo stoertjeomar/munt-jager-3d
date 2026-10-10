@@ -1502,6 +1502,34 @@ body.omar-kasteel #lock-hint h1::after {
   box-shadow: 0 0 16px rgba(90, 216, 255, 0.4);
 }
 
+/* Muis-snelheid op het startscherm */
+#sens-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #ddd;
+}
+
+#sens-row button {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(243, 210, 122, 0.6);
+  background: rgba(20, 14, 6, 0.8);
+  color: #f3d27a;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#sens-row b {
+  min-width: 46px;
+  text-align: center;
+  color: #f3d27a;
+}
+
 /* Het admin-vakje in een menu: grote letters in het midden */
 #menu-body .admin-code {
   font-size: 22px;

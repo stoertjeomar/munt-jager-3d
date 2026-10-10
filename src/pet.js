@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { collidersNear } from './spatial.js';
 import { loadGLB } from './assets.js';
 import { play } from './audio.js';
 
@@ -432,7 +433,7 @@ export class Pet {
   pushOutOfBlocks(colliders) {
     const pos = this.position;
     const r = this.cfg.radius;
-    for (const b of colliders) {
+    for (const b of collidersNear(colliders, pos.x, pos.z, r + 1, (this.nearList ??= []))) {
       if (b.min.y > 0.8 || b.max.y < 0.05) continue;
       const cx = THREE.MathUtils.clamp(pos.x, b.min.x, b.max.x);
       const cz = THREE.MathUtils.clamp(pos.z, b.min.z, b.max.z);

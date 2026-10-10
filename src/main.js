@@ -1078,7 +1078,23 @@ function toggleLock() {
     }
   }
   state.lockTarget = best;
+  if (best) ui.toast(`🎯 Vastgezet op <b>${best.type?.name ?? best.name ?? 'vijand'}</b><br><small>Q (of de muis flink opzij bewegen) = weer los</small>`, 2);
 }
+
+// Muis-snelheid op het startscherm (− en +), onthouden in de browser
+const sensVal = document.getElementById('sens-val');
+const showSens = () => {
+  if (sensVal) sensVal.textContent = `${Math.round(cameraRig.sensitivity * 100)}%`;
+};
+showSens();
+document.getElementById('sens-down')?.addEventListener('click', () => {
+  cameraRig.setSensitivity(cameraRig.sensitivity - 0.1);
+  showSens();
+});
+document.getElementById('sens-up')?.addEventListener('click', () => {
+  cameraRig.setSensitivity(cameraRig.sensitivity + 0.1);
+  showSens();
+});
 
 // ---------- Invoer ----------
 
@@ -1828,7 +1844,7 @@ function gameLoop() {
   // Is de boss dood door iets anders dan een klap? (bijv. schade terwijl je doodging)
   if (state.activeBoss && (!state.activeBoss.awake || state.activeBoss.dead)) state.activeBoss = null;
 
-  sites.update(dt, elapsed);
+  sites.update(dt, elapsed, camera.position);
   const picked = npcs.update(dt, elapsed, player.position);
   if (picked) {
     play('coin');
@@ -1876,6 +1892,11 @@ function gameLoop() {
     minDistance: dragon.riding ? 11 : null, // op de draak: verder weg, dan zie je hem helemaal
   });
   effects.applyShake(camera, realDt);
+  // De muis flink opzij bewogen terwijl je op een vijand vastgezet stond? Dan los (anders voelt rondkijken stroef)
+  if (cameraRig.breakLock) {
+    cameraRig.breakLock = false;
+    if (state.lockTarget) state.lockTarget = null;
+  }
   updateNightLight();
   updateBlobShadows();
   grass?.update(player.position);

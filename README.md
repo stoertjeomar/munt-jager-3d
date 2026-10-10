@@ -13,6 +13,9 @@ En als alle bosses verslagen zijn, gaat de **Schaduwpoort** open... en daarna ja
 
 ![Screenshot van Munt Jager 3D](docs/screenshot.png)
 
+> 🎉 **Klaar!** Dit is de laatste versie van Munt Jager 3D. Alles zit erin, en het spel is zo soepel mogelijk gemaakt.
+> Veel plezier met spelen!
+
 ## Direct spelen
 
 **[Speel Munt Jager 3D in je browser](https://stoertjeomar.github.io/munt-jager-3d/)** — niks installeren.
@@ -40,11 +43,11 @@ Three.js zit al in de map `lib/`, dus er hoeft niks geïnstalleerd te worden en 
 | Toets | Actie |
 | ----- | ----- |
 | WASD / pijltjes | Lopen |
-| Muis | Rondkijken (de camera draait ook vanzelf achter je aan) |
+| Muis | Rondkijken (de camera draait ook vanzelf achter je aan). Te snel of te sloom? Op het startscherm (Esc) zet je de **muis-snelheid** met − en + |
 | Shift | Kort tikken = rollen (onkwetsbaar), ingedrukt houden = sprinten |
 | Spatie | Springen (in de lucht nog eens = dubbele sprong) |
 | Klik / F | Slaan (F in de lucht = grondslag) |
-| Q | Vastzetten op een vijand (lock-on) |
+| Q | Vastzetten op een vijand (lock-on). Nog een keer Q, of de muis flink opzij bewegen = weer los |
 | R | Flesje drinken (leven terug) |
 | E | Praten met een NPC / winkelen bij de koopman / kist openen / huisdier aaien / de Arena / het Windaltaar |
 | C | Dash |
@@ -160,7 +163,12 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
 - **Soepel spelen**: alles wat ver weg in de mist staat (bomen, plantjes, huizen, vijanden) wordt niet getekend, en de
   bomen en plantjes zijn verdeeld in vakken, zodat alleen die dichtbij getekend worden. Bij het begin staat er "Laden…" op
   de knop tot alles binnen is; dan worden alle plaatjes en shaders alvast klaargezet, zodat het spel niet hapert als je
-  begint. De muziek wordt verder vooruit ingepland, zodat hij niet stopt als het spel even hapert
+  begint. De muziek wordt verder vooruit ingepland, zodat hij niet stopt als het spel even hapert.
+  Botsingen (met bomen, muren, stenen) worden alleen gecheckt voor de dingen vlak bij je, Claude, je huisdier, de vijanden
+  en de camera (in vakjes van 8 meter), in plaats van voor alle duizenden blokken van de hele wereld. Vlaggen wapperen alleen
+  als je in de buurt bent, en het koor in de muziek is lichter (het geluid in het Schaduwrijk hapert niet meer)
+- **Hapert het spel toch?** Druk op **G** tot er *Laag* staat, sluit andere tabbladen en zet in je browser
+  *hardwareversnelling* aan (Chrome/Edge: Instellingen → Systeem). Rondkijken sloom? Zet de muis-snelheid hoger op het startscherm
 - Je poppetje blijft altijd recht: landen midden in een salto of een dash midden in een koprol laat hem niet meer scheef
   of ondersteboven staan, en na een slag staan de heupen en de nek weer goed (je loopt niet meer scheef)
 - **Kampioenen** beginnen op een vrij plekje, lopen rond, botsen net zo groot als ze eruitzien en springen over iets heen
@@ -243,6 +251,7 @@ munt-jager-3d/
     ├── main.js       → start alles op, game loop, gevechten, winkel, doodgaan
     ├── graphics.js   → hoe het getekend wordt: gloed, kleuren, gladde randjes, de standen Laag/Normaal/Hoog (G)
     ├── culling.js    → wat ver weg in de mist staat niet tekenen (dan loopt het spel soepel)
+    ├── spatial.js    → snel de bomen, muren en stenen vlak bij iets vinden (voor de botsingen)
     ├── blobs.js      → zachte schaduw-vlekjes onder de speler, vijanden en mensen
     ├── grass.js      → dicht, wuivend gras rond de speler (alleen op Normaal en Hoog)
     ├── levels.js     → de 5 gebieden: pad, vijanden, kisten, NPC's, huizen (pas hier je gebieden aan!) en hoe ze samen de open wereld vormen

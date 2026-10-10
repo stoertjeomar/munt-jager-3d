@@ -1,9 +1,12 @@
 import * as THREE from 'three';
+import { collidersNear } from './spatial.js';
 
 // Een "third person" camera die om de speler heen draait.
 // Klik in het spel: de muis wordt "vastgezet" en gewoon bewegen = rondkijken.
 // Esc maakt de muis weer vrij. Scrollen = zoomen.
-const MOUSE_SENSITIVITY = 0.0025;
+const MOUSE_SENSITIVITY = 0.0025; // bij muis-snelheid 100% (zie sensitivity: op het startscherm kun je hem sneller of langzamer zetten)
+const SENS_KEY = 'munt-jager-3d-muis';
+const FLICK = 260; // zoveel pixels snel opzij bewegen (binnen ~0,3 seconde) zet het vastzetten op een vijand (Q) uit
 const MAX_MOUSE_JUMP = 250; // grotere sprongen in één muisbeweging zijn een browser-foutje (Chrome), die negeren we
 const PITCH_MIN = -0.95; // zo ver kun je omhoog kijken (negatief = camera onder je hoofd, kijkt omhoog)
 const PITCH_MAX = 1.3; // zo ver kun je van bovenaf kijken
@@ -23,6 +26,16 @@ export class CameraRig {
     this.hitPoint = new THREE.Vector3();
     this.lookUp = 0;
     this.mouseIdle = 0; // hoe lang de muis al stil is (dan draait de camera vanzelf achter je)
+    this.flick = 0; // hoeveel de muis net opzij bewoog (een flinke ruk = vastzetten op een vijand uit)
+    this.breakLock = false;
+    // Muis-snelheid (1 = 100%), onthouden in de browser
+    this.sensitivity = 1;
+    try {
+      const saved = Number(localStorage.getItem(SENS_KEY));
+      if (saved >= 0.3 && saved <= 3) this.sensitivity = saved;
+    } catch {
+      // geen opslag: dan gewoon 100%
+    }
 
 
     domElement.addEventListener('pointerdown', () => {
@@ -34,8 +47,11 @@ export class CameraRig {
       // ineens naar links of rechts schieten. Zulke sprongen slaan we over.
       if (Math.abs(e.movementX) > MAX_MOUSE_JUMP || Math.abs(e.movementY) > MAX_MOUSE_JUMP) return;
       if (Math.abs(e.movementX) + Math.abs(e.movementY) > 2) this.mouseIdle = 0;
-      this.yaw -= e.movementX * MOUSE_SENSITIVITY;
-      this.pitch += e.movementY * MOUSE_SENSITIVITY;
+      this.flick += Math.abs(e.movementX);
+      if (this.flick > FLICK) this.breakLock = true;
+      const s = MOUSE_SENSITIVITY * this.sensitivity;
+      this.yaw -= e.movementX * s;
+      this.pitch += e.movementY * s;
       this.pitch = THREE.MathUtils.clamp(this.pitch, PITCH_MIN, PITCH_MAX);
     });
     domElement.addEventListener(
@@ -46,6 +62,17 @@ export class CameraRig {
       },
       { passive: false }
     );
+  }
+
+  /** Muis-snelheid veranderen (en onthouden). */
+  setSensitivity(value) {
+    this.sensitivity = Math.round(THREE.MathUtils.clamp(value, 0.3, 3) * 10) / 10;
+    try {
+      localStorage.setItem(SENS_KEY, String(this.sensitivity));
+    } catch {
+      // niet erg
+    }
+    return this.sensitivity;
   }
 
   /** Muis vastzetten. "unadjustedMovement" = ruwe muisbeweging, zonder de sprongen van Windows-muisversnelling. */
@@ -79,6 +106,7 @@ export class CameraRig {
    */
   update(dt, followPosition, follow = {}) {
     this.mouseIdle += dt;
+    this.flick = Math.max(0, this.flick - FLICK * 3.5 * dt); // (zakt weer weg: alleen een snelle ruk telt)
     let goalYaw = null;
     let speed = 0;
     if (follow.lockTarget) {
@@ -87,7 +115,8 @@ export class CameraRig {
       const dz = follow.lockTarget.z - followPosition.z;
       // Staat het doel (bijna) recht boven of onder je? Dan springt de hoek alle kanten op: niet draaien.
       if (dx * dx + dz * dz > 2.5) goalYaw = Math.atan2(-dx, -dz);
-      speed = 7;
+      // Beweeg je zelf de muis? Dan trekt de camera minder hard naar het doel (anders voelt rondkijken sloom en stroef)
+      speed = this.mouseIdle < 0.4 ? 2 : 7;
       // Hoog doel (zoals een vliegende boss)? Dan kijkt de camera mee omhoog
       const above = follow.lockTarget.y - (followPosition.y + 1.2);
       const goalPitch = THREE.MathUtils.clamp(0.35 - above * 0.05, 0.05, 0.6);
@@ -129,7 +158,7 @@ export class CameraRig {
       const dir = offset.clone().normalize();
       this.ray.set(this.target, dir);
       let nearest = d;
-      for (const box of follow.colliders) {
+      for (const box of collidersNear(follow.colliders, this.target.x, this.target.z, d + 1, (this.nearList ??= []))) {
         if (box.distanceToPoint(this.target) > nearest) continue;
         const hit = this.ray.intersectBox(box, this.hitPoint);
         if (hit) nearest = Math.min(nearest, hit.distanceTo(this.target) - 0.3);
