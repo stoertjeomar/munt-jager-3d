@@ -1175,30 +1175,42 @@ async function warmUp() {
     renderer.setRenderTarget(composer.renderTarget1);
     const done = renderer.compileAsync(scene, camera);
     renderer.setRenderTarget(before);
-    await done;
+    await Promise.race([done, new Promise((resolve) => setTimeout(resolve, 8000))]); // (nooit langer dan 8 seconden wachten)
   } catch (e) {
     console.warn('Klaarzetten lukte niet helemaal:', e);
   }
 }
 
-/** Elke frame: laden klaar? En wat staat er te ver weg in de mist (dat tekenen we niet, zie culling.js)? */
-function updateCulling(dt) {
-  if (!boot.ready && !boot.warming) {
-    // Pas als er een halve seconde niks meer binnenkomt (sommige modellen laden pas na andere), of na 20 seconden
-    const now = performance.now();
-    if (modelsLoading() > 0) boot.idleSince = 0;
-    else boot.idleSince ||= now;
-    if ((boot.idleSince && now - boot.idleSince > 500) || now - boot.start > 20000) {
-      boot.warming = true;
+/** De knop open zetten: nu kun je spelen. */
+function bootDone() {
+  boot.ready = true;
+  clearInterval(bootTimer);
+  startBtn.disabled = false;
+  if (!gameStarted) startBtn.textContent = 'Spelen';
+}
+
+// Laden klaar? Pas als er een halve seconde niks meer binnenkomt (sommige modellen laden pas na andere), of na 20 seconden.
+// Dit staat los van de game loop: ook als er iets misgaat in het spel, gaat de knop altijd open (na hooguit 30 seconden).
+const bootTimer = setInterval(() => {
+  const now = performance.now();
+  if (now - boot.start > 30000) bootDone();
+  if (boot.ready || boot.warming) return;
+  if (modelsLoading() > 0) boot.idleSince = 0;
+  else boot.idleSince ||= now;
+  if ((boot.idleSince && now - boot.idleSince > 500) || now - boot.start > 20000) {
+    boot.warming = true;
+    try {
       culler.addScene(scene);
       culler.refresh(); // nu alles geladen is, kloppen de maten
-      warmUp().finally(() => {
-        boot.ready = true;
-        startBtn.disabled = false;
-        if (!gameStarted) startBtn.textContent = 'Spelen';
-      });
+    } catch (e) {
+      console.warn('Opmeten lukte niet helemaal:', e);
     }
+    warmUp().finally(bootDone);
   }
+}, 250);
+
+/** Elke frame: wat staat er te ver weg in de mist (dat tekenen we niet, zie culling.js)? */
+function updateCulling(dt) {
   // Af en toe kijken of er nieuwe dingen in de wereld staan (vijanden die erbij komen, enzovoort)
   boot.scan -= dt;
   if (boot.scan <= 0) {
