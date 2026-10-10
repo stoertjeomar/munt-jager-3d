@@ -1,4 +1,4 @@
-import { getAudio } from './audio.js';
+import { getAudio, wakeAudio } from './audio.js';
 
 // Muziek! Net als de geluidseffecten zelfgemaakt met de Web Audio API: geen muziekbestanden nodig.
 // Elk liedje staat hieronder als "bladmuziek" in tekst. Een kleine sequencer speelt de noten op tijd af.
@@ -815,7 +815,7 @@ function loadFile(a, path) {
 // ======================================================================
 
 const STEPS = 16; // de sequencer telt in zestiende noten
-const AHEAD = 0.25; // zoveel seconden vooruit plannen we noten in (dan hapert het niet als het spel even hangt)
+const AHEAD = 0.8; // zoveel seconden vooruit plannen we noten in (dan stopt de muziek niet als het spel even hapert)
 
 export class Music {
   constructor() {
@@ -869,7 +869,10 @@ export class Music {
   /** Wisselt zo nodig van liedje en plant de volgende noten in. */
   tick() {
     const a = getAudio();
-    if (!a) return;
+    if (!a) {
+      wakeAudio(); // de browser had het geluid even stilgezet (bijvoorbeeld na een ander tabblad): weer aanzetten
+      return;
+    }
     if (!this.out) this.setup(a);
     const want = this.enabled ? this.want : null;
     if ((this.song?.name ?? null) !== want) {

@@ -35,7 +35,7 @@ const STYLE = `
 @keyframes omar-fall { to { transform: translate(var(--dx), 118vh) rotate(var(--rot)); } }
 #omar-flash { position: fixed; inset: 0; z-index: 39; pointer-events: none; background: #fff; animation: omar-flash 0.7s ease-out forwards; }
 @keyframes omar-flash { from { opacity: 0.85; } to { opacity: 0; } }
-#omar-fade { position: fixed; inset: 0; z-index: 25; pointer-events: none; opacity: 0; display: flex; flex-direction: column;
+#omar-fade { position: fixed; inset: 0; z-index: 25; pointer-events: none; opacity: 0; visibility: hidden; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 16px;
   background: radial-gradient(circle at 50% 45%, #3a0d5a 0%, #14031f 65%, #000 100%); }
 #omar-fade b { font-weight: normal; font-size: clamp(26px, 4.5vw, 46px); letter-spacing: 4px; color: #d9a3ff; text-shadow: 0 0 20px rgba(176, 77, 255, 0.8); }
@@ -204,6 +204,7 @@ export class OmarFlow {
   /** Het paarse overgangsscherm (0 = weg, 1 = helemaal dicht). */
   setFade(opacity, title = null, sub = null) {
     this.fadeEl.style.opacity = opacity;
+    this.fadeEl.style.visibility = Number(opacity) > 0 ? 'visible' : 'hidden'; // helemaal weg: dan hoeft de browser hem ook niet te tekenen
     if (title !== null) this.fadeEl.querySelector('b').textContent = title;
     if (sub !== null) this.fadeEl.querySelector('small').textContent = sub;
   }

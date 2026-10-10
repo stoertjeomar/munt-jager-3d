@@ -23,6 +23,34 @@ const POWER_ICONS = {
 const WEAPON_ICONS = { club: '🏏', bijl: '🪓', hamer: '🔨', dolk: '🗡', zeis: '☠' };
 const weaponIcon = (key) => WEAPON_ICONS[key] ?? '⚔';
 
+/** De knoppen voor het oefenduel tegen Claude: alle niveaus (dicht 🔒 tot je het niveau ervoor hebt gewonnen). */
+function buddyDuelRow(levels) {
+  return `<div class="bet-row duel-levels">` + levels.map((l) => l.open
+    ? `<button data-buddy="${l.key}">${l.icon} ${l.name}<br><small>● ${l.reward}${l.wins ? ` · ✔ ${l.wins}×` : ''}</small></button>`
+    : `<button disabled title="Win eerst het niveau ervoor">🔒 ${l.name}<br><small>● ${l.reward}</small></button>`).join('') + `</div>`;
+}
+
+// Alleen iets in de balken veranderen als het echt anders is. Anders moet de browser elke frame
+// alle knoppen en balken opnieuw opmeten en tekenen, en dat maakt het spel trager.
+function setText(el, text) {
+  text = String(text);
+  if (el._text === text) return;
+  el._text = text;
+  el.textContent = text;
+}
+function setHTML(el, html) {
+  if (el._html === html) return;
+  el._html = html;
+  el.innerHTML = html;
+}
+function setStyle(el, prop, value) {
+  const key = `_${prop}`;
+  if (el[key] === value) return;
+  el[key] = value;
+  if (prop.startsWith('--')) el.style.setProperty(prop, value);
+  else el.style[prop] = value;
+}
+
 // Kleur van elk soort gebied op de kaart
 const MAP_COLORS = { weide: '#4f8f4e', woud: '#2c4f2c', hoogland: '#7c776a', schaduw: '#3a2448', kasteel: '#3a2348' };
 
@@ -120,13 +148,13 @@ export class UI {
     const hp = player.health / player.maxHealth;
     // De "lag"-balk zakt langzaam na: zo zie je hoeveel schade je kreeg
     this.hpLag = Math.max(hp, this.hpLag - dt * 0.4);
-    this.el.hpFill.style.width = `${hp * 100}%`;
-    this.el.hpLag.style.width = `${this.hpLag * 100}%`;
-    this.el.hpText.textContent = `${Math.ceil(player.health)} / ${player.maxHealth}`;
-    $('hp-bar').style.width = `${Math.min(40, 14 + player.maxHealth / 14)}vw`;
+    setStyle(this.el.hpFill, 'width', `${(hp * 100).toFixed(1)}%`);
+    setStyle(this.el.hpLag, 'width', `${(this.hpLag * 100).toFixed(1)}%`);
+    setText(this.el.hpText, `${Math.ceil(player.health)} / ${player.maxHealth}`);
+    setStyle($('hp-bar'), 'width', `${Math.min(40, 14 + player.maxHealth / 14)}vw`);
     $('hp-bar').classList.toggle('low', hp < 0.3 && player.health > 0);
-    this.el.stFill.style.width = `${(player.stamina / player.maxStamina) * 100}%`;
-    $('st-bar').style.width = `${Math.min(34, 10 + player.maxStamina / 12)}vw`;
+    setStyle(this.el.stFill, 'width', `${((player.stamina / player.maxStamina) * 100).toFixed(1)}%`);
+    setStyle($('st-bar'), 'width', `${Math.min(34, 10 + player.maxStamina / 12)}vw`);
     $('st-bar').classList.toggle('tired', player.stamina < 15);
     // Level: rondje met het getal (springt even op als je een level omhoog gaat)
     const lvl = this.stats.level;
@@ -139,22 +167,25 @@ export class UI {
       }
       this.lastLevel = lvl;
     }
-    this.el.level.innerHTML = `${rankOf(this.stats.data)} · <b>${this.stats.xp}</b> / ${this.stats.xpNeeded} tot level ${lvl + 1}`;
-    this.el.xpFill.style.width = `${(this.stats.xp / this.stats.xpNeeded) * 100}%`;
-    this.el.runes.textContent = this.stats.runes.toLocaleString('nl-NL');
-    $('stars-count').textContent = this.stats.data.stars ?? 0;
+    setHTML(this.el.level, `${rankOf(this.stats.data)} · <b>${this.stats.xp}</b> / ${this.stats.xpNeeded} tot level ${lvl + 1}`);
+    setStyle(this.el.xpFill, 'width', `${((this.stats.xp / this.stats.xpNeeded) * 100).toFixed(1)}%`);
+    if (this.lastRunes !== this.stats.runes) {
+      this.lastRunes = this.stats.runes;
+      setText(this.el.runes, this.stats.runes.toLocaleString('nl-NL'));
+    }
+    setText($('stars-count'), this.stats.data.stars ?? 0);
     const wKey = player.sword.weaponKey;
-    this.el.weapon.innerHTML = `${weaponIcon(wKey)} ${WEAPONS[wKey].name}${player.fireTimer > 0 ? ' 🔥' : ''}${player.boost ? ` <span style="color:#9be7ff">🌬 ${Math.ceil(player.boost.t)}s</span>` : ''}`;
-    this.el.weapon.style.color = itemColor({ kind: 'weapon', key: wKey });
+    setHTML(this.el.weapon, `${weaponIcon(wKey)} ${WEAPONS[wKey].name}${player.fireTimer > 0 ? ' 🔥' : ''}${player.boost ? ` <span style="color:#9be7ff">🌬 ${Math.ceil(player.boost.t)}s</span>` : ''}`);
+    setStyle(this.el.weapon, 'color', itemColor({ kind: 'weapon', key: wKey }));
     this.el.weapon.classList.toggle('fire', player.fireTimer > 0);
-    this.el.helmet.textContent = player.helmetKey && player.helmetKey !== 'geen' ? `⛑ ${HELMETS[player.helmetKey].name}` : '';
+    setText(this.el.helmet, player.helmetKey && player.helmetKey !== 'geen' ? `⛑ ${HELMETS[player.helmetKey].name}` : '');
     this.updateHotbar(player);
 
     // Munten erbij: "+14" naast je teller
     if (this.runesGainTimer > 0) {
       this.runesGainTimer -= dt;
-      this.el.runesGain.textContent = `+${this.runesGainAmount}`;
-      this.el.runesGain.style.opacity = Math.min(1, this.runesGainTimer * 2);
+      setText(this.el.runesGain, `+${this.runesGainAmount}`);
+      setStyle(this.el.runesGain, 'opacity', Math.min(1, this.runesGainTimer * 2).toFixed(2));
       if (this.runesGainTimer <= 0) this.runesGainAmount = 0;
     }
 
@@ -164,13 +195,13 @@ export class UI {
       // Een boss kan een eigen naam en stijl voor de balk hebben (Sky: barName en barStyle 'elden', zie skyFighter.js)
       const name = boss.barName ?? boss.name;
       if (this.el.bossName.textContent !== name) this.el.bossName.textContent = name;
-      this.el.boss.className = boss.barStyle ?? '';
+      if (this.el.boss.className !== (boss.barStyle ?? '')) this.el.boss.className = boss.barStyle ?? '';
       const b = boss.hp / (boss.maxHp ?? boss.info.hp);
       this.bossLag = Math.max(b, this.bossLag - dt * 0.3);
-      this.el.bossFill.style.width = `${b * 100}%`;
-      this.el.bossLag.style.width = `${this.bossLag * 100}%`;
+      setStyle(this.el.bossFill, 'width', `${(b * 100).toFixed(1)}%`);
+      setStyle(this.el.bossLag, 'width', `${(this.bossLag * 100).toFixed(1)}%`);
     } else {
-      this.el.boss.classList.add('hidden');
+      if (!this.el.boss.classList.contains('hidden')) this.el.boss.classList.add('hidden');
       this.bossLag = 1;
     }
 
@@ -190,7 +221,12 @@ export class UI {
       this.el.region.style.opacity = Math.min(1, this.regionTimer, (4 - this.regionTimer) * 2);
     }
 
-    this.drawMinimap(player, time);
+    // De minimap 30 keer per seconde tekenen is genoeg (scheelt werk)
+    this.mapT = (this.mapT ?? 0) + dt;
+    if (this.mapT >= 1 / 30 || dt === 0) {
+      this.mapT = 0;
+      this.drawMinimap(player, time);
+    }
   }
 
   /** De krachtenbalk: flesjes en krachten, met een taartpunt die laat zien hoe lang je nog moet wachten. */
@@ -208,7 +244,7 @@ export class UI {
       this.el.flasks.innerHTML = '<span class="key">R</span><span class="ic">🧪</span><span class="nm">Flesje</span><span class="count"></span>';
     }
     // Flesjes
-    this.el.flasks.querySelector('.count').textContent = `${player.flasks}/${this.stats.flasksMax}`;
+    setText(this.el.flasks.querySelector('.count'), `${player.flasks}/${this.stats.flasksMax}`);
     this.el.flasks.classList.toggle('empty', player.flasks <= 0);
     this.el.flasks.classList.toggle('ready', player.flasks > 0);
     // Krachten
@@ -220,8 +256,8 @@ export class UI {
     for (const [key, el] of Object.entries(this.slotEls ?? {})) {
       const [cd, max] = cooldowns[key] ?? [0, 1];
       const active = key === 'fire' && player.fireTimer > 0;
-      el.style.setProperty('--cd', active ? 1 - player.fireTimer / POWERS.fire.duration : cd > 0 ? cd / max : 0);
-      el.querySelector('.cd').textContent = cd > 0 ? (cd >= 1 ? Math.ceil(cd) : cd.toFixed(1)) : active ? Math.ceil(player.fireTimer) : '';
+      setStyle(el, '--cd', (active ? 1 - player.fireTimer / POWERS.fire.duration : cd > 0 ? cd / max : 0).toFixed(3));
+      setText(el.querySelector('.cd'), cd > 0 ? (cd >= 1 ? Math.ceil(cd) : cd.toFixed(1)) : active ? Math.ceil(player.fireTimer) : '');
       el.classList.toggle('active', active);
       el.classList.toggle('ready', cd <= 0 && !active);
       el.classList.toggle('nostamina', player.stamina < (POWERS[key].stamina ?? 0));
@@ -408,9 +444,9 @@ export class UI {
         <div class="bet-row">` +
         [a, b].map((m) => info.bets.map((n) => `<button data-bet="${m.key}" data-amount="${n}" ${info.runes < n ? 'disabled' : ''}>● ${n} op ${m.name}</button>`).join('')).join('') +
         `</div><button data-act="reroll">🔄 Andere monsters</button>
-        <h3>🤖 Oefenduel tegen Claude</h3>
-        <p class="menu-info"><small>Je computer-maatje vecht tegen jou. Verliezen kost niks, winnen geeft munten!</small></p>
-        <div class="bet-row"><button data-buddy="makkelijk">😊 Makkelijk</button><button data-buddy="normaal">😤 Normaal</button><button data-buddy="moeilijk">🔥 Moeilijk</button></div>
+        <h3>🤖 Duel tegen Claude</h3>
+        <p class="menu-info"><small>Vecht tegen Claude! Verliezen kost niks, winnen geeft munten. Win een niveau om het volgende te openen: hoe hoger, hoe sterker en slimmer hij wordt (combo's, wervelslag, vuurzwaard, flesjes...).</small></p>
+        ${buddyDuelRow(info.buddyLevels ?? [])}
         <h3>🌐 Online</h3>
         <button class="item" data-act="duel"><span>🌐 Duel tegen een vriend</span><small>Speel samen online en vecht tegen elkaar in de arena (zie "Samen spelen" op het startscherm).</small></button>
         <button data-act="close">Sluiten (Esc)</button>`;
@@ -490,20 +526,19 @@ export class UI {
   openBuddy(buddy, actions, levels) {
     this.showMenu('maatje', '🤖 Claude, je maatje');
     const d = this.stats.data.buddy ?? {};
-    const wins = d.wins ?? {};
     const mode = buddy.mode;
+    const won = levels.filter((l) => l.wins > 0).length;
     const modeBtn = (m, icon, title, info) => `<button class="item ${mode === m ? 'equipped' : ''}" data-mode="${m}"><span>${icon} ${title}</span><small>${info}</small>${mode === m ? '<em>nu</em>' : ''}</button>`;
     this.el.menuBody.innerHTML = `<p class="menu-info">Claude speelt met je mee: hij loopt achter je aan en vecht tegen vijanden in de buurt.
       Vijanden die hij verslaat geven munten (maar sterker worden doe je zelf).</p>
       <h3>Wat moet Claude doen?</h3>` +
       modeBtn('volg', '👣', 'Volg mij', 'Hij loopt achter je aan, vecht mee en flitst naar je toe als hij achterblijft') +
       modeBtn('wacht', '✋', 'Wacht hier', 'Hij blijft staan (en vecht alleen tegen vijanden die heel dichtbij komen)') +
-      modeBtn('weg', '👋', mode === 'weg' ? 'Is even weg' : 'Ga even weg', 'Even alleen spelen? Kies later weer "Volg mij"') +
-      `<h3>⚔ Oefenduel in de Arena</h3>
-      <p class="menu-info"><small>Gewonnen: 😊 ${wins.makkelijk ?? 0} · 😤 ${wins.normaal ?? 0} · 🔥 ${wins.moeilijk ?? 0} · verloren: ${d.losses ?? 0}</small></p>
-      <div class="bet-row">` +
-      Object.entries(levels).map(([key, l]) => `<button data-duel="${key}">${{ makkelijk: '😊', normaal: '😤', moeilijk: '🔥' }[key] ?? '⚔'} ${l.name}<br><small>● ${l.reward}</small></button>`).join('') +
-      `</div><button data-act="close">Sluiten (H)</button>`;
+      modeBtn('npc', '🏠', 'Ga terug naar Muntdorp', 'Even alleen spelen? Hij wacht in Muntdorp. Praat met hem (E) om hem weer mee te nemen') +
+      `<h3>⚔ Duel in de Arena</h3>
+      <p class="menu-info"><small>Niveaus gewonnen: <b>${won} / ${levels.length}</b> · verloren: ${d.losses ?? 0}</small></p>` +
+      buddyDuelRow(levels).replaceAll('data-buddy=', 'data-duel=') +
+      `<button data-act="close">Sluiten (H)</button>`;
     this.el.menuBody.onclick = (e) => {
       const b = e.target.closest('button');
       if (!b || b.disabled) return;

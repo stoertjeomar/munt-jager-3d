@@ -766,7 +766,11 @@ export class RamesFlow {
     const filming = FILM.includes(this.phase);
     // De duisternis rond het beeld schuift langzaam mee
     this.dark += (this.darkGoal - this.dark) * Math.min(1, 2.5 * dt);
-    this.darkEl.style.opacity = this.dark.toFixed(3);
+    const dark = this.dark.toFixed(3);
+    if (this.darkEl.style.opacity !== dark) {
+      this.darkEl.style.opacity = dark;
+      this.darkEl.style.visibility = this.dark >= 0.001 ? 'visible' : 'hidden'; // helemaal weg: dan hoeft de browser hem ook niet te tekenen
+    }
     this.world.gloom = 1 - Math.min(1, this.dark * 1.6) * 0.5; // de hele wereld wordt donkerder: dan gloeit zijn magie nog feller
     // Esc gedrukt tijdens een filmpje? Dan staat alles stil (het bordje "Pauze" komt uit omar.js)
     document.body.classList.toggle('omar-pauze', filming && !running);

@@ -17,6 +17,8 @@ export const CHAMPION = {
   runes: 5, // keer zoveel munten
   firstAfter: 45, // na zoveel seconden komt de eerste in een gebied
   every: [150, 240], // daarna steeds tussen deze aantallen seconden na het verslaan
+  leash: 34, // zo ver (meter) loopt hij achter je aan voordat hij teruggaat (gewone vijanden: 20)
+  roam: 12, // zo ver loopt hij heen en weer als hij je nog niet gezien heeft
 };
 
 /** Een gouden kroon (zweeft boven zijn hoofd en draait rond). */
@@ -83,17 +85,47 @@ export class Champions {
     const kinds = r.level.spawns.map(([k]) => k).filter((k) => !ENEMY_TYPES[k].dummy && !ENEMY_TYPES[k].flies);
     const kind = kinds[Math.floor(Math.random() * kinds.length)];
     const path = r.level.path;
+    // Een vrij plekje: niet in een boom, steen of huis (daar zat hij vroeger soms vast), en niet vlak bij de speler
+    const radius = ENEMY_TYPES[kind].radius + 0.6;
+    const free = (x, z) => {
+      if (this.game.insideHouse?.(new THREE.Vector3(x, 1, z))) return false;
+      for (const b of this.game.colliders ?? []) {
+        if (b.min.y > 2 || b.max.y < 0.05) continue;
+        const cx = THREE.MathUtils.clamp(x, b.min.x, b.max.x);
+        const cz = THREE.MathUtils.clamp(z, b.min.z, b.max.z);
+        if ((x - cx) ** 2 + (z - cz) ** 2 < radius * radius) return false;
+      }
+      return true;
+    };
     let x = 0;
     let z = 0;
-    for (let tries = 0; tries < 20; tries++) {
+    let found = false;
+    for (let tries = 0; tries < 60 && !found; tries++) {
       const i = 1 + Math.floor(Math.random() * (path.length - 3));
       const [lx, lz] = path[i];
-      [x, z] = r.t(lx + (Math.random() - 0.5) * 16, lz + (Math.random() - 0.5) * 10);
-      if (Math.hypot(x - playerPos.x, z - playerPos.z) > 25) break;
+      const spread = tries < 30 ? 1 : 0.4; // lukt het niet? dan dichter bij het pad (daar staat bijna nooit iets)
+      [x, z] = r.t(lx + (Math.random() - 0.5) * 16 * spread, lz + (Math.random() - 0.5) * 10 * spread);
+      found = Math.hypot(x - playerPos.x, z - playerPos.z) > 25 && free(x, z);
     }
     const e = this.game.addEnemy(kind, x, z);
     e.summoned = false;
     e.champion = true;
+    e.leash = CHAMPION.leash;
+    // Hij is groter, dus hij botst ook als een grotere vijand (anders liep hij half door bomen en muren en leek hij vast te zitten).
+    // En hij ligt niet op de grond te wachten (zoals een Zombiepop): een kampioen loopt rond.
+    e.type = { ...e.type, radius: e.type.radius * CHAMPION.size, height: e.type.height * CHAMPION.size, dormant: false };
+    e.state = 'walk';
+    // Heen en weer lopen naar een plek een stukje verder (fitPatrol in enemies.js zorgt dat die ook vrij is)
+    for (let tries = 0; tries < 12; tries++) {
+      const a = Math.random() * Math.PI * 2;
+      const bx = x + Math.sin(a) * CHAMPION.roam;
+      const bz = z + Math.cos(a) * CHAMPION.roam;
+      if (!free(bx, bz)) continue;
+      e.pointB.set(bx, 0, bz);
+      e.home.copy(e.pointA).lerp(e.pointB, 0.5);
+      e.patrolChecked = false;
+      break;
+    }
     e.hpScale = CHAMPION.hp;
     e.hp = e.maxHp;
     e.body.scale.setScalar(CHAMPION.size);

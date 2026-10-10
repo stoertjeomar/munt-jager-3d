@@ -104,7 +104,17 @@ export function unlockAudio() {
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
     loadSamples();
   }
-  if (ctx.state === 'suspended') ctx.resume();
+  if (ctx.state !== 'running') ctx.resume().catch(() => {});
+}
+
+/** Stond het geluid stil (de browser doet dat soms, bijvoorbeeld als je even een ander tabblad had)? Probeer het weer aan te zetten. */
+let lastWake = 0;
+export function wakeAudio() {
+  if (!ctx || ctx.state === 'running' || ctx.state === 'closed') return;
+  const now = performance.now();
+  if (now - lastWake < 1000) return; // niet te vaak proberen
+  lastWake = now;
+  ctx.resume().catch(() => {});
 }
 
 export function toggleMute() {

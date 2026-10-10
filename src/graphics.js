@@ -20,6 +20,16 @@ export const QUALITY = {
 };
 const ORDER = ['laag', 'normaal', 'hoog'];
 const SAVE_KEY = 'munt-jager-3d-grafisch';
+const MANUAL_KEY = 'munt-jager-3d-grafisch-zelf'; // '1' = je hebt zelf met G gekozen (dan verandert het spel niks meer)
+const SMOOTH = 1 / 38; // loopt het spel langzamer dan 38 beelden per seconde? Dan gaan de graphics een stand omlaag
+
+function loadManual() {
+  try {
+    return localStorage.getItem(MANUAL_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 function loadQuality() {
   try {
@@ -30,9 +40,10 @@ function loadQuality() {
   }
 }
 
-function saveQuality(key) {
+function saveQuality(key, manual = false) {
   try {
     localStorage.setItem(SAVE_KEY, key);
+    if (manual) localStorage.setItem(MANUAL_KEY, '1');
   } catch {
     // niet erg: dan onthouden we het niet
   }
@@ -94,8 +105,9 @@ export function createGraphics({ renderer, scene, camera, world, ui }) {
   let gtao = null; // ambient occlusion (alleen op Hoog), wordt pas gemaakt als je hem nodig hebt
   const listeners = [];
   let key = 'normaal';
-  // Nog nooit gekozen? Dan kijken we in de eerste seconden of de computer het bijhoudt.
-  let speedCheck = loadQuality() ? null : { wait: 1.5, time: 0, frames: 0 };
+  // Zelf nog niks gekozen? Dan kijken we tijdens het spelen steeds of de computer het bijhoudt.
+  let manual = loadManual();
+  const watch = { wait: 3, times: [] };
 
   function createGTAO() {
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -166,32 +178,34 @@ export function createGraphics({ renderer, scene, camera, world, ui }) {
     ui?.toast(`🎨 Graphics: <b>${QUALITY[next].naam}</b><br><small>Druk G om te wisselen</small>`, 2);
   }
 
-  /** Een stand kiezen en onthouden. */
+  /** Een stand zelf kiezen en onthouden (dan verandert het spel hem niet meer vanzelf). */
   function set(newKey) {
-    speedCheck = null; // zelf gekozen: niet meer automatisch omlaag
-    saveQuality(newKey);
+    manual = true;
+    saveQuality(newKey, true);
     apply(newKey);
   }
 
   /**
-   * Elke frame: hoe lang duurde deze frame? Als je nog nooit zelf een stand koos en de computer
-   * het in de eerste seconden niet bijhoudt (minder dan 25 beelden per seconde), gaan we één stand omlaag.
+   * Elke frame: hoe lang duurde deze frame? Zolang je niet zelf een stand koos, kijken we steeds een paar
+   * seconden: haalt de computer geen 38 beelden per seconde, dan gaat het een stand omlaag (zodat het soepel loopt).
+   * We kijken naar de middelste frametijd: een enkele hapering (iets nieuws laden) telt dan niet mee.
    */
   function measure(frameTime, playing) {
-    if (!speedCheck || !playing || frameTime > 0.5) return; // tab even weg geweest: telt niet
-    if (speedCheck.wait > 0) {
-      speedCheck.wait -= frameTime; // de eerste anderhalve seconde overslaan (dan wordt er nog van alles klaargezet)
+    if (manual || !playing || frameTime > 0.5) return; // (tab even weg geweest: telt niet)
+    if (watch.wait > 0) {
+      watch.wait -= frameTime; // net begonnen of net gewisseld: even wachten tot alles klaarstaat
       return;
     }
-    speedCheck.time += frameTime;
-    speedCheck.frames++;
-    if (speedCheck.time < 5) return;
-    const average = speedCheck.time / speedCheck.frames;
-    speedCheck = null;
+    watch.times.push(frameTime);
+    if (watch.times.length < 180) return;
+    const middle = [...watch.times].sort((a, b) => a - b)[watch.times.length >> 1];
+    watch.times.length = 0;
     const index = ORDER.indexOf(key);
-    if (average > 0.04 && index > 0) {
-      set(ORDER[index - 1]);
-      ui?.toast(`Je computer is wat langzaam: graphics op <b>${QUALITY[key].naam}</b> gezet<br><small>Druk G om te wisselen</small>`, 4);
+    if (middle > SMOOTH && index > 0) {
+      apply(ORDER[index - 1]);
+      saveQuality(key); // (de volgende keer meteen zo beginnen)
+      watch.wait = 3;
+      ui?.toast(`Het spel liep niet soepel: graphics op <b>${QUALITY[key].naam}</b> gezet<br><small>Druk G om te wisselen</small>`, 4);
     }
   }
 

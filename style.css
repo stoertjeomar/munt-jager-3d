@@ -667,6 +667,7 @@ body.omar-film #map-wrap {
   position: fixed;
   inset: 0;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
   background: radial-gradient(ellipse at 50% 45%, transparent 30%, rgba(24, 6, 44, 0.75) 75%, rgba(4, 0, 10, 0.96) 100%);
 }
@@ -1345,8 +1346,17 @@ body.omar-film #map-wrap {
   padding: 8px 6px;
 }
 
+/* De 8 duel-niveaus van Claude: 4 naast elkaar */
+.bet-row.duel-levels {
+  grid-template-columns: repeat(4, 1fr);
+}
+
 /* ---------- Kleine schermen ---------- */
 @media (max-width: 700px) {
+  .bet-row.duel-levels {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   #map-wrap,
   #minimap {
     width: 130px;
