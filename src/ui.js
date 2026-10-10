@@ -33,17 +33,19 @@ function buddyDuelRow(levels) {
 // Alleen iets in de balken veranderen als het echt anders is. Anders moet de browser elke frame
 // alle knoppen en balken opnieuw opmeten en tekenen, en dat maakt het spel trager.
 function setText(el, text) {
+  if (!el) return;
   text = String(text);
   if (el._text === text) return;
   el._text = text;
   el.textContent = text;
 }
 function setHTML(el, html) {
-  if (el._html === html) return;
+  if (!el || el._html === html) return;
   el._html = html;
   el.innerHTML = html;
 }
 function setStyle(el, prop, value) {
+  if (!el) return;
   const key = `_${prop}`;
   if (el[key] === value) return;
   el[key] = value;
@@ -127,7 +129,7 @@ export class UI {
     this.mapCtx = this.el.minimap.getContext('2d');
     this.mapScale = this.el.minimap.width / 180; // scherpe minimap (2× zoveel pixels)
     this.night = 0;
-    this.slotKeys = '';
+    this.slotKeys = null; // (null: de eerste keer altijd de krachtenbalk opbouwen, ook als je nog geen krachten hebt)
     this.lastLevel = null;
     this.lastCooldown = {};
   }
