@@ -8,7 +8,7 @@ import * as THREE from 'three';
 // De game zelf mag `visible` gewoon blijven gebruiken (een vijand die doodgaat, een kist die opengaat):
 // wij zetten een eigen "te ver"-vlaggetje, en `visible` is alleen waar als allebei goed is.
 
-const MARGIN = 6; // een paar meter extra, dan zie je nooit iets "aanfloepen"
+const MARGIN = 12; // een flink stuk extra, dan zie je nooit iets "aanfloepen"
 const CELL = 40; // bomen, stenen en bloemen verdelen we in vakken van 40 x 40 meter
 
 const hideable = new WeakSet();
@@ -78,8 +78,9 @@ export class FarCuller {
       return;
     }
     const at = new THREE.Vector3().setFromMatrixPosition(obj.matrixWorld);
-    // Kleine dingen (een paaltje, een kist, een slijmpje) zie je van ver toch bijna niet: die gaan al eerder uit
-    if (maxDist === Infinity && !obj.isInstancedMesh) maxDist = this.sphere.radius < 0.8 ? 60 : this.sphere.radius < 2 ? 100 : Infinity;
+    // (Alleen gras, bloemetjes en plantjes gaan eerder uit (maxDist). Al het andere pas als het helemaal in de mist
+    // verdwenen is: vroeger gingen kleine dingen al op 60-100 meter uit, en dan waren vijanden, mensen en stukjes van
+    // huizen onzichtbaar terwijl je ze nog had moeten zien, vooral als je op de draak vloog.)
     makeHideable(obj);
     this.items.push({
       obj,
