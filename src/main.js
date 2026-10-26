@@ -34,7 +34,7 @@ import { Champions, CHAMPION } from './champions.js';
 import { Villagers } from './villagers.js';
 import { Arena } from './arena.js';
 import { Islands, ALTAR } from './islands.js';
-import { Multiplayer, DUEL } from './multiplayer.js';
+import { Multiplayer, DUEL, PROBLEMS } from './multiplayer.js';
 import { Buddy, BUDDY, BUDDY_DUEL, duelLevels } from './buddy.js';
 import { RamesFlow } from './rames.js';
 import { Admin } from './admin.js';
@@ -475,18 +475,35 @@ function openMultiplayerMenu() {
       multiplayer.startDuel(true);
     },
     goto: () => {
-      const r = multiplayer.remote;
-      if (!r?.state) return;
-      closeMenuAndPlay();
-      if (dragon.active) dragon.hide();
-      player.position.copy(r.position).add(new THREE.Vector3(1.5, 0, 1.5));
-      player.velocity.set(0, 0, 0);
-      cameraRig.snapTo(player.position);
-      play('dash');
+      if (goToFriend()) closeMenuAndPlay();
     },
     leave: () => multiplayer.leave(),
     close: closeMenuAndPlay,
-  }, DUEL.prize);
+  }, DUEL.prize, PROBLEMS);
+}
+
+/** Naar je vriend toe reizen (online samen spelen). auto = net meegedaan (dan vertellen we wat er gebeurde). */
+function goToFriend(auto = false) {
+  const r = multiplayer?.remote;
+  if (!r?.state) return false;
+  if (state.activeBoss || arena.busy || multiplayer.duel) {
+    if (!auto) ui.toast('Eerst dit gevecht afmaken!', 3);
+    return false;
+  }
+  if (dragon.active) dragon.hide();
+  const to = r.position.clone().add(new THREE.Vector3(1.5, 0, 1.5));
+  // Vliegt je vriend op de draak? Dan kom je beneden op de grond (of op het luchteiland eronder)
+  to.y = Math.max(0, islands?.groundAt(to.x, to.z, to.y) ?? 0);
+  player.position.copy(to);
+  player.velocity.set(0, 0, 0);
+  if (buddy?.mode === 'volg') buddy.teleportTo(player.position); // Claude reist mee
+  state.lockTarget = null;
+  trail.cut();
+  cameraRig.snapTo(player.position);
+  play('dash');
+  effects.burst(player.position.clone().setY(1), 0x9be7ff, { count: 30, speed: 5, size: 0.12, life: 0.7, up: 4 });
+  if (auto) ui.toast(`🧭 Je bent naar <b>${r.name}</b> toe gereisd!`, 4);
+  return true;
 }
 
 // ---------- Trofeeën (K), premies (Premiebord) en de sterrenwinkel ----------
@@ -1162,7 +1179,21 @@ startBtn.addEventListener('click', () => {
   unlockAudio();
   gameStarted = true;
   cameraRig.lock();
+  joinFromLink();
 });
+
+// Kwam je binnen via de link van je vriend (...?kamer=7K3P)? Dan doe je meteen mee zodra je begint
+let linkCode = IN_SPECIAL ? null : new URLSearchParams(location.search).get('kamer');
+if (linkCode) {
+  const mpBtn = document.getElementById('mp-btn');
+  if (mpBtn) mpBtn.textContent = `🌐 Meedoen met MUNT-${linkCode.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^MUNT/, '').slice(0, 4)}`;
+}
+function joinFromLink() {
+  if (!linkCode || !multiplayer) return;
+  const code = linkCode;
+  linkCode = null;
+  multiplayer.join(code);
+}
 
 // ---------- Soepel spelen: eerst alles laden en klaarzetten, daarna pas beginnen ----------
 // Zolang er nog modellen binnenkomen staat er "Laden…" op de knop. Daarna zetten we alle plaatjes en shaders
@@ -1241,6 +1272,7 @@ document.getElementById('mp-btn')?.addEventListener('click', () => {
   if (!multiplayer) return;
   gameStarted = true;
   lockHintEl.classList.add('hidden');
+  joinFromLink();
   openMultiplayerMenu();
 });
 
@@ -1536,7 +1568,7 @@ const champions = new Champions({ stats, effects, addEnemy: addSummon, removeEne
 const arena = new Arena({ scene, stats, ui, effects, colliders: world.colliders, addEnemy: addSummon, removeEnemy, player, pets, goals, giveRunes, giveStars });
 // Online samen spelen (multiplayer.js): elkaar zien, en een duel in de Arena
 const multiplayer = IN_SPECIAL ? null : new Multiplayer({
-  scene, player, stats, ui, effects, dragon, arena,
+  scene, player, stats, ui, effects, dragon, arena, goToFriend,
   onDuelStart: (side) => {
     closeMenuAndPlay();
     if (dragon.active) dragon.hide();

@@ -93,6 +93,29 @@ function drawLand(ctx, toMap, scale, bosses) {
   }
 }
 
+/** Tekst naar het klembord (om te plakken in een chat). Geeft een Promise: true = gelukt. */
+function copyText(text) {
+  const old = () => {
+    // (oudere browsers, of geen toestemming: via een onzichtbaar tekstvak)
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch {
+      ok = false;
+    }
+    area.remove();
+    return ok;
+  };
+  if (!navigator.clipboard?.writeText) return Promise.resolve(old());
+  return navigator.clipboard.writeText(text).then(() => true, () => old());
+}
+
 export class UI {
   constructor(stats) {
     this.stats = stats;
@@ -469,32 +492,64 @@ export class UI {
 
   /**
    * Samen spelen (online): een kamer maken, meedoen met een code, of een duel beginnen.
-   * mp = de Multiplayer (multiplayer.js); actions = { host(), join(code), duel(), goto(), leave(), close(), name(text) }
+   * mp = de Multiplayer (multiplayer.js); actions = { host(), join(code), duel(), goto(), leave(), close(), name(text) };
+   * problems = wat er mis kan gaan, met tips (PROBLEMS in multiplayer.js)
    */
-  openMultiplayer(mp, actions, duelPrize) {
+  openMultiplayer(mp, actions, duelPrize, problems) {
     this.showMenu('online', '🌐 Samen spelen');
     const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    const ICON = { bezig: '⏳', klaar: '✔', verbonden: '🔗', mislukt: '✖' };
+    // Hoe het zoeken gaat (deze regel verandert elke seconde, de rest van het menu niet)
+    const ways = () => {
+      const link = mp.link;
+      if (!link) return '';
+      if (mp.status === 'verbonden') {
+        if (!link.open) return '<small>⏳ De verbinding is even weg... we proberen het opnieuw</small>';
+        return `<small>Verbonden via <b>${esc(link.via)}</b>${link.spare ? ` · ${link.spare} reserve` : ''}</small>`;
+      }
+      const list = link.status.map((w) => `<span class="way ${w.state}">${ICON[w.state]} ${esc(w.name)}</span>`).join('');
+      const dead = link.status.every((w) => w.state === 'mislukt');
+      return `<small>Zoeken via</small> ${list}${mp.status === 'verbinden' ? ` <small>· ${link.seconds} s</small>` : ''}` +
+        (dead ? '<small class="warn">⚠ Nog geen enkele server bereikbaar. Heb je internet?</small>' : '');
+    };
+    let shown = '';
     const render = () => {
       if (this.menuOpen !== 'online') return;
       const st = mp.status;
+      const key = `${st}|${mp.code}|${mp.error}|${mp.remote?.name ?? ''}`;
+      const waysEl = this.el.menuBody.querySelector('#mp-ways');
+      if (key === shown && waysEl) {
+        waysEl.innerHTML = ways();
+        return;
+      }
+      shown = key;
       const other = esc(mp.remote?.name ?? 'je vriend');
       let html = `<p class="menu-info">Speel samen met een vriend via internet! Jullie zien elkaar in de wereld en kunnen in de <b>Arena</b> een duel doen.
         <small>(Vijanden, kisten en munten heeft ieder voor zich.)</small></p>
         <label class="field">Jouw naam <input id="mp-name" maxlength="14" value="${esc(this.stats.data.name ?? '')}" placeholder="Speler"></label>`;
       if (st === 'verbonden') {
         html += `<div class="mp-status ok">✔ Verbonden met <b>${other}</b> (kamer MUNT-${esc(mp.code ?? '')})</div>
+          <div id="mp-ways" class="mp-ways">${ways()}</div>
           <button class="item" data-act="duel"><span>⚔ Duel in de Arena</span><small>Jullie gaan allebei naar de Arena. Wie het eerst geen leven meer heeft, verliest. De winnaar krijgt ● ${duelPrize}.</small></button>
           <button class="item" data-act="goto"><span>🧭 Naar ${other} toe</span><small>Snel naar je vriend toe reizen</small></button>
           <button class="danger" data-act="leave">Stoppen met samen spelen</button>`;
       } else if (st === 'wachten') {
-        html += `<div class="mp-code"><small>Jouw code</small><b>MUNT-${esc(mp.code)}</b><small>Geef deze code aan je vriend. Wachten tot je vriend meedoet...</small></div>
+        html += `<div class="mp-code"><small>Jouw code</small><b>MUNT-${esc(mp.code)}</b><small>Geef deze code aan je vriend, of stuur de link: wie hem opent, doet meteen mee.</small></div>
+          <div class="mp-share"><button data-act="copy-code">📋 Kopieer code</button><button data-act="copy-link">🔗 Kopieer link</button></div>
+          <div id="mp-ways" class="mp-ways">${ways()}</div>
+          <p class="menu-info"><small>Wachten tot je vriend meedoet... Je mag dit menu dichtdoen en alvast spelen.</small></p>
+          <button data-act="leave">Kamer sluiten</button>`;
+      } else if (st === 'verbinden') {
+        html += `<div class="mp-status">⏳ Verbinden met kamer <b>MUNT-${esc(mp.code)}</b>...</div>
+          <div id="mp-ways" class="mp-ways">${ways()}</div>
           <button data-act="leave">Annuleren</button>`;
-      } else if (st === 'laden' || st === 'verbinden') {
-        html += `<div class="mp-status">⏳ ${st === 'laden' ? 'Even laden...' : `Verbinden met kamer MUNT-${esc(mp.code)}...`}</div><button data-act="leave">Annuleren</button>`;
       } else {
-        if (st === 'fout') html += `<div class="mp-status bad">⚠ ${esc(mp.error)}</div>`;
+        const problem = st === 'fout' ? problems[mp.error] : null;
+        if (problem) {
+          html += `<div class="mp-status bad">⚠ ${esc(problem.text)}${problem.tips ? `<ul>${problem.tips.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}</div>`;
+        }
         html += `<h3>🏠 Een kamer maken</h3>
-          <button class="item" data-act="host"><span>🏠 Nieuwe kamer</span><small>Je krijgt een code die je aan je vriend geeft</small></button>
+          <button class="item" data-act="host"><span>🏠 Nieuwe kamer</span><small>Je krijgt een code (en een link) die je aan je vriend geeft</small></button>
           <h3>🤝 Meedoen met een vriend</h3>
           <div class="join-row"><input id="mp-code" maxlength="9" placeholder="MUNT-XXXX" autocomplete="off"><button data-act="join">Meedoen</button></div>`;
       }
@@ -517,7 +572,12 @@ export class UI {
       if (!b || b.disabled) return;
       const act = b.dataset.act;
       if (act === 'join') actions.join(this.el.menuBody.querySelector('#mp-code')?.value ?? '');
-      else if (act && actions[act]) actions[act]();
+      else if (act === 'copy-code' || act === 'copy-link') {
+        const text = act === 'copy-code' ? `MUNT-${mp.code}` : mp.shareLink;
+        copyText(text).then((ok) => {
+          b.textContent = ok ? '✔ Gekopieerd!' : '✖ Lukte niet: schrijf de code over';
+        });
+      } else if (act && actions[act]) actions[act]();
     };
   }
 

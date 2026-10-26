@@ -2,43 +2,56 @@ import * as THREE from 'three';
 import { Player } from './player.js';
 import { Dragon } from './dragon.js';
 import { play } from './audio.js';
+import { WEAPONS } from './weapons.js';
+import { HELMETS } from './gear.js';
+import { FriendLink, PROTO, TEST_PARAMS } from './netlink.js';
 
 // ======================================================================
-// Samen spelen via internet (met PeerJS: computers praten direct met elkaar, "WebRTC")
+// Samen spelen via internet (computers praten direct met elkaar, "WebRTC")
 // ======================================================================
-// Eén speler maakt een kamer en krijgt een code (bijv. MUNT-7K3P). De vriend typt die code in, en dan:
+// Eén speler maakt een kamer en krijgt een code (bijv. MUNT-7K3P). De vriend typt die code in
+// (of opent de link die de kamermaker stuurt), en dan:
 //   - zie je elkaar in de wereld lopen, springen, slaan en op de draak vliegen
 //   - kun je in de Arena een DUEL doen: wie het eerst geen leven meer heeft, verliest
 // Elke speler heeft zijn eigen vijanden, kisten en munten (die worden niet gedeeld): je speelt samen in dezelfde
 // wereld, maar ieder in zijn eigen avontuur.
-// De verbinding loopt via de gratis PeerJS-server (0.peerjs.com) om elkaar te vinden; daarna gaat alles direct.
-// Om te testen met een eigen server: index.html?peer=localhost:9000
+// Hoe jullie elkaar vinden (drie manieren tegelijk, met een reserve) staat in netlink.js.
 
-const PREFIX = 'munt-jager-3d-';
 const SEND_EVERY = 1 / 15; // zo vaak sturen we waar je bent (15 keer per seconde)
 const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // geen 0/O en 1/I (die lijken op elkaar)
+const TRAVEL = 30; // de meedoener reist meteen naar de kamermaker als die verder weg is dan dit (meter)
 export const DUEL = { prize: 150, countdown: 3 };
 
-/** PeerJS laden (alleen als je samen wilt spelen). */
-let peerLib = null;
-function loadPeerJS() {
-  if (window.peerjs) return Promise.resolve(window.peerjs);
-  peerLib ??= new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = 'lib/peerjs.min.js';
-    s.onload = () => (window.peerjs ? resolve(window.peerjs) : reject(new Error('PeerJS niet gevonden')));
-    s.onerror = () => reject(new Error('Kon lib/peerjs.min.js niet laden'));
-    document.head.appendChild(s);
-  });
-  return peerLib;
-}
+/** Wat er mis kan gaan, en wat je dan kunt doen (staat in het menu). */
+export const PROBLEMS = {
+  code: { text: 'Typ de code van je vriend: 4 letters en cijfers (bijvoorbeeld MUNT-7K3P).' },
+  niemand: {
+    text: 'Je vriend is niet gevonden.',
+    tips: [
+      'Klopt de code? (Er zit nooit een O, 0, I of 1 in.)',
+      'Staat het spel van je vriend nog open, met de code in beeld?',
+      'Laad allebei de pagina opnieuw (Ctrl+F5) en maak een nieuwe kamer.',
+    ],
+  },
+  netwerk: {
+    text: 'Jullie vonden elkaar wel, maar het netwerk liet de verbinding niet toe.',
+    tips: [
+      'Probeer het nog een keer: soms lukt het de tweede keer wel.',
+      'Op school of op het werk is dit vaak geblokkeerd: probeer het thuis.',
+      'Of gebruik de hotspot van een telefoon.',
+    ],
+  },
+  offline: {
+    text: 'Geen enkele server is bereikbaar.',
+    tips: ['Heb je internet?', 'Op school of op het werk is dit vaak geblokkeerd: probeer het thuis of met een hotspot.'],
+  },
+  vol: { text: 'In die kamer speelt al iemand mee.', tips: ['Vraag je vriend om een nieuwe kamer te maken.'] },
+  browser: { text: 'Deze browser kan niet samen spelen.', tips: ['Probeer Chrome, Edge of Firefox.'] },
+};
 
-/** Instellingen voor de PeerJS-server (?peer=host:poort om een eigen server te gebruiken). */
-function serverOptions() {
-  const custom = new URLSearchParams(location.search).get('peer');
-  if (!custom) return { debug: 0 };
-  const [host, port] = custom.split(':');
-  return { host, port: Number(port) || 9000, path: '/', secure: false, debug: 0 };
+/** Een naam van je vriend die veilig in beeld kan (geen rare tekens, niet te lang). */
+function cleanName(name) {
+  return String(name ?? '').replace(/[<>&"'`]/g, '').trim().slice(0, 14) || 'Vriend';
 }
 
 /** Nep-"stats" voor het poppetje van je vriend (Player leest alleen deze dingen). */
@@ -85,8 +98,8 @@ function makeNameTag(text) {
 class RemotePlayer {
   constructor(scene, hello) {
     this.scene = scene;
-    this.name = hello.name ?? 'Vriend';
-    this.player = new Player(scene, new RemoteStats(hello.character ?? 'soldaat'));
+    this.name = cleanName(hello.name);
+    this.player = new Player(scene, new RemoteStats(String(hello.character ?? 'soldaat')));
     this.tag = makeNameTag(`🌐 ${this.name}`);
     scene.add(this.tag);
     this.dragon = null;
@@ -108,6 +121,7 @@ class RemotePlayer {
 
   /** Nieuwe toestand van je vriend (15 keer per seconde). */
   receive(s) {
+    if (!Array.isArray(s.p) || s.p.length !== 3 || !s.p.every(Number.isFinite)) return; // (kapot bericht)
     const first = !this.state;
     this.state = s;
     this.target.fromArray(s.p);
@@ -129,8 +143,9 @@ class RemotePlayer {
     const far = p.position.distanceTo(this.target) > 8;
     if (far) p.position.copy(this.target);
     else p.position.lerp(this.target, 1 - Math.exp(-14 * dt));
-    if (s.w !== p.sword.weaponKey) p.sword.setWeapon(s.w);
-    if (s.h !== p.helmetKey) p.setHelmet(s.h);
+    // (een wapen of helm die wij niet kennen, uit een andere versie van het spel? Dan houden we de oude)
+    if (s.w !== p.sword.weaponKey && WEAPONS[s.w]) p.sword.setWeapon(s.w);
+    if (s.h !== p.helmetKey && HELMETS[s.h]) p.setHelmet(s.h);
     p.fireTimer = s.fire ? 1 : 0;
     // Op de draak?
     if (s.dr) {
@@ -183,28 +198,38 @@ class RemotePlayer {
 
 export class Multiplayer {
   /**
-   * @param {object} game  { scene, player, stats, ui, effects, dragon, arena, onDuelStart(), onDuelEnd(won) }
+   * @param {object} game  { scene, player, stats, ui, effects, dragon, arena, onDuelStart(), onDuelEnd(won), goToFriend(auto) }
    */
   constructor(game) {
     this.game = game;
-    this.peer = null;
-    this.conn = null;
+    this.link = null; // de verbinding met je vriend (netlink.js)
     this.remote = null;
     this.code = null;
-    this.status = 'uit'; // uit | laden | wachten | verbinden | verbonden | fout
-    this.error = '';
+    this.isHost = false; // jij hebt de kamer gemaakt
+    this.status = 'uit'; // uit | wachten | verbinden | verbonden | fout
+    this.error = ''; // wat er mis ging (een van PROBLEMS)
     this.sendTimer = 0;
+    this.travelled = false;
     this.duel = null; // { phase: 'aftellen' | 'vechten' | 'klaar', t }
     this.hitIds = new Set();
   }
 
   get connected() {
-    return this.status === 'verbonden' && !!this.conn?.open;
+    return this.status === 'verbonden' && !!this.link?.open;
   }
 
   /** Je naam (die zie je vriend boven je hoofd). */
   get myName() {
     return this.game.stats.data.name || 'Speler';
+  }
+
+  /** De link die je naar je vriend kunt sturen: wie hem opent, doet meteen mee. */
+  get shareLink() {
+    const here = new URLSearchParams(location.search);
+    const query = new URLSearchParams();
+    for (const key of TEST_PARAMS) if (here.has(key)) query.set(key, here.get(key));
+    query.set('kamer', this.code ?? '');
+    return `${location.origin}${location.pathname}?${query}`;
   }
 
   makeCode() {
@@ -214,107 +239,85 @@ export class Multiplayer {
   }
 
   /** Een kamer maken: je krijgt een code die je aan je vriend geeft. */
-  async host() {
+  host() {
     this.leave();
-    this.status = 'laden';
-    this.changed();
-    try {
-      const { Peer } = await loadPeerJS();
-      this.code = this.makeCode();
-      this.peer = new Peer(PREFIX + this.code, serverOptions());
-      this.peer.on('open', () => {
-        this.status = 'wachten';
-        this.changed();
-      });
-      this.peer.on('connection', (conn) => {
-        if (this.conn) {
-          conn.on('open', () => conn.close()); // er is al iemand: kamer vol
-          return;
-        }
-        this.useConnection(conn);
-      });
-      this.peer.on('error', (e) => this.fail(e));
-    } catch (e) {
-      this.fail(e);
-    }
+    this.isHost = true;
+    this.code = this.makeCode();
+    this.status = 'wachten';
+    this.connect();
   }
 
   /** Meedoen met de code van je vriend. */
-  async join(code) {
-    code = String(code).toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^MUNT/, '');
-    if (code.length < 4) {
-      this.fail({ type: 'code' });
+  join(code) {
+    code = String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^MUNT/, '');
+    if (code.length !== 4) {
+      this.leave();
+      this.problem('code');
       return;
     }
     this.leave();
-    this.status = 'laden';
-    this.changed();
-    try {
-      const { Peer } = await loadPeerJS();
-      this.code = code;
-      this.peer = new Peer(undefined, serverOptions());
-      this.peer.on('open', () => {
-        this.status = 'verbinden';
+    this.isHost = false;
+    this.code = code;
+    this.status = 'verbinden';
+    this.connect();
+  }
+
+  /** Op zoek naar je vriend (via alle manieren tegelijk, zie netlink.js). */
+  connect() {
+    this.error = '';
+    this.link = new FriendLink(this.code, this.isHost, {
+      open: () => {
+        this.status = 'verbonden';
+        this.travelled = false;
+        this.send({ t: 'hallo', name: this.myName, character: this.game.player.characterId, v: PROTO });
         this.changed();
-        this.useConnection(this.peer.connect(PREFIX + code, { serialization: 'json', reliable: true }));
-      });
-      this.peer.on('error', (e) => this.fail(e));
-    } catch (e) {
-      this.fail(e);
-    }
-  }
-
-  useConnection(conn) {
-    this.conn = conn;
-    conn.on('open', () => {
-      this.status = 'verbonden';
-      this.send({ t: 'hallo', name: this.myName, character: this.game.player.characterId });
-      this.changed();
+      },
+      message: (msg) => this.receive(msg),
+      close: () => this.lost(),
+      fail: (type) => {
+        this.link = null;
+        this.leave();
+        this.problem(type);
+      },
+      change: () => this.changed(),
+      codeTaken: () => this.host(), // (heel zeldzaam: iemand anders heeft dezelfde code)
     });
-    conn.on('data', (msg) => this.receive(msg));
-    conn.on('close', () => this.lost());
-    conn.on('error', () => this.lost());
-  }
-
-  /** Iets mislukt (geen internet, verkeerde code...). */
-  fail(e) {
-    const why = {
-      'peer-unavailable': 'Die kamer bestaat niet (meer). Klopt de code?',
-      network: 'Geen verbinding met de server. Heb je internet?',
-      'server-error': 'De server doet even niet mee. Probeer het later nog eens.',
-      'browser-incompatible': 'Deze browser kan niet samen spelen. Probeer Chrome of Edge.',
-      'unavailable-id': 'Die code is al bezet. Maak een nieuwe kamer.',
-      code: 'Typ de code van je vriend (4 letters/cijfers).',
-    }[e?.type] ?? `Er ging iets mis${e?.message ? `: ${e.message}` : ''}.`;
-    this.leave();
-    this.status = 'fout';
-    this.error = why;
     this.changed();
+    this.link.start();
   }
 
-  /** De verbinding is weg. */
+  /** Iets mislukt (verkeerde code, niemand gevonden...). */
+  problem(type) {
+    this.status = 'fout';
+    this.error = type;
+    this.changed();
+    // Zit je niet in het menu (je speelt al)? Dan een berichtje in beeld
+    if (this.game.ui.menuOpen !== 'online') this.game.ui.toast(`🌐 ${PROBLEMS[type]?.text ?? 'Samen spelen lukte niet.'} <small>(O = samen spelen)</small>`, 6);
+  }
+
+  /** De verbinding met je vriend is weg. */
   lost() {
-    if (this.status !== 'verbonden') return;
     const name = this.remote?.name ?? 'Je vriend';
     if (this.duel) this.endDuel(null);
-    this.leave();
-    this.game.ui.toast(`🌐 <b>${name}</b> is weg. De verbinding is verbroken.`, 4);
+    this.remote?.remove();
+    this.remote = null;
+    if (this.isHost && this.link) {
+      // Je kamer blijft open: met dezelfde code kan je vriend opnieuw meedoen
+      this.link.reset();
+      this.status = 'wachten';
+      this.changed();
+      this.game.ui.toast(`🌐 <b>${name}</b> is weg. Je kamer <b>MUNT-${this.code}</b> blijft open: met dezelfde code kan je vriend weer meedoen.`, 5);
+    } else {
+      this.leave();
+      this.game.ui.toast(`🌐 <b>${name}</b> is weg. De verbinding is verbroken.`, 4);
+    }
   }
 
   /** Stoppen met samen spelen. */
   leave() {
-    try {
-      this.conn?.close();
-    } catch {
-      // al dicht
-    }
-    try {
-      this.peer?.destroy();
-    } catch {
-      // al weg
-    }
-    this.conn = null;
-    this.peer = null;
+    if (this.duel) this.endDuel(null);
+    this.link?.close();
+    this.link = null;
     this.remote?.remove();
     this.remote = null;
     this.duel = null;
@@ -329,7 +332,7 @@ export class Multiplayer {
   }
 
   send(msg) {
-    if (this.conn?.open) this.conn.send(msg);
+    if (this.link?.open) this.link.send(msg);
   }
 
   receive(msg) {
@@ -340,16 +343,27 @@ export class Multiplayer {
       this.remote = new RemotePlayer(this.game.scene, msg);
       play('flag');
       ui.toast(`🌐 <b>${this.remote.name}</b> speelt nu met je mee!`, 4);
+      // Een andere versie van het spel? Dan werkt misschien niet alles: allebei de nieuwste laden
+      const v = Number(msg.v) || 1;
+      if (v !== PROTO) {
+        const why = v < PROTO ? `<b>${this.remote.name}</b> heeft een oudere versie van het spel` : 'Jij hebt een oudere versie van het spel';
+        setTimeout(() => ui.toast(`⚠ ${why}. Laad allebei de pagina opnieuw (<b>Ctrl+F5</b>) voor de nieuwste versie.`, 8), 4000);
+      }
       this.changed();
     } else if (msg.t === 'toestand') {
       // (Hebben we zijn "hallo" gemist? Dan maken we zijn poppetje nu)
-      if (!this.remote) this.receive({ t: 'hallo', name: msg.n, character: msg.c });
+      if (!this.remote) this.receive({ t: 'hallo', name: msg.n, character: msg.c, v: PROTO });
       this.remote?.receive(msg);
+      // Net meegedaan? Dan reis je meteen naar de kamermaker toe (anders moet je elkaar eerst zoeken)
+      if (!this.isHost && !this.travelled && this.remote?.state) {
+        this.travelled = true;
+        if (this.remote.position.distanceTo(player.position) > TRAVEL) this.game.goToFriend?.(true);
+      }
     } else if (msg.t === 'klap') {
       // Je vriend raakte jou (alleen in een duel)
-      if (this.duel?.phase !== 'vechten') return;
+      if (this.duel?.phase !== 'vechten' || !Array.isArray(msg.from)) return;
       const from = new THREE.Vector3().fromArray(msg.from);
-      const taken = player.hurt(from, msg.damage);
+      const taken = player.hurt(from, Math.min(Number(msg.damage) || 0, 500));
       if (taken) {
         play('hurt');
         effects.shake(0.2);

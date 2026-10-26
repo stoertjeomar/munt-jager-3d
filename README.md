@@ -114,9 +114,18 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
   drinkt flesjes en laat zich niet meer wegduwen. Verliezen kost niks, winnen geeft munten (tot ● 5000).
   Vijanden die Claude verslaat geven munten, maar tellen niet mee voor je level
 - **Samen spelen (online)** 🌐: druk op **O** (of *Samen spelen* op het startscherm). Eén speler maakt een kamer en krijgt
-  een code (bijv. MUNT-7K3P), de ander typt die code in. Dan zie je elkaar lopen, springen, slaan en op de draak vliegen,
-  en in de Arena kun je een **duel** doen (de winnaar krijgt munten). Vijanden, kisten en munten heeft ieder voor zich.
-  Dit werkt met [PeerJS](https://peerjs.com): de computers vinden elkaar via de gratis PeerJS-server en praten daarna direct
+  een code (bijv. MUNT-7K3P) én een **link**. Stuur de link naar je vriend: wie hem opent en op *Spelen* klikt, doet meteen
+  mee. Of je vriend typt de code in. Wie meedoet, reist meteen naar de kamermaker toe. Dan zie je elkaar lopen, springen,
+  slaan en op de draak vliegen, en in de Arena kun je een **duel** doen (de winnaar krijgt munten). Vijanden, kisten en
+  munten heeft ieder voor zich. Gaat je vriend weg? Dan blijft je kamer open en kan je vriend met dezelfde code terugkomen.
+  - **Hoe jullie elkaar vinden**: het spel probeert **drie manieren tegelijk** — de PeerJS-server, openbare Nostr-servers
+    en openbare WebTorrent-trackers (die laatste twee via [Trystero](https://github.com/dmotz/trystero)). De eerste die
+    werkt wordt gebruikt, de andere blijven als **reserve**: valt de ene weg, dan gaat het spel via de andere verder.
+    In het menu zie je hoe het met elke manier gaat (✔ = server bereikt, 🔗 = verbonden, ✖ = lukt niet).
+    Daarna praten de computers direct met elkaar (WebRTC), en lukt dat niet, dan via een TURN-server
+  - **Lukt het niet?** Dan zegt het spel wat er mis is, met tips: klopt de code, staat het spel van je vriend nog open,
+    laad allebei de pagina opnieuw (Ctrl+F5). Op school of op het werk is samen spelen vaak geblokkeerd: probeer het thuis
+    of met de hotspot van een telefoon. Heeft één van jullie een oudere versie van het spel, dan zie je dat ook
 - **Echte animaties voor je held**: slaan (een combo van verschillende slagen, en met zware wapens een grote hamerslag),
   dashen, afzetten bij het springen, een **salto** bij de dubbele sprong, een **superheldenlanding** na de grondslag,
   geraakt worden, drinken, bukken en omvallen als je doodgaat. Ze komen uit de *Universal Animation Library 2* en worden
@@ -241,7 +250,7 @@ klik / F = vuur spuwen · B = afstappen (hoog in de lucht val je naar beneden, d
 munt-jager-3d/
 ├── index.html        → pagina, HUD en startscherm
 ├── style.css         → opmaak
-├── lib/              → Three.js (r170) + loaders, PeerJS (samen spelen) + licenties
+├── lib/              → Three.js (r170) + loaders, PeerJS en Trystero (samen spelen) + licenties
 ├── models/           → 3D-modellen (personages, wapens, helmen, bosses, KayKit, Kenney; extra/ = de nieuwe modellen)
 ├── textures/         → Kenney Retro Textures (grond, muren, daken, ramen)
 ├── sounds/           → geluiden uit het Kenney Starter Kit
@@ -271,7 +280,8 @@ munt-jager-3d/
     ├── pet.js        → Knokkie en Pluis: lopen los rond in Muntdorp
     ├── arena.js      → de Arena: golven, huisdiergevechten, wedden op monsters en het duel
     ├── islands.js    → de Hemeleilanden: zwevende eilanden, het Windaltaar en de bewakers
-    ├── multiplayer.js→ samen spelen via internet (PeerJS): je vriend zien en het duel
+    ├── multiplayer.js→ samen spelen via internet: je vriend zien, naar hem toe reizen en het duel
+    ├── netlink.js    → hoe jullie elkaar vinden: PeerJS, Nostr en Torrent tegelijk, met reserve-verbindingen
     ├── buddy.js      → Claude, je computer-maatje: NPC in Muntdorp, meelopen, meevechten, kletsen en het duel (8 niveaus)
     ├── invasions.js  → Omar-invasies: golven schaduwkrijgers bij een kamp
     ├── shadowDragon.js → de eindbaas: de Schaduwdraak
@@ -308,7 +318,9 @@ munt-jager-3d/
 - **De Arena** → `ARENA`, `WAVES` en `FIGHTERS` in `src/arena.js` · **De Hemeleilanden** → `ISLAND_LAYOUT` in `src/levels.js` en `ALTAR` in `src/islands.js`
 - **Animaties van je held** → `CLIPS` bovenaan `src/player.js` (welke animatie bij welke actie, en welk stukje ervan)
 - **Claude, je maatje** → `BUDDY` (hoe sterk, hoe ver) en `BUDDY_DUEL` (de 8 duel-niveaus: leven, schade, combo's, wervelslag, ...) in `src/buddy.js`; wat hij zegt staat in `LINES`
-- **Samen spelen** → `src/multiplayer.js` (test met een eigen PeerJS-server: `index.html?peer=localhost:9000`)
+- **Samen spelen** → `src/multiplayer.js` (het spel) en `src/netlink.js` (de verbinding). Testen met eigen servers:
+  `index.html?peer=localhost:9000` (PeerJS), `?nostr=ws://localhost:7000` (Nostr), `?tracker=ws://localhost:8000` (Torrent);
+  maar een paar manieren proberen: `?via=peerjs` of `?via=nostr,torrent`
 - **Trofeeën, premies en de sterrenwinkel** → `TROPHIES` in `src/goals.js` en `STAR_ITEMS` in `src/stats.js`
 - **Kampioenen en woedende bosses** → `CHAMPION` in `src/champions.js` en `RAGE` in `src/bosses.js`
 - **Quests** → `QUESTS` bovenaan `src/npcs.js`
@@ -348,7 +360,9 @@ munt-jager-3d/
 - Personages Eve, Soldaat en Mila: via Mixamo
 - Etalagepoppen en hun animaties (Zombiepop, Ninjapop, dorpelingen, en de animaties van je held): *Universal Animation Library 2* door
   [Quaternius](https://quaternius.com) — CC0
-- Samen spelen: [PeerJS](https://peerjs.com) door Michelle Bu, Eric Zhang en anderen — MIT ([lib/peerjs-LICENSE.txt](lib/peerjs-LICENSE.txt))
+- Samen spelen: [PeerJS](https://peerjs.com) door Michelle Bu, Eric Zhang en anderen — MIT ([lib/peerjs-LICENSE.txt](lib/peerjs-LICENSE.txt));
+  [Trystero](https://github.com/dmotz/trystero) door Dan Motzenbecker en [noble-secp256k1](https://github.com/paulmillr/noble-secp256k1)
+  door Paul Miller — MIT ([lib/trystero-LICENSE.txt](lib/trystero-LICENSE.txt))
 - Budget Mario door Teh_LaughingMan, Buff man door joney_lol, MS Gundam RX-78-2 door Tipatat Chennavasin
   (fan-modellen; Mario en Gundam zijn van Nintendo en Bandai — alleen voor eigen plezier)
 
