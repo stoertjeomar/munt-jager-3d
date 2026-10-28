@@ -5,7 +5,7 @@ Kies je held en trek door één grote wereld met 5 gebieden: versla vijanden voo
 met zij-quests, koop spullen bij de koopman, vlieg op je **draak** naar de **Hemeleilanden** hoog in de lucht, train je
 **huisdieren** in de **Arena** en versla de boss van elk gebied. Pas op: Omar stuurt soms zijn **schaduwleger** op je af!
 En als alle bosses verslagen zijn, gaat de **Schaduwpoort** open... en daarna jaag je op **trofeeën**, **premies**,
-**Kampioenen** en **woedende bosses**. Of speel **samen online** met een vriend en daag hem uit voor een **duel**!
+**Kampioenen** en **woedende bosses**. Of speel **samen online** met een vriend (dat werkt nu echt!) en daag je vriend uit voor een **duel**!
 
 > 👑 **Ikzelf, Omar, zit ook in de game!** Ik heb dit spel gemaakt en ik woon in Muntdorp.
 > Daag me uit en ik neem je mee naar mijn Gekke Kasteel. Niemand heeft mij ooit verslagen...
@@ -15,6 +15,11 @@ En als alle bosses verslagen zijn, gaat de **Schaduwpoort** open... en daarna ja
 
 > 🎉 **Klaar!** Dit is de laatste versie van Munt Jager 3D. Alles zit erin, en het spel is zo soepel mogelijk gemaakt.
 > Veel plezier met spelen!
+
+> 🌐 **Nieuw: samen spelen werkt nu echt!** Druk op **O**, maak een kamer en stuur de **link** (of de code) naar je vriend.
+> Wie de link opent en op *Spelen* klikt, doet meteen mee en staat meteen naast je. Het spel zoekt je vriend op
+> **drie manieren tegelijk**, dus het lukt veel vaker dan vroeger. Lukt het toch niet? Dan zegt het spel waarom, met tips.
+> Tip: laad allebei de pagina opnieuw met **Ctrl+F5**, dan hebben jullie zeker de nieuwste versie.
 
 ## Direct spelen
 
